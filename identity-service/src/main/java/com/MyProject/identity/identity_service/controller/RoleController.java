@@ -1,0 +1,55 @@
+package com.MyProject.identity.identity_service.controller;
+
+import java.util.List;
+
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import com.MyProject.identity.identity_service.dto.request.RoleCreationRequest;
+import com.MyProject.identity.identity_service.dto.request.RoleUpdateRequest;
+import com.MyProject.identity.identity_service.dto.response.ApiResponse;
+import com.MyProject.identity.identity_service.dto.response.RoleResponse;
+import com.MyProject.identity.identity_service.service.RoleService;
+
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+
+@RestController
+@RequestMapping("/roles")
+@RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+public class RoleController {
+    RoleService roleService;
+
+    @PostMapping("/create")
+    @PreAuthorize("hasRole('ADMIN')")
+    ApiResponse<RoleResponse> createRole(@RequestBody RoleCreationRequest request) {
+        return ApiResponse.<RoleResponse>builder()
+                .result(roleService.createRole(request))
+                .build();
+    }
+
+    @PutMapping("/{name}")
+    @PreAuthorize("hasRole('ADMIN')")
+    ApiResponse<RoleResponse> updateRole(@PathVariable String name, @RequestBody RoleUpdateRequest request) {
+        return ApiResponse.<RoleResponse>builder()
+                .result(roleService.updateRole(name, request))
+                .build();
+    }
+
+    @DeleteMapping("/{name}")
+    @PreAuthorize("hasRole('ADMIN')")
+    ApiResponse<Void> deleteRole(@PathVariable String name) {
+        roleService.deleteRole(name);
+        return ApiResponse.<Void>builder().message("Deleted role success!").build();
+    }
+
+    @GetMapping("/read")
+    @PreAuthorize("hasRole('ADMIN')")
+    ApiResponse<List<RoleResponse>> getAllRoles() {
+        return ApiResponse.<List<RoleResponse>>builder()
+                .result(roleService.getAllRoles())
+                .build();
+    }
+}

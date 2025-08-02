@@ -1,0 +1,22 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /travel
+
+spring:
+  datasource:
+    url: ${DBMS_CONNECTION:jdbc:mysql://localhost:3306/travel-service}
+    username: ${DBMS_USERNAME:root}
+    password: ${DBMS_PASSWORD:1801062012}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+jwt:
+  signerKey: "uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0"
+  valid-duration: 3600
+  refreshable-duration: 360000
+  cleanup:
+    delay: 3600000
+
