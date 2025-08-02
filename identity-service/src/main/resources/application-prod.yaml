@@ -1,0 +1,2 @@
+jwt:
+  signerKey: ${JWT_SIGNERKEY:MJin38cXisFp/gw5dsECmpFfvT84CW2LlrV0zflBvadJjjomCwkGiKNqG98i7AIU}
