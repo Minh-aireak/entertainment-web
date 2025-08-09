@@ -38,7 +38,6 @@ public class AuthenticationController {
     }
 
     @PostMapping("/introspect")
-    @PreAuthorize("hasRole('ADMIN')")
     ApiResponse<IntrospectResponse> introspect(@RequestBody IntrospectRequest request) {
         var result = authenticationService.introspectResponse(request);
         return ApiResponse.<IntrospectResponse>builder().result(result).build();

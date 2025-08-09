@@ -22,5 +22,5 @@ public interface UserMapper {
 
     @Mapping(target = "password", ignore = true)
     @Mapping(target = "roles", ignore = true)
-    void update(@MappingTarget User user, UserUpdateRequest request);
+    void changePass (@MappingTarget User user, UserUpdateRequest request);
 }

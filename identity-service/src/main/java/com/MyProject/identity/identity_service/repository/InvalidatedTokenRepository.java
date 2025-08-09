@@ -8,7 +8,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.MyProject.identity.identity_service.entity.InvalidatedToken;
+import org.springframework.stereotype.Repository;
 
+@Repository
 public interface InvalidatedTokenRepository extends JpaRepository<InvalidatedToken, String> {
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("DELETE FROM InvalidatedToken t WHERE t.expiryTime < :date")

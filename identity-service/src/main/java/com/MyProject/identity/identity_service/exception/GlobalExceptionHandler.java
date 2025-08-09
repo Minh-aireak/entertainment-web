@@ -51,7 +51,7 @@ public class GlobalExceptionHandler {
         return message.replace("{" + MIN_VALUE + "}", minValue);
     }
 
-    @ExceptionHandler(value = org.springframework.security.access.AccessDeniedException.class)
+    @ExceptionHandler(value = AccessDeniedException.class)
     public ResponseEntity<ApiResponse<?>> handlingAccessDeniedException(AccessDeniedException exception) {
         return ApiResponse.toResponseEntity(ErrorCode.UNAUTHORIZED);
     }

@@ -1,7 +1,7 @@
 server:
   port: 8080
   servlet:
-    context-path: /travel
+    context-path: /identity
 
 spring:
   datasource:
@@ -19,4 +19,8 @@ jwt:
   refreshable-duration: 360000
   cleanup:
     delay: 3600000
+
+app:
+  services:
+    profile: "http://localhost:8081/profile"
 
