@@ -3,3 +3,12 @@ server:
   servlet:
     context-path: /profile
 
+jwt:
+  signerKey: "uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0"
+
+spring:
+  neo4j:
+    uri: bolt://localhost:7687
+    authentication:
+      username: neo4j
+      password: 1801062012

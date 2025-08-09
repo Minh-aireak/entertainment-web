@@ -1,4 +1,4 @@
-package com.MyProject.identity.identity_service.validator;
+package com.MyProject.profile.profile_service.validator;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
