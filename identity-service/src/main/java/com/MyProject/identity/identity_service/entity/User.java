@@ -1,6 +1,5 @@
 package com.MyProject.identity.identity_service.entity;
 
-import java.time.LocalDate;
 import java.util.Set;
 
 import jakarta.persistence.*;
@@ -25,12 +24,7 @@ public class User {
     String username;
 
     String password;
-    String firstName;
-    String lastName;
-
-    LocalDate dob;
 
     @ManyToMany
     Set<Role> roles;
-
 }

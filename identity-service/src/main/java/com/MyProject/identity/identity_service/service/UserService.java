@@ -4,6 +4,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import com.MyProject.identity.identity_service.dto.request.UserProfileCreationRequest;
+import com.MyProject.identity.identity_service.mapper.UserProfileMapper;
+import com.MyProject.identity.identity_service.repository.httpclient.UserProfileClient;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -25,6 +29,7 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -33,6 +38,8 @@ public class UserService {
     UserMapper userMapper;
     RoleRepository roleRepository;
     PasswordEncoder passwordEncoder;
+    UserProfileClient client;
+    UserProfileMapper userProfileMapper;
 
     @Transactional(rollbackFor = Exception.class)
     public UserResponse createUser(UserCreationRequest request) {
@@ -40,6 +47,9 @@ public class UserService {
                 -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
 
         User user = userMapper.toUser(request);
+
+        UserProfileCreationRequest userprofileRequest = userProfileMapper.toUserProfileCreationRequest(request);
+
         user.setPassword(passwordEncoder.encode(request.getPassword()));
 
         Set<Role> roles = new HashSet<>();
@@ -52,23 +62,21 @@ public class UserService {
             throw new AppException(ErrorCode.USERNAME_EXISTED);
         }
 
+        client.createProfile(userprofileRequest);
+
         return userMapper.toUserResponse(user);
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public UserResponse updateUser(String userId, UserUpdateRequest request) {
-        User user = userRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+    public UserResponse changePassword(UserUpdateRequest request) {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        User user = userRepository.findByUsername(authentication.getName()).orElseThrow(()
+                -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
-        userMapper.update(user, request);
+        userMapper.changePass(user, request);
 
         if (request.getPassword() != null) {
             user.setPassword(passwordEncoder.encode(request.getPassword()));
-        }
-
-        if (request.getRoles() != null) {
-            var roles = roleRepository.findAllById(request.getRoles());
-
-            user.setRoles(new HashSet<>(roles));
         }
 
         return userMapper.toUserResponse(userRepository.save(user));

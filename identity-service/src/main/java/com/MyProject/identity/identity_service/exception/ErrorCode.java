@@ -34,7 +34,8 @@ public enum ErrorCode {
     DOB_NOTNULL(1019, "Day of birth cannot be null!", HttpStatus.BAD_REQUEST),
     INVALID_DOB(1020, "You must be at least {min} years old!", HttpStatus.BAD_REQUEST),
     WEAK_KEY(1021, "Key length is weak!", HttpStatus.BAD_REQUEST),
-    ACCESS_DENIED(1022, "Token not owned by user!", HttpStatus.FORBIDDEN);
+    ACCESS_DENIED(1022, "Token not owned by user!", HttpStatus.FORBIDDEN),
+    INVALID_PHONENUMBER(1023, "Phone number invalid!", HttpStatus.BAD_REQUEST);
 
     int code;
     String message;
