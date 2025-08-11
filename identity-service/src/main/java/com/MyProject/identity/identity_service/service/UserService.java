@@ -4,11 +4,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import com.MyProject.event.dto.NotificationEvent;
 import com.MyProject.identity.identity_service.dto.request.UserProfileCreationRequest;
 import com.MyProject.identity.identity_service.mapper.UserProfileMapper;
 import com.MyProject.identity.identity_service.repository.httpclient.UserProfileClient;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -40,8 +42,9 @@ public class UserService {
     PasswordEncoder passwordEncoder;
     UserProfileClient client;
     UserProfileMapper userProfileMapper;
+    KafkaTemplate<String, Object> kafkaTemplate;
 
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional
     public UserResponse createUser(UserCreationRequest request) {
         Role role = roleRepository.findById("USER").orElseThrow(()
                 -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
@@ -63,6 +66,15 @@ public class UserService {
         }
 
         client.createProfile(userprofileRequest);
+
+        NotificationEvent notificationEvent = NotificationEvent.builder()
+                .channel("EMAIL")
+                .recipient(request.getEmail())
+                .subject("Welcome to travelplanner!")
+                .body("Hello, " + request.getUsername())
+                .build();
+
+        kafkaTemplate.send("notification-delivery", notificationEvent);
 
         return userMapper.toUserResponse(user);
     }
