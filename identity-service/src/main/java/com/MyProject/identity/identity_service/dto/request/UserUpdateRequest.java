@@ -1,5 +1,6 @@
 package com.MyProject.identity.identity_service.dto.request;
 
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Size;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -18,4 +19,7 @@ public class UserUpdateRequest {
 
     @Size(min = 8, message = "PASSWORD_INVALID")
     String password;
+
+    @Email
+    String email;
 }

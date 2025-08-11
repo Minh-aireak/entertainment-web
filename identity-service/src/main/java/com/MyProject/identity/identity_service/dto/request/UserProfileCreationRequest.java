@@ -16,6 +16,7 @@ import java.time.LocalDate;
 @Builder
 public class UserProfileCreationRequest {
     String username;
+    String email;
     String fistName;
 
     @NotNull(message = "NAME_INVALID")

@@ -6,9 +6,9 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 
 @SpringBootApplication
 @EnableFeignClients
-public class TravelPlannerItineraryManagerApplication {
+public class IdentityApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(TravelPlannerItineraryManagerApplication.class, args);
+        SpringApplication.run(IdentityApplication.class, args);
     }
 }
