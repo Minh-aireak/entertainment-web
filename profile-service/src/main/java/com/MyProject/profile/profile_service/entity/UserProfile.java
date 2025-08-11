@@ -17,7 +17,7 @@ import java.time.LocalDate;
 public class UserProfile {
     @Id
     String username;
-
+    String email;
     String firstName;
     String lastName;
     LocalDate dob;
