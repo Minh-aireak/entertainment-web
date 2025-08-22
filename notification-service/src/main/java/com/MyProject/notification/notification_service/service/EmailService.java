@@ -13,8 +13,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -22,7 +20,7 @@ public class EmailService {
     EmailClient emailClient;
     String apiKey = "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";
 
-    public EmailResponse senEmail(SendEmailRequest request){
+    public EmailResponse sendEmail(SendEmailRequest request){
         EmailRequest emailRequest = EmailRequest.builder()
                 .sender(Sender.builder()
                         .name("aireak.com")

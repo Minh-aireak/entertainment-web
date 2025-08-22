@@ -1,0 +1,31 @@
+:root {
+  --primary: #9c4810f3;
+  --default-layout-header-height: 60px;
+  --default-layout-width: 1500px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  text-rendering: optimizeSpeed;
+  line-height: 1.5;
+  .tippy-box {
+    background-color: rgba(84, 84, 84, 0.92);
+    border-radius: 8px;
+    line-height: 2.2rem;
+    font-size: 1.3rem;
+    font-weight: bold;
+  }
+
+  .tippy-content {
+    padding: 8px 9px;
+  }
+}
+
+html {
+  font-size: 80%;
+}
