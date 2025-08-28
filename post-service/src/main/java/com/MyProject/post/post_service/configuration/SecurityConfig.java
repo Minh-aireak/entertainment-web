@@ -40,7 +40,6 @@ public class SecurityConfig {
         httpSecurity.csrf(AbstractHttpConfigurer::disable);
 
         // Thiết lập domain được truy cập:
-        httpSecurity.cors(cors -> cors.configurationSource(corsConfigurationSource()));
 
         // Thiết jwt để decode token truyen vao gồm header, payload, signature; Prefix để authorized;
         // bắt lỗi authenticated từ entrypoint
@@ -48,20 +47,6 @@ public class SecurityConfig {
                         jwtConfigurer.decoder(jwtDecoder).jwtAuthenticationConverter(jwtAuthenticationConverter()))
                 .authenticationEntryPoint(new JwtAuthenticationEntryPoint()));
         return httpSecurity.build();
-    }
-
-    @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration corsConfiguration = new CorsConfiguration();
-
-        corsConfiguration.addAllowedOrigin("http://localhost:8888");
-        corsConfiguration.addAllowedMethod("*");
-        corsConfiguration.addAllowedHeader("*");
-
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", corsConfiguration);
-
-        return source;
     }
 
     @Bean

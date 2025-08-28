@@ -4,6 +4,7 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Data
 @NoArgsConstructor
@@ -18,4 +19,5 @@ public class UserProfileCreationRequest {
     LocalDate dob;
     String phoneNumber;
     String city;
+    LocalDateTime joinDate;
 }

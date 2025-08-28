@@ -1,5 +1,6 @@
 package com.MyProject.identity.identity_service.service;
 
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -65,6 +66,7 @@ public class UserService {
             throw new AppException(ErrorCode.USERNAME_EXISTED);
         }
 
+        userprofileRequest.setJoinDate(LocalDateTime.now());
         client.createProfile(userprofileRequest);
 
         NotificationEvent notificationEvent = NotificationEvent.builder()
@@ -101,17 +103,6 @@ public class UserService {
         } else {
             throw new AppException(ErrorCode.USER_NOT_EXISTED);
         }
-    }
-
-    @Transactional(rollbackFor = Exception.class)
-    public UserResponse getMyInfo() {
-        var authentication = SecurityContextHolder.getContext().getAuthentication();
-        String username = authentication.getName();
-
-        User user =
-                userRepository.findByUsername(username).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
-
-        return userMapper.toUserResponse(user);
     }
 
     @Transactional

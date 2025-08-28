@@ -11,12 +11,14 @@ import com.MyProject.profile.profile_service.repository.UserProfileRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -45,6 +47,7 @@ public class UserProfileService {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         UserProfile profile = userProfileRepository.findByUsername(authentication.getName());
 
+        log.info(String.valueOf(profile));
         return userProfileMapper.toUserProfileResponse(profile);
     }
 

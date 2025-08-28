@@ -6,6 +6,7 @@ import org.springframework.data.neo4j.core.schema.Id;
 import org.springframework.data.neo4j.core.schema.Node;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Node("user_profile")
 @Getter
@@ -23,4 +24,5 @@ public class UserProfile {
     LocalDate dob;
     String phoneNumber;
     String city;
+    LocalDateTime joinDate;
 }

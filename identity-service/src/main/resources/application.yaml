@@ -22,6 +22,10 @@ jwt:
   signerKey: "uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0"
   valid-duration: 3600
   refreshable-duration: 360000
+  client-id: "266132262326-islopun9fjajf96gds894ncmi43ugcku.apps.googleusercontent.com"
+  client-secret: "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"
+  redirect-uri: "http://localhost:5173/authenticate"
+  grant-type: "authorization_code"
   cleanup:
     delay: 3600000
 

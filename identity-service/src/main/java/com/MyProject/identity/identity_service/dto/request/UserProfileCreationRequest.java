@@ -1,13 +1,14 @@
 package com.MyProject.identity.identity_service.dto.request;
 
-import com.MyProject.profile.profile_service.validator.DobConstraint;
-import com.MyProject.profile.profile_service.validator.PhoneNumberConstraint;
+import com.MyProject.identity.identity_service.validator.DobConstraint;
+import com.MyProject.identity.identity_service.validator.PhoneNumberConstraint;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Data
 @NoArgsConstructor
@@ -28,8 +29,10 @@ public class UserProfileCreationRequest {
     LocalDate dob;
 
     @NotNull
-    @PhoneNumberConstraint(message = "INVALID_PHONENUMBER")
+    @PhoneNumberConstraint(message = "INVALID_PHONE_NUMBER")
     String phoneNumber;
 
     String city;
+
+    LocalDateTime joinDate;
 }

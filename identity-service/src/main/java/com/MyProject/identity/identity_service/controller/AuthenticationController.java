@@ -5,10 +5,7 @@ import java.text.ParseException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import com.nimbusds.jose.JOSEException;
 import com.MyProject.identity.identity_service.dto.request.AuthenticationRequest;
@@ -56,6 +53,12 @@ public class AuthenticationController {
     ApiResponse<AuthenticationResponse> refresh(@RequestBody RefreshRequest request, @AuthenticationPrincipal Jwt jwt)
             throws JOSEException, ParseException {
         var result = authenticationService.refreshToken(request, jwt);
+        return ApiResponse.<AuthenticationResponse>builder().result(result).build();
+    }
+
+    @PostMapping("/outbound/authentication")
+    ApiResponse<AuthenticationResponse> outboundAuthenticate(@RequestParam("code") String code) throws JOSEException {
+        var result = authenticationService.outboundAuthenticate(code);
         return ApiResponse.<AuthenticationResponse>builder().result(result).build();
     }
 }

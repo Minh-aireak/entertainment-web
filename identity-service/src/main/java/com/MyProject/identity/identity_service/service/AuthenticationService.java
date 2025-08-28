@@ -2,14 +2,25 @@ package com.MyProject.identity.identity_service.service;
 
 import java.text.ParseException;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
+import java.util.Set;
 import java.util.StringJoiner;
 import java.util.UUID;
 
+import com.MyProject.event.dto.NotificationEvent;
+import com.MyProject.identity.identity_service.dto.request.*;
+import com.MyProject.identity.identity_service.entity.Role;
+import com.MyProject.identity.identity_service.repository.RoleRepository;
+import com.MyProject.identity.identity_service.repository.httpclient.OutboundIdentityClient;
+import com.MyProject.identity.identity_service.repository.httpclient.OutboundUserClient;
+import com.MyProject.identity.identity_service.repository.httpclient.UserProfileClient;
 import io.jsonwebtoken.security.Keys;
 import io.jsonwebtoken.security.WeakKeyException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
@@ -21,10 +32,6 @@ import com.nimbusds.jose.crypto.MACSigner;
 import com.nimbusds.jose.crypto.MACVerifier;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
-import com.MyProject.identity.identity_service.dto.request.AuthenticationRequest;
-import com.MyProject.identity.identity_service.dto.request.IntrospectRequest;
-import com.MyProject.identity.identity_service.dto.request.LogoutRequest;
-import com.MyProject.identity.identity_service.dto.request.RefreshRequest;
 import com.MyProject.identity.identity_service.dto.response.AuthenticationResponse;
 import com.MyProject.identity.identity_service.dto.response.IntrospectResponse;
 import com.MyProject.identity.identity_service.entity.InvalidatedToken;
@@ -41,6 +48,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -48,6 +56,11 @@ public class AuthenticationService {
     UserRepository userRepository;
     PasswordEncoder passwordEncoder;
     InvalidatedTokenRepository invalidatedTokenRepository;
+    OutboundIdentityClient outboundIdentityClient;
+    OutboundUserClient outboundUserClient;
+    UserProfileClient client;
+    RoleRepository roleRepository;
+    KafkaTemplate<String, Object> kafkaTemplate;
 
     @NonFinal
     @Value("${jwt.signerKey}")
@@ -60,6 +73,22 @@ public class AuthenticationService {
     @NonFinal
     @Value("${jwt.refreshable-duration}")
     long refreshableDuration;
+
+    @NonFinal
+    @Value("${jwt.client-id}")
+    String clientId;
+
+    @NonFinal
+    @Value("${jwt.client-secret}")
+    String clientSecret;
+
+    @NonFinal
+    @Value("${jwt.redirect-uri}")
+    String redirectUri;
+
+    @NonFinal
+    @Value("${jwt.grant-type}")
+    String authorizationCode;
 
     public AuthenticationResponse authentication(AuthenticationRequest request) throws JOSEException {
         var user = userRepository
@@ -205,5 +234,63 @@ public class AuthenticationService {
         } catch (WeakKeyException exception){
             throw new AppException(ErrorCode.WEAK_KEY);
         }
+    }
+
+    public AuthenticationResponse outboundAuthenticate(String code) throws JOSEException {
+        var response = outboundIdentityClient.exchangeToken(ExchangeTokenRequest
+                .builder()
+                        .code(code)
+                        .clientId(clientId)
+                        .clientSecret(clientSecret)
+                        .redirectUri(redirectUri)
+                        .grantType(authorizationCode)
+                .build());
+
+        var userInfo = outboundUserClient.getInfo("json", response.getAccessToken());
+
+        var user = userRepository.findByEmail(userInfo.getEmail()).orElseGet(() -> {
+            Role role = roleRepository.findById("USER").orElseThrow(()
+                    -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
+
+            User newUser = User.builder()
+                    .username(userInfo.getEmail())
+                    .email(userInfo.getEmail())
+                    .password(UUID.randomUUID().toString().replace("-", "").substring(0, 8))
+                    .roles(Set.of(role))
+                    .build();
+
+            UserProfileCreationRequest creationRequest = UserProfileCreationRequest.builder()
+                    .username(userInfo.getEmail())
+                    .email(userInfo.getEmail())
+                    .fistName(userInfo.getFamilyName())
+                    .lastName(userInfo.getGivenName())
+                    .joinDate(LocalDateTime.now())
+                    .build();
+
+            client.createProfile(creationRequest);
+
+            NotificationEvent notificationEvent = NotificationEvent.builder()
+                    .channel("EMAIL")
+                    .recipient(userInfo.getEmail())
+                    .subject("Welcome to travelplanner!")
+                    .body("Hello,\n" +
+                            "You have successfully registered as a member of TravelPlanner with the following credentials:\n" +
+                            "Username: " + userInfo.getEmail() +
+                            "\n" +
+                            "Password: " + newUser.getPassword() +
+                            ".Please remember to change your password as soon as possible for your account security.")
+                    .build();
+            newUser.setPassword(passwordEncoder.encode(newUser.getPassword()));
+            userRepository.save(newUser);
+            kafkaTemplate.send("notification-delivery", notificationEvent);
+
+            return newUser;
+        });
+
+        var token = generateToken(user);
+
+        return AuthenticationResponse.builder()
+                .token(token)
+                .build();
     }
 }

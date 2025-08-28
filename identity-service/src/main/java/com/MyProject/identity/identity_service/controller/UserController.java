@@ -33,8 +33,8 @@ public class UserController {
                 .build();
     }
 
-    @PostMapping("/changePassword")
-    ApiResponse<UserResponse> updateUser(@RequestBody @Valid UserUpdateRequest request) {
+    @PostMapping("/change-password")
+    ApiResponse<UserResponse> changePassword(@RequestBody @Valid UserUpdateRequest request) {
         return ApiResponse.<UserResponse>builder()
                 .result(userService.changePassword(request))
                 .build();
@@ -45,13 +45,6 @@ public class UserController {
     ApiResponse<Void> deleteUser(@PathVariable String userId) {
         userService.deleteUser(userId);
         return ApiResponse.<Void>builder().message("User has been deleted!").build();
-    }
-
-    @GetMapping("/getMyInfo")
-    ApiResponse<UserResponse> getMyInfo() {
-        return ApiResponse.<UserResponse>builder()
-                .result(userService.getMyInfo())
-                .build();
     }
 
     @GetMapping("/read")
