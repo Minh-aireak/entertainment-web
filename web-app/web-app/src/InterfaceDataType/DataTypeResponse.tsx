@@ -63,3 +63,11 @@ export interface CreatePostResponse {
   message: string;
   result: Schedule;
 }
+
+export interface StatusUpdateResponse {
+  userId: string;
+  scheduleId: string;
+  title: string;
+  newStatus: string;
+  message: string;
+}

@@ -192,5 +192,4 @@ const ScheduleCard: React.FC<ScheduleCardProps> = ({
     </Card>
   );
 };
-
 export default ScheduleCard;

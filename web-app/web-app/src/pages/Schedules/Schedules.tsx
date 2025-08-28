@@ -10,11 +10,13 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Pagination,
   CircularProgress,
-  Alert,
   Fab,
   Paper,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from "@mui/material";
 import {
   Search,
@@ -22,18 +24,23 @@ import {
   Refresh,
   Schedule as ScheduleIcon,
 } from "@mui/icons-material";
+import InfiniteScroll from "react-infinite-scroll-component";
 import ScheduleCard from "../../components/Schedule/ScheduleCard";
 import ScheduleDetail from "../../components/Schedule/ScheduleDetail";
-import { deleteSchedule, getMySchedules, createSchedule } from "../../services/scheduleService";
+import {
+  deleteSchedule,
+  getMySchedules,
+  createSchedule,
+} from "../../services/scheduleService";
 import { CustomAlertSnackbar } from "../../components/CustomAlertSnackbar";
 import type { Schedule } from "../../InterfaceDataType/DataTypeResponse";
 
 type DataCreatePostRequest = {
-        title: string;
+  title: string;
   startTime: string;
   endTime: string;
-  content?: string;
-}
+  content: string;
+};
 
 function Schedules() {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
@@ -48,29 +55,50 @@ function Schedules() {
     null
   );
   const [detailOpen, setDetailOpen] = useState(false);
-  const [totalPages, setTotalPages] = useState(1);
-  const [createNewSchedule, setCreateNewSchedule] = useState<DataCreatePostRequest | null>(null);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createForm, setCreateForm] = useState<DataCreatePostRequest>({
+    title: "",
+    startTime: "",
+    endTime: "",
+    content: "",
+  });
+  const [hasMore, setHasMore] = useState(true);
+  const [totalSize, setTotalSize] = useState(0);
 
-  const loadSchedules = async (page: number) => {
+  const loadSchedulePerPage = async (page: number, size: number) => {
+    setLoading(true);
     try {
-      setLoading(true);
-      await getMySchedules(page).then((response) => {
-        setTotalPages(response.data.result?.totalPages);
-        setSchedules((prev) => [...prev, ...response.data.result?.data]);
-      }).catch;
-      (error: any) => {
-        setSnackbarMessage(error.message);
-        setSnackbarOpen(true);
-        setSeverity(false);
-      };
+      const response = await getMySchedules(page, size);
+      setHasMore(response.data.result.data.length > 0);
+      setSchedules((prev) => [...prev, ...response.data.result.data]);
+      return response.data.result.data;
+    } catch (error: any) {
+      setSnackbarMessage(error.message);
+      setSnackbarOpen(true);
+      setSeverity(false);
     } finally {
       setLoading(false);
     }
   };
 
+  const loadMore = async () => {
+    const nextPage = currentPage + 1;
+    const nextData = await loadSchedulePerPage(nextPage, 6);
+    if (nextData) {
+      setCurrentPage(nextPage);
+    }
+  };
+
   useEffect(() => {
-    loadSchedules(currentPage);
-  }, [currentPage]);
+    if (!hasMore) return;
+    const loadInitData = async () => {
+      const initSchedule = await loadSchedulePerPage(1, 6);
+      if (initSchedule) {
+        setSchedules(initSchedule);
+      }
+    };
+    loadInitData();
+  }, []);
 
   const filteredSchedules = schedules.filter((schedule) => {
     const matchesSearch =
@@ -78,7 +106,11 @@ function Schedules() {
       schedule.content.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus =
-      statusFilter === "all" || schedule.status === statusFilter;
+      statusFilter === "all" ||
+      (statusFilter === "upcoming" && schedule.status === "Up coming") ||
+      (statusFilter === "ongoing" && schedule.status === "On going") ||
+      (statusFilter === "completed" && schedule.status === "Completed") ||
+      (statusFilter === "cancelled" && schedule.status === "Cancelled");
 
     return matchesSearch && matchesStatus;
   });
@@ -90,52 +122,86 @@ function Schedules() {
       const schedule = schedules.find((s) => s.id === scheduleId);
       if (schedule) {
         setSelectedSchedule(schedule);
-        setDetailOpen(true);  
-        setSelectedSchedule(schedule);
+        setDetailOpen(true);
       }
     } catch (error: any) {
       setSnackbarMessage(error.message);
-      setSeverity(false); 
-    } finally{
-      setSnackbarOpen(true);
+      setSeverity(false);
+    } finally {
       setLoading(false);
     }
   };
 
+  const handleCreateSchedule = async () => {
+    try {
+      setLoading(true);
+      const scheduleData = {
+        ...createForm,
+      };
+      const response = await createSchedule(scheduleData);
+      setSnackbarMessage(response.data.message);
+      setSeverity(true);
+      setCreateDialogOpen(false);
+      setCreateForm({ title: "", startTime: "", endTime: "", content: "" });
+      setCurrentPage(1);
+      setHasMore(true);
+      setSchedules([]);
+      const initSchedule = await loadSchedulePerPage(1, 6);
+      if (initSchedule) {
+        setSchedules(initSchedule);
+      }
+    } catch (error: any) {
+      setSnackbarMessage(error.message);
+      setSeverity(false);
+    } finally {
+      setSnackbarOpen(true);
+      setLoading(false);
+    }
+  };
+  /////////////////
   const handleEditSchedule = (scheduleId: string) => {
-    // TODO: Implement edit functionality
     console.log("Edit schedule:", scheduleId);
   };
 
   const handleDeleteSchedule = async (scheduleId: string) => {
     try {
       setLoading(true);
-      await deleteSchedule(scheduleId).then((response) => {
-        setSnackbarMessage(response.data.message);
-      }).catch;
-      (error: any) => {
-        setSnackbarMessage(error.message);
-        setSeverity(true);
-      };
+      const response = await deleteSchedule(scheduleId);
+      setSnackbarMessage(response.data.message);
+      setSeverity(true);
+      setSchedules((prev) =>
+        prev.filter((schedule) => schedule.id !== scheduleId)
+      );
+      if (selectedSchedule?.id === scheduleId) {
+        setDetailOpen(false);
+        setSelectedSchedule(null);
+      }
+    } catch (error: any) {
+      setSnackbarMessage(error.message);
+      setSeverity(false);
     } finally {
       setSnackbarOpen(true);
       setLoading(false);
     }
-    };
-
-      const handleCreateSchedule = async (createNewSchedule: DataCreatePostRequest) => {
-    try {
-      setLoading(true);
-      const response = await createSchedule(createNewSchedule);
-        setSnackbarMessage(response.data.message);
-      }catch(error: any) {
-        setSnackbarMessage(error.message);
-        setSeverity(true);
-      }finally {
-      setSnackbarOpen(true);
-      setLoading(false);
-    }
   };
+
+  const handleCreateButtonClick = () => {
+    setCreateDialogOpen(true);
+  };
+
+  const handleCloseCreateDialog = () => {
+    setCreateDialogOpen(false);
+    setCreateForm({ title: "", startTime: "", endTime: "", content: "" });
+  };
+
+  const handleFormChange = (
+    field: keyof DataCreatePostRequest,
+    value: string
+  ) => {
+    setCreateForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
   };
 
   return (
@@ -146,6 +212,78 @@ function Schedules() {
         severity={severity ? "success" : "error"}
         onClose={() => setSnackbarOpen(false)}
       />
+
+      <Dialog
+        open={createDialogOpen}
+        onClose={handleCloseCreateDialog}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Create New Schedule</DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2, display: "flex", flexDirection: "column", gap: 2 }}>
+            <TextField
+              fullWidth
+              label="Title"
+              value={createForm.title}
+              onChange={(e) => handleFormChange("title", e.target.value)}
+              required
+            />
+            <TextField
+              fullWidth
+              label="Start Time"
+              type="datetime-local"
+              value={createForm.startTime}
+              onChange={(e) => handleFormChange("startTime", e.target.value)}
+              required
+              slotProps={{
+                inputLabel: {
+                  shrink: true,
+                },
+              }}
+            />
+            <TextField
+              fullWidth
+              label="End Time"
+              type="datetime-local"
+              value={createForm.endTime}
+              onChange={(e) => handleFormChange("endTime", e.target.value)}
+              required
+              slotProps={{
+                inputLabel: {
+                  shrink: true,
+                },
+              }}
+            />
+            <TextField
+              fullWidth
+              label="Content"
+              multiline
+              rows={4}
+              value={createForm.content}
+              onChange={(e) => handleFormChange("content", e.target.value)}
+              required
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseCreateDialog}>Cancel</Button>
+          <Button
+            onClick={handleCreateSchedule}
+            variant="contained"
+            disabled={
+              loading ||
+              !createForm.title ||
+              !createForm.startTime ||
+              !createForm.endTime ||
+              !createForm.content
+            }
+          >
+            {loading ? <CircularProgress size={20} /> : "Create"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Container maxWidth="xl" sx={{ py: 4 }}>
         <Box sx={{ mb: 4 }}>
           <Box
@@ -164,14 +302,16 @@ function Schedules() {
                 My schedules
               </Typography>
             </Box>
-            <Button
-              variant="contained"
-              startIcon={<Add />}
-              onClick={handleCreateSchedule}
-              sx={{ borderRadius: 2 }}
-            >
-              Create new schedule
-            </Button>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <Button
+                variant="contained"
+                startIcon={<Add />}
+                onClick={handleCreateButtonClick}
+                sx={{ borderRadius: 2 }}
+              >
+                Create new schedule
+              </Button>
+            </Box>
           </Box>
           <Box
             sx={{
@@ -191,7 +331,7 @@ function Schedules() {
                 color="primary.main"
                 sx={{ fontWeight: 700 }}
               >
-                {schedules.filter((s) => s.status === "upcoming").length}
+                {schedules.filter((s) => s.status === "Up coming").length}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 Up coming
@@ -203,7 +343,7 @@ function Schedules() {
                 color="success.main"
                 sx={{ fontWeight: 700 }}
               >
-                {schedules.filter((s) => s.status === "ongoing").length}
+                {schedules.filter((s) => s.status === "On going").length}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 On going
@@ -215,7 +355,7 @@ function Schedules() {
                 color="text.secondary"
                 sx={{ fontWeight: 700 }}
               >
-                {schedules.filter((s) => s.status === "completed").length}
+                {schedules.filter((s) => s.status === "Completed").length}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 Completed
@@ -227,7 +367,7 @@ function Schedules() {
                 color="error.main"
                 sx={{ fontWeight: 700 }}
               >
-                {schedules.filter((s) => s.status === "cancelled").length}
+                {schedules.filter((s) => s.status === "Cancelled").length}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 Cancelled
@@ -251,16 +391,14 @@ function Schedules() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               slotProps={{
-    textField: {
-      InputProps: {
-        startAdornment: (
-          <InputAdornment position="start">
-            <SearchIcon />
-          </InputAdornment>
-        ),
-      },
-    },
-  }}
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search />
+                    </InputAdornment>
+                  ),
+                },
+              }}
             />
             <FormControl fullWidth>
               <InputLabel>Status</InputLabel>
@@ -280,20 +418,21 @@ function Schedules() {
               fullWidth
               variant="outlined"
               startIcon={<Refresh />}
-              onClick={loadSchedules}
+              onClick={async () => {
+                setCurrentPage(1);
+                setHasMore(true);
+                setSchedules([]);
+                const refreshData = await loadSchedulePerPage(1, 6);
+                if (refreshData) {
+                  setSchedules(refreshData);
+                }
+              }}
               disabled={loading}
             >
               Refresh
             </Button>
           </Box>
         </Paper>
-
-        {/* Content */}
-        {error && (
-          <Alert severity="error" sx={{ mb: 3 }}>
-            {error}
-          </Alert>
-        )}
 
         {loading ? (
           <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
@@ -305,55 +444,47 @@ function Schedules() {
               sx={{ fontSize: 64, color: "text.secondary", mb: 2 }}
             />
             <Typography variant="h6" color="text.secondary" sx={{ mb: 1 }}>
-              Không tìm thấy lịch trình nào
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {searchTerm || statusFilter !== "all"
-                ? "Thử thay đổi bộ lọc tìm kiếm"
-                : "Bạn chưa có lịch trình nào. Hãy tạo lịch trình đầu tiên!"}
+              No schedule found
             </Typography>
           </Paper>
         ) : (
           <>
-            <Box
-              sx={{
-                display: "grid",
-                gridTemplateColumns: {
-                  xs: "1fr",
-                  sm: "repeat(2, 1fr)",
-                  md: "repeat(3, 1fr)",
-                },
-                gap: 3,
-              }}
-            >
-              {filteredSchedules.map((schedule) => (
-                <Box key={schedule.id}>
-                  <ScheduleCard
-                    schedule={schedule}
-                    onViewDetail={handleViewDetail}
-                    onEdit={handleEditSchedule}
-                    onDelete={handleDeleteSchedule}
-                  />
+            <InfiniteScroll
+              dataLength={schedules.length}
+              next={loadMore}
+              hasMore={hasMore}
+              loader={
+                <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+                  <CircularProgress />
                 </Box>
-              ))}
-            </Box>
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
-                <Pagination
-                  count={totalPages}
-                  page={currentPage}
-                  onChange={(_, page) => setCurrentPage(page)}
-                  color="primary"
-                  size="large"
-                />
+              }
+            >
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: {
+                    xs: "1fr",
+                    sm: "repeat(2, 1fr)",
+                    md: "repeat(3, 1fr)",
+                  },
+                  gap: 3,
+                }}
+              >
+                {filteredSchedules.map((schedule) => (
+                  <Box key={schedule.id}>
+                    <ScheduleCard
+                      schedule={schedule}
+                      onViewDetail={handleViewDetail}
+                      onEdit={handleEditSchedule}
+                      onDelete={handleDeleteSchedule}
+                    />
+                  </Box>
+                ))}
               </Box>
-            )}
+            </InfiniteScroll>
           </>
         )}
 
-        {/* Schedule Detail Dialog */}
         <ScheduleDetail
           schedule={selectedSchedule}
           open={detailOpen}
@@ -361,12 +492,10 @@ function Schedules() {
           onEdit={handleEditSchedule}
           onDelete={handleDeleteSchedule}
         />
-
-        {/* Floating Action Button */}
         <Fab
           color="primary"
           aria-label="add"
-          onClick={handleCreateSchedule}
+          onClick={handleCreateButtonClick}
           sx={{
             position: "fixed",
             bottom: 16,
