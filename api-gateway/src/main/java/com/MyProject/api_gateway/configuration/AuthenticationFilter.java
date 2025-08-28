@@ -39,7 +39,8 @@ public class AuthenticationFilter implements GlobalFilter, Order {
     private String[] publicEndpoint = {
             "/identity/auth/login",
             "/identity/users/registration",
-            "/identity/auth/outbound/authentication"};
+            "/identity/auth/outbound/authentication",
+            "/identity/auth/refresh"};
 
     @Override
     public Class<? extends Annotation> annotationType() {
