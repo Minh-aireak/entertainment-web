@@ -41,8 +41,6 @@ import com.MyProject.identity.identity_service.exception.ErrorCode;
 import com.MyProject.identity.identity_service.repository.InvalidatedTokenRepository;
 import com.MyProject.identity.identity_service.repository.UserRepository;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -223,16 +221,20 @@ public class AuthenticationService {
 
     protected boolean checkJidAndSignerKey(String token, String expectedJid) {
         try {
-            Claims claims = Jwts.parserBuilder()
-                    .setSigningKey(Keys.hmacShaKeyFor(signerKey.getBytes()))
-                    .build()
-                    .parseClaimsJws(token)
-                    .getBody();
+            SignedJWT signedJWT = SignedJWT.parse(token);
+            JWSVerifier verifier = new MACVerifier(signerKey.getBytes());
 
-            String actualJid = claims.getId();
+            if(!signedJWT.verify(verifier)){
+                return false;
+            }
+
+            String actualJid = signedJWT.getJWTClaimsSet().getJWTID();
+
             return actualJid.equals(expectedJid);
         } catch (WeakKeyException exception){
             throw new AppException(ErrorCode.WEAK_KEY);
+        } catch (ParseException | JOSEException e) {
+            throw new RuntimeException(e);
         }
     }
 
