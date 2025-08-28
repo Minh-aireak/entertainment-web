@@ -3,17 +3,20 @@ package com.MyProject.post.post_service.dto.response;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class PostResponse {
+public class ScheduleResponse {
    String id;
    String userId;
+   String title;
    String content;
-   Instant createdDate;
-   Instant modifiedDate;
+   LocalDateTime startTime;
+   LocalDateTime endTime;
+   LocalDateTime createdDate;
+   String status;
 }

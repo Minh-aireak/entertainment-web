@@ -1,5 +1,6 @@
 package com.MyProject.post.post_service.entity;
 
+import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -8,7 +9,7 @@ import lombok.experimental.FieldDefaults;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.MongoId;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 @Getter
 @Setter
@@ -20,7 +21,10 @@ public class Post {
     String id;
 
     String userId;
+    String title;
     String content;
-    Instant createdDate;
-    Instant modifiedDate;
+    LocalDateTime startTime;
+    LocalDateTime endTime;
+    LocalDateTime createdDate;
+    String status;
 }
