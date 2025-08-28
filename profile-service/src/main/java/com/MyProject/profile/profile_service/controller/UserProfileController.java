@@ -28,7 +28,7 @@ public class UserProfileController {
                 .build();
     }
 
-    @PostMapping("/updateMyInfo")
+    @PostMapping("/update-my-profile")
     ApiResponse<UserProfileResponse> updateProfile(@RequestBody UserProfileUpdateRequest request){
         return ApiResponse.<UserProfileResponse>builder()
                 .result(userProfileService.updateProfile(request))

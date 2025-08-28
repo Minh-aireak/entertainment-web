@@ -47,7 +47,6 @@ public class UserProfileService {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         UserProfile profile = userProfileRepository.findByUsername(authentication.getName());
 
-        log.info(String.valueOf(profile));
         return userProfileMapper.toUserProfileResponse(profile);
     }
 
