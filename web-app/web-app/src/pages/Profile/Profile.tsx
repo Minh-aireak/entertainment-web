@@ -85,7 +85,7 @@ const Profile = () => {
           avatar: response.result.avatar ?? "",
         });
       } catch (error: any) {
-        setSnackbarMessage(error.response.data.message);
+        setSnackbarMessage(error.message);
         setSeverity(false);
         setSnackbarOpen(true);
       }

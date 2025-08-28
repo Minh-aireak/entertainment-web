@@ -9,7 +9,7 @@ export interface UserProfileResponse {
     phoneNumber: string;
     city: string;
     joinDate: Date;
-    avatar: string;
+    avatar?: string;
   };
 }
 

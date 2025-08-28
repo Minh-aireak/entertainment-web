@@ -4,7 +4,7 @@ export const CONFIG = {
 
 export const API_ENDPOINTS = {
   LOGIN: "identity/auth/login",
-  REFRESH_TOKEN: "identity/auth/refresh-token",
+  REFRESH_TOKEN: "identity/auth/refresh",
   REGISTER: "identity/users/registration",
   MY_INFO: "/profile/get-my-info",
   UPDATE_PROFILE: "/profile/update-my-profile",

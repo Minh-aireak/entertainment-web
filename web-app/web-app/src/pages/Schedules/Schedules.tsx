@@ -11,7 +11,6 @@ import {
   Select,
   MenuItem,
   CircularProgress,
-  Fab,
   Paper,
   Dialog,
   DialogTitle,
@@ -34,6 +33,7 @@ import {
 } from "../../services/scheduleService";
 import { CustomAlertSnackbar } from "../../components/CustomAlertSnackbar";
 import type { Schedule } from "../../InterfaceDataType/DataTypeResponse";
+import ScheduleDelete from "../../components/Schedule/ScheduleDelete";
 
 type DataCreatePostRequest = {
   title: string;
@@ -54,6 +54,7 @@ function Schedules() {
   const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(
     null
   );
+  const [scheduleId, setScheduleId] = useState("");
   const [detailOpen, setDetailOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createForm, setCreateForm] = useState<DataCreatePostRequest>({
@@ -63,7 +64,7 @@ function Schedules() {
     content: "",
   });
   const [hasMore, setHasMore] = useState(true);
-  const [totalSize, setTotalSize] = useState(0);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const loadSchedulePerPage = async (page: number, size: number) => {
     setLoading(true);
@@ -82,23 +83,14 @@ function Schedules() {
   };
 
   const loadMore = async () => {
+    if (loading) return;
+
     const nextPage = currentPage + 1;
     const nextData = await loadSchedulePerPage(nextPage, 6);
-    if (nextData) {
+    if (nextData && nextData.length > 0) {
       setCurrentPage(nextPage);
     }
   };
-
-  useEffect(() => {
-    if (!hasMore) return;
-    const loadInitData = async () => {
-      const initSchedule = await loadSchedulePerPage(1, 6);
-      if (initSchedule) {
-        setSchedules(initSchedule);
-      }
-    };
-    loadInitData();
-  }, []);
 
   const filteredSchedules = schedules.filter((schedule) => {
     const matchesSearch =
@@ -109,17 +101,26 @@ function Schedules() {
       statusFilter === "all" ||
       (statusFilter === "upcoming" && schedule.status === "Up coming") ||
       (statusFilter === "ongoing" && schedule.status === "On going") ||
-      (statusFilter === "completed" && schedule.status === "Completed") ||
-      (statusFilter === "cancelled" && schedule.status === "Cancelled");
+      (statusFilter === "completed" && schedule.status === "Completed");
 
     return matchesSearch && matchesStatus;
   });
+
+  useEffect(() => {
+    const loadInitData = async () => {
+      const initSchedule = await loadSchedulePerPage(1, 6);
+      if (initSchedule) {
+        setSchedules(initSchedule);
+      }
+    };
+    loadInitData();
+  }, []);
 
   const handleViewDetail = async (scheduleId: string) => {
     try {
       setLoading(true);
 
-      const schedule = schedules.find((s) => s.id === scheduleId);
+      const schedule = filteredSchedules.find((s) => s.id === scheduleId);
       if (schedule) {
         setSelectedSchedule(schedule);
         setDetailOpen(true);
@@ -128,6 +129,47 @@ function Schedules() {
       setSnackbarMessage(error.message);
       setSeverity(false);
     } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteView = async (scheduleId: string) => {
+    try {
+      setLoading(true);
+
+      const schedule = filteredSchedules.find((s) => s.id === scheduleId);
+      if (schedule) {
+        setScheduleId(schedule.id);
+        setDeleteOpen(true);
+      }
+    } catch (error: any) {
+      setSnackbarMessage(error.message);
+      setSeverity(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /////////////////
+  const handleEditSchedule = (scheduleId: string) => {
+    console.log("Edit schedule:", scheduleId);
+  };
+
+  const handleDeleteSchedule = async (scheduleId: string) => {
+    try {
+      setLoading(true);
+      const response = await deleteSchedule(scheduleId);
+      setSnackbarMessage(response.data.message);
+      setSeverity(true);
+      setDeleteOpen(false);
+      setSchedules((prev) =>
+        prev.filter((schedule) => schedule.id !== scheduleId)
+      );
+    } catch (error: any) {
+      setSnackbarMessage(error.message);
+      setSeverity(false);
+    } finally {
+      setSnackbarOpen(true);
       setLoading(false);
     }
   };
@@ -158,32 +200,6 @@ function Schedules() {
       setLoading(false);
     }
   };
-  /////////////////
-  const handleEditSchedule = (scheduleId: string) => {
-    console.log("Edit schedule:", scheduleId);
-  };
-
-  const handleDeleteSchedule = async (scheduleId: string) => {
-    try {
-      setLoading(true);
-      const response = await deleteSchedule(scheduleId);
-      setSnackbarMessage(response.data.message);
-      setSeverity(true);
-      setSchedules((prev) =>
-        prev.filter((schedule) => schedule.id !== scheduleId)
-      );
-      if (selectedSchedule?.id === scheduleId) {
-        setDetailOpen(false);
-        setSelectedSchedule(null);
-      }
-    } catch (error: any) {
-      setSnackbarMessage(error.message);
-      setSeverity(false);
-    } finally {
-      setSnackbarOpen(true);
-      setLoading(false);
-    }
-  };
 
   const handleCreateButtonClick = () => {
     setCreateDialogOpen(true);
@@ -202,6 +218,16 @@ function Schedules() {
       ...prev,
       [field]: value,
     }));
+  };
+
+  const handleRefresh = async () => {
+    setCurrentPage(1);
+    setHasMore(true);
+    setSchedules([]);
+    const refreshData = await loadSchedulePerPage(1, 6);
+    if (refreshData) {
+      setSchedules(refreshData);
+    }
   };
 
   return (
@@ -313,67 +339,6 @@ function Schedules() {
               </Button>
             </Box>
           </Box>
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: {
-                xs: "1fr",
-                sm: "repeat(2, 1fr)",
-                md: "repeat(4, 1fr)",
-              },
-              gap: 2,
-              mb: 3,
-            }}
-          >
-            <Paper sx={{ p: 2, textAlign: "center" }}>
-              <Typography
-                variant="h4"
-                color="primary.main"
-                sx={{ fontWeight: 700 }}
-              >
-                {schedules.filter((s) => s.status === "Up coming").length}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Up coming
-              </Typography>
-            </Paper>
-            <Paper sx={{ p: 2, textAlign: "center" }}>
-              <Typography
-                variant="h4"
-                color="success.main"
-                sx={{ fontWeight: 700 }}
-              >
-                {schedules.filter((s) => s.status === "On going").length}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                On going
-              </Typography>
-            </Paper>
-            <Paper sx={{ p: 2, textAlign: "center" }}>
-              <Typography
-                variant="h4"
-                color="text.secondary"
-                sx={{ fontWeight: 700 }}
-              >
-                {schedules.filter((s) => s.status === "Completed").length}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Completed
-              </Typography>
-            </Paper>
-            <Paper sx={{ p: 2, textAlign: "center" }}>
-              <Typography
-                variant="h4"
-                color="error.main"
-                sx={{ fontWeight: 700 }}
-              >
-                {schedules.filter((s) => s.status === "Cancelled").length}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Cancelled
-              </Typography>
-            </Paper>
-          </Box>
         </Box>
 
         <Paper sx={{ p: 3, mb: 3 }}>
@@ -411,22 +376,13 @@ function Schedules() {
                 <MenuItem value="upcoming">Up coming</MenuItem>
                 <MenuItem value="ongoing">On going</MenuItem>
                 <MenuItem value="completed">Completed</MenuItem>
-                <MenuItem value="cancelled">Cancelled</MenuItem>
               </Select>
             </FormControl>
             <Button
               fullWidth
               variant="outlined"
               startIcon={<Refresh />}
-              onClick={async () => {
-                setCurrentPage(1);
-                setHasMore(true);
-                setSchedules([]);
-                const refreshData = await loadSchedulePerPage(1, 6);
-                if (refreshData) {
-                  setSchedules(refreshData);
-                }
-              }}
+              onClick={handleRefresh}
               disabled={loading}
             >
               Refresh
@@ -434,10 +390,8 @@ function Schedules() {
           </Box>
         </Paper>
 
-        {loading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-            <CircularProgress />
-          </Box>
+        {loading && schedules.length === 0 ? (
+          <Box sx={{ display: "flex", justifyContent: "center", py: 8 }} />
         ) : filteredSchedules.length === 0 ? (
           <Paper sx={{ p: 8, textAlign: "center" }}>
             <ScheduleIcon
@@ -450,14 +404,10 @@ function Schedules() {
         ) : (
           <>
             <InfiniteScroll
-              dataLength={schedules.length}
+              dataLength={filteredSchedules.length}
               next={loadMore}
               hasMore={hasMore}
-              loader={
-                <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-                  <CircularProgress />
-                </Box>
-              }
+              loader={null}
             >
               <Box
                 sx={{
@@ -476,7 +426,7 @@ function Schedules() {
                       schedule={schedule}
                       onViewDetail={handleViewDetail}
                       onEdit={handleEditSchedule}
-                      onDelete={handleDeleteSchedule}
+                      onDelete={handleDeleteView}
                     />
                   </Box>
                 ))}
@@ -490,20 +440,15 @@ function Schedules() {
           open={detailOpen}
           onClose={() => setDetailOpen(false)}
           onEdit={handleEditSchedule}
+          onDelete={handleDeleteView}
+        />
+
+        <ScheduleDelete
+          open={deleteOpen}
+          scheduleId={scheduleId}
+          onClose={() => setDeleteOpen(false)}
           onDelete={handleDeleteSchedule}
         />
-        <Fab
-          color="primary"
-          aria-label="add"
-          onClick={handleCreateButtonClick}
-          sx={{
-            position: "fixed",
-            bottom: 16,
-            right: 16,
-          }}
-        >
-          <Add />
-        </Fab>
       </Container>
     </>
   );

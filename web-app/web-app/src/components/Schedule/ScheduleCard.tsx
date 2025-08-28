@@ -68,6 +68,9 @@ const ScheduleCard: React.FC<ScheduleCardProps> = ({
           boxShadow: "0 8px 25px rgba(0,0,0,0.15)",
           cursor: "pointer",
         },
+        borderRight: "1px solid",
+        borderBottom: "1px solid",
+        borderColor: "grey.400",
       }}
       onClick={() => onViewDetail(schedule.id)}
     >

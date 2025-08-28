@@ -95,29 +95,7 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({
         <Typography variant="h5" component="div" sx={{ fontWeight: 600 }}>
           Schedule Details
         </Typography>
-        <Box>
-          {onEdit && (
-            <IconButton
-              onClick={() => onEdit(schedule.id)}
-              sx={{ color: "primary.main", mr: 1 }}
-            >
-              <Edit />
-            </IconButton>
-          )}
-          {onDelete && (
-            <IconButton
-              onClick={() => onDelete(schedule.id)}
-              sx={{ color: "error.main", mr: 1 }}
-            >
-              <Delete />
-            </IconButton>
-          )}
-          <IconButton onClick={onClose}>
-            <Close />
-          </IconButton>
-        </Box>
       </DialogTitle>
-
       <DialogContent sx={{ pt: 0 }}>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
           <Box>
@@ -264,11 +242,19 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({
           </Box>
         </Box>
       </DialogContent>
-
       <DialogActions sx={{ p: 3, pt: 0 }}>
         <Button onClick={onClose} variant="outlined">
           Close
         </Button>
+        {onDelete && (
+          <Button
+            onClick={() => onDelete(schedule.id)}
+            sx={{ backgroundColor: "error.main", color: "white" }}
+            startIcon={<Delete />}
+          >
+            Delete
+          </Button>
+        )}
         {onEdit && (
           <Button
             onClick={() => onEdit(schedule.id)}
