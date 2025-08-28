@@ -1,0 +1,39 @@
+server:
+  port: 8888
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: block_api_internal_profile
+              uri: http://localhost:8081
+              predicates:
+                - Path=/profile/internal/**
+              filters:
+                - SetStatus=FORBIDDEN
+            - id: block_api_internal_identity
+              uri: http://localhost:8080
+              predicates:
+                - Path=/users/internal/**
+              filters:
+                - SetStatus=FORBIDDEN
+            - id: identity_service
+              uri: http://localhost:8080
+              predicates:
+                - Path=/identity/**
+            - id: profile_service
+              uri: http://localhost:8081
+              predicates:
+                - Path=/profile/**
+            - id: notification_service
+              uri: http://localhost:8082
+              predicates:
+                - Path=/notification/**
+            - id: post_service
+              uri: http://localhost:8083
+              predicates:
+                - Path=/post/**
