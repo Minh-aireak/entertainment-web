@@ -3,7 +3,7 @@ import { API_ENDPOINTS } from "../configurations/configuration";
 import type {
   UserProfileResponse,
   UpdateProfileResponse,
-} from "../InterfaceDataType/DataTypeResponse";
+} from "../InterfaceDataType/DataType";
 
 export const getMyInfo = async (): Promise<UserProfileResponse> => {
   return (await httpClient.get(API_ENDPOINTS.MY_INFO))

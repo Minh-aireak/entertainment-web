@@ -1,7 +1,7 @@
 import { httpClient } from "../../configurations/httpClient";
 import { API_ENDPOINTS } from "../../configurations/configuration";
 import AuthClientStore from "../client-store/AuthClientStore";
-import type { LoginResponse } from "../../InterfaceDataType/DataTypeResponse";
+import type { LoginResponse } from "../../InterfaceDataType/DataType";
 
 export const logIn = async (
   username: string,

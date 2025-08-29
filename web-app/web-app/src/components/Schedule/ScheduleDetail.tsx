@@ -9,61 +9,56 @@ import {
   Box,
   Chip,
   Paper,
-  IconButton,
 } from "@mui/material";
 import {
-  Close,
   AccessTime,
   CalendarToday,
   Description,
   Edit,
   Delete,
+  Save,
 } from "@mui/icons-material";
-import type { Schedule } from "../../InterfaceDataType/DataTypeResponse";
+import type {
+  PostDataUpdate,
+  Schedule,
+} from "../../InterfaceDataType/DataType";
 import dayjs from "dayjs";
 
 interface ScheduleDetailProps {
   schedule: Schedule | null;
   open: boolean;
-  onClose: () => void;
-  onEdit?: (scheduleId: string) => void;
-  onDelete?: (scheduleId: string) => void;
+  onCloseDetail: () => void;
+  onEdit: (scheduleId: string) => void;
+  onDelete: (scheduleId: string) => void;
 }
 
 const getStatusColor = (status: string) => {
   switch (status) {
-    case "upcoming":
+    case "Up coming":
       return "primary";
-    case "ongoing":
+    case "On going":
       return "success";
-    case "completed":
-      return "default";
-    case "cancelled":
-      return "error";
-    default:
+    case "Completed":
       return "default";
   }
 };
 
 const getStatusText = (status: string) => {
   switch (status) {
-    case "upcoming":
+    case "Up coming":
       return "Up coming";
-    case "ongoing":
+    case "On going":
       return "On going";
-    case "completed":
+    case "Completed":
       return "Completed";
-    case "cancelled":
-      return "Cancelled";
     default:
-      return status;
   }
 };
 
 const ScheduleDetail: React.FC<ScheduleDetailProps> = ({
   schedule,
   open,
-  onClose,
+  onCloseDetail,
   onEdit,
   onDelete,
 }) => {
@@ -72,7 +67,7 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({
   return (
     <Dialog
       open={open}
-      onClose={onClose}
+      onClose={onCloseDetail}
       maxWidth="md"
       fullWidth
       slotProps={{
@@ -98,29 +93,27 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({
       </DialogTitle>
       <DialogContent sx={{ pt: 0 }}>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <Box>
-            <Box
-              sx={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-                mb: 2,
-              }}
-            >
-              <Typography variant="h4" component="h1" sx={{ fontWeight: 700 }}>
-                {schedule.title}
-              </Typography>
-              <Chip
-                label={getStatusText(schedule.status)}
-                color={getStatusColor(schedule.status) as any}
-                size="medium"
-                sx={{ ml: 2, fontSize: 13 }}
-              />
-            </Box>
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              mb: 2,
+            }}
+          >
+            <Typography variant="h4" component="h1" sx={{ fontWeight: 700 }}>
+              {schedule.title}
+            </Typography>
+            <Chip
+              label={getStatusText(schedule.status)}
+              color={getStatusColor(schedule.status) as any}
+              size="medium"
+              sx={{ ml: 2, fontSize: 13 }}
+            />
           </Box>
 
           <Box>
-            <Paper sx={{ p: 3, mb: 2 }}>
+            <Paper sx={{ pb: 3, mb: 2, pl: 3, pr: 3 }}>
               <Typography
                 variant="h6"
                 sx={{
@@ -243,27 +236,23 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({
         </Box>
       </DialogContent>
       <DialogActions sx={{ p: 3, pt: 0 }}>
-        <Button onClick={onClose} variant="outlined">
+        <Button onClick={onCloseDetail} variant="outlined">
           Close
         </Button>
-        {onDelete && (
-          <Button
-            onClick={() => onDelete(schedule.id)}
-            sx={{ backgroundColor: "error.main", color: "white" }}
-            startIcon={<Delete />}
-          >
-            Delete
-          </Button>
-        )}
-        {onEdit && (
-          <Button
-            onClick={() => onEdit(schedule.id)}
-            variant="contained"
-            startIcon={<Edit />}
-          >
-            Edit
-          </Button>
-        )}
+        <Button
+          onClick={() => onDelete(schedule.id)}
+          sx={{ backgroundColor: "error.main", color: "white" }}
+          startIcon={<Delete />}
+        >
+          Delete
+        </Button>
+        <Button
+          onClick={() => onEdit(schedule.id)}
+          variant="contained"
+          startIcon={<Edit />}
+        >
+          Edit
+        </Button>
       </DialogActions>
     </Dialog>
   );

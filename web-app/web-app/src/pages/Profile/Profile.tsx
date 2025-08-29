@@ -13,7 +13,7 @@ import {
   updateProfile,
   uploadAvatar,
 } from "../../services/userService";
-import type { UserProfileResponse } from "../../InterfaceDataType/DataTypeResponse";
+import type { UserProfileResponse } from "../../InterfaceDataType/DataType";
 
 type ResultUserProfileResponse = UserProfileResponse["result"];
 const cx = classNames.bind(styles);

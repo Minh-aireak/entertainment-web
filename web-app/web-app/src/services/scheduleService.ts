@@ -4,7 +4,9 @@ import type {
   ScheduleResponse,
   CreatePostResponse,
   ScheduleDetailResponse,
-} from "../InterfaceDataType/DataTypeResponse";
+  PostDataUpdate,
+  UpdatePostResponse,
+} from "../InterfaceDataType/DataType";
 
 export const getMySchedules = async (page: number, size: number) => {
   return await httpClient.get<ScheduleResponse>(API_ENDPOINTS.MY_POSTS, {
@@ -23,8 +25,8 @@ export const getSchedule = async (postId: string) => {
 
 export const createSchedule = async (scheduleData: {
   title: string;
-  startTime: string;
-  endTime: string;
+  startTime: Date;
+  endTime: Date;
   content: string;
 }) => {
   return await httpClient.post<CreatePostResponse>(
@@ -35,13 +37,9 @@ export const createSchedule = async (scheduleData: {
 
 export const updateSchedule = async (
   scheduleId: string,
-  scheduleData: {
-    startTime?: string;
-    endTime?: string;
-    content?: string;
-  }
+  scheduleData: PostDataUpdate
 ) => {
-  return await httpClient.post(
+  return await httpClient.post<UpdatePostResponse>(
     `${API_ENDPOINTS.UPDATE_POST}/${scheduleId}`,
     scheduleData
   );
