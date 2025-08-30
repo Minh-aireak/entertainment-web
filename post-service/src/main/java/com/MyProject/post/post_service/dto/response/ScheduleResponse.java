@@ -17,6 +17,6 @@ public class ScheduleResponse {
    String content;
    LocalDateTime startTime;
    LocalDateTime endTime;
-   LocalDateTime createdDate;
+   String createdDate;
    String status;
 }

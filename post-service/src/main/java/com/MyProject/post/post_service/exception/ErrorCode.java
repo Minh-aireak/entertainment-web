@@ -13,7 +13,8 @@ import org.springframework.http.HttpStatusCode;
 public enum ErrorCode {
     UNAUTHENTICATED(8301, "Unauthenticated!", HttpStatus.UNAUTHORIZED),
     UNAUTHORIZED(8302, "Forbidden!", HttpStatus.UNAUTHORIZED),
-    SCHEDULE_NOT_EXISTED(8303, "Schedule not existed!", HttpStatus.BAD_REQUEST);
+    SCHEDULE_NOT_EXISTED(8303, "Schedule not existed!", HttpStatus.BAD_REQUEST),
+    MAP_STRATEGY_EXCEPTION(8304, "Strategy got some problem!", HttpStatus.BAD_REQUEST);
 
     int code;
     String message;

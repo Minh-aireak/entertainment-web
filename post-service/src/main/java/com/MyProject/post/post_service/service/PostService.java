@@ -1,5 +1,6 @@
 package com.MyProject.post.post_service.service;
 
+import com.MyProject.post.post_service.configuration.DateTimeFormatter;
 import com.MyProject.post.post_service.dto.request.ScheduleRequest;
 import com.MyProject.post.post_service.dto.response.PageResponse;
 import com.MyProject.post.post_service.dto.response.ScheduleResponse;
@@ -11,25 +12,32 @@ import com.MyProject.post.post_service.repository.PostRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.data.domain.Page;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class PostService {
     PostRepository postRepository;
     PostMapper postMapper;
+    DateTimeFormatter dateTimeFormatter;
+//    SimpMessagingTemplate messagingTemplate;
 
     public ScheduleResponse createPost(ScheduleRequest request){
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -67,12 +75,18 @@ public class PostService {
         Pageable pageable = PageRequest.of(page - 1, size, sort);
         var pageData = postRepository.findAllByUserId(jwt.getClaim("userId"), pageable);
 
+        var postList = pageData.getContent().stream().map(post -> {
+            var postResponse = postMapper.toScheduleResponse(post);
+            postResponse.setCreatedDate(dateTimeFormatter.format(post.getCreatedDate()));
+            return postResponse;
+        }).toList();
+
         return PageResponse.<ScheduleResponse>builder()
                 .currentPage(page)
                 .pageSize(size)
                 .totalPages(pageData.getTotalPages())
                 .totalElement(pageData.getTotalElements())
-                .data(pageData.getContent().stream().map(postMapper::toScheduleResponse).toList())
+                .data(postList)
                 .build();
     }
 
@@ -98,4 +112,20 @@ public class PostService {
     public void deletePost(String postId){
         postRepository.deleteById(postId);
     }
+//
+//    @Scheduled(fixedDelayString = "${jwt.auto-update-status}")
+//    @Transactional
+//    public void listPostValid() {
+//       var list = postRepository.findAllByStatusValid(List.of("Up coming", "On going"));
+//       list.forEach((item) -> {
+//           String currentStatus = calculateStatus(item.getStartTime(), item.getEndTime(), LocalDateTime.now());
+//           String response = " is in progress!";
+//           if(!currentStatus.equals(item.getStatus())){
+//               item.setStatus(currentStatus);
+//               postRepository.save(item);
+//               response = (currentStatus.equals("Completed") ? " has been completed!" : response);
+//               messagingTemplate.convertAndSendToUser(123, 123,item.getTitle() + response);
+//           }
+//       });
+//    }
 }
