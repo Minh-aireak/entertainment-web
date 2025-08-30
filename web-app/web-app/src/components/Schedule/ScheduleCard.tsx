@@ -9,11 +9,11 @@ import {
   CardActions,
 } from "@mui/material";
 import { AccessTime, Visibility, Delete } from "@mui/icons-material";
-import type { Schedule } from "../../InterfaceDataType/DataType";
+import type { ScheduleResponse } from "../../InterfaceDataType/DataType";
 import dayjs from "dayjs";
 
 interface ScheduleCardProps {
-  schedule: Schedule;
+  schedule: ScheduleResponse;
   onViewDetail: (scheduleId: string) => void;
   onEdit?: (scheduleId: string) => void;
   onDelete?: (scheduleId: string) => void;
@@ -134,8 +134,7 @@ const ScheduleCard: React.FC<ScheduleCardProps> = React.memo(
                 color="text.secondary"
                 sx={{ fontWeight: 600, fontSize: 13 }}
               >
-                Created at:{" "}
-                {dayjs(schedule.createdDate).format("DD/MM/YYYY HH:mm")}
+                Created: {schedule.createdDate}
               </Typography>
             </Box>
           </Box>

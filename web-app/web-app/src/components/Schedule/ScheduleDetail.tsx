@@ -16,16 +16,12 @@ import {
   Description,
   Edit,
   Delete,
-  Save,
 } from "@mui/icons-material";
-import type {
-  PostDataUpdate,
-  Schedule,
-} from "../../InterfaceDataType/DataType";
+import type { ScheduleResponse } from "../../InterfaceDataType/DataType";
 import dayjs from "dayjs";
 
 interface ScheduleDetailProps {
-  schedule: Schedule | null;
+  schedule: ScheduleResponse | null;
   open: boolean;
   onCloseDetail: () => void;
   onEdit: (scheduleId: string) => void;
@@ -207,13 +203,13 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({
                   color="text.secondary"
                   sx={{ mb: 0.5, fontSize: 13, fontWeight: "bold" }}
                 >
-                  Created at:
+                  Created:
                 </Typography>
                 <Typography
                   variant="body1"
                   sx={{ fontSize: 13, fontWeight: "bold" }}
                 >
-                  {dayjs(schedule.createdDate).format("DD/MM/YYYY HH:mm")}
+                  {schedule.createdDate}
                 </Typography>
               </Box>
               <Box>

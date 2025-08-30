@@ -17,10 +17,6 @@ import {
   ScheduleTwoTone as SchedulesIcon,
   AccountCircle as ProfileIcon,
 } from "@mui/icons-material";
-import classNames from "classnames/bind";
-import styles from "./Sidebar.module.scss";
-
-const cx = classNames.bind(styles);
 
 const sidebarItems = [
   {
@@ -30,24 +26,22 @@ const sidebarItems = [
   },
   {
     text: "Groups",
-    icon: <GroupsIcon className={cx("icon-size")} style={{ fontSize: 30 }} />,
+    icon: <GroupsIcon style={{ fontSize: 30 }} />,
     path: "/groups",
   },
   {
     text: "Messages",
-    icon: <MessagesIcon className={cx("icon-size")} style={{ fontSize: 30 }} />,
+    icon: <MessagesIcon style={{ fontSize: 30 }} />,
     path: "/messages",
   },
   {
     text: "Schedules",
-    icon: (
-      <SchedulesIcon className={cx("icon-size")} style={{ fontSize: 30 }} />
-    ),
+    icon: <SchedulesIcon style={{ fontSize: 30 }} />,
     path: "/schedules",
   },
   {
     text: "Profile",
-    icon: <ProfileIcon className={cx("icon-size")} style={{ fontSize: 30 }} />,
+    icon: <ProfileIcon style={{ fontSize: 30 }} />,
     path: "/profile",
   },
 ];

@@ -1,7 +1,7 @@
 import { httpClient } from "../configurations/httpClient";
 import { API_ENDPOINTS } from "../configurations/configuration";
 import type {
-  ScheduleResponse,
+  SchedulePageResponse,
   CreatePostResponse,
   ScheduleDetailResponse,
   PostDataUpdate,
@@ -9,7 +9,7 @@ import type {
 } from "../InterfaceDataType/DataType";
 
 export const getMySchedules = async (page: number, size: number) => {
-  return await httpClient.get<ScheduleResponse>(API_ENDPOINTS.MY_POSTS, {
+  return await httpClient.get<SchedulePageResponse>(API_ENDPOINTS.MY_POSTS, {
     params: {
       page: page,
       size: size,
@@ -30,7 +30,7 @@ export const createSchedule = async (scheduleData: {
   content: string;
 }) => {
   return await httpClient.post<CreatePostResponse>(
-    API_ENDPOINTS.CREATE_POST,
+    API_ENDPOINTS.CREATE_POST, 
     scheduleData
   );
 };
