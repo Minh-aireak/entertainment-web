@@ -31,5 +31,6 @@ jwt:
 
 app:
   services:
-    profile: "http://localhost:8081/profile"
+    profile:
+      url: "http://localhost:8081/profile"
 

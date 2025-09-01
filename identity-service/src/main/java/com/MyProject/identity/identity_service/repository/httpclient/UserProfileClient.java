@@ -7,7 +7,7 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 
-@FeignClient(name = "profile-service", url = "${app.services.profile}", configuration = {AuthenticationRequestInterceptor.class})
+@FeignClient(name = "identity-profile-service", url = "${app.services.profile.url}", configuration = {AuthenticationRequestInterceptor.class})
 public interface UserProfileClient {
     @PostMapping(value = "/internal/registration", produces = MediaType.APPLICATION_JSON_VALUE)
     void createProfile(@RequestBody UserProfileCreationRequest request);
