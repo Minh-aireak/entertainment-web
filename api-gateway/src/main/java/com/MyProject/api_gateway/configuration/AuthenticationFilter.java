@@ -40,7 +40,8 @@ public class AuthenticationFilter implements GlobalFilter, Order {
             "/identity/auth/login",
             "/identity/users/registration",
             "/identity/auth/outbound/authentication",
-            "/identity/auth/refresh"};
+            "/identity/auth/refresh",
+            "/file/media/download/.*"};
 
     @Override
     public Class<? extends Annotation> annotationType() {
