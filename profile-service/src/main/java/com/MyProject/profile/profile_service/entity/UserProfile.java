@@ -19,6 +19,7 @@ public class UserProfile {
     @Id
     String username;
     String email;
+    String displayName;
     String firstName;
     String lastName;
     LocalDate dob;

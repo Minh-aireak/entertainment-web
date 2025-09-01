@@ -9,6 +9,7 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.prepost.PostAuthorize;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,13 +21,6 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class UserProfileController {
     UserProfileService userProfileService;
-
-    @PostMapping("/internal/registration")
-    ApiResponse<UserProfileResponse> createProfile(@RequestBody UserProfileCreationRequest request){
-        return ApiResponse.<UserProfileResponse>builder()
-                .result(userProfileService.createProfile(request))
-                .build();
-    }
 
     @PostMapping("/update-my-profile")
     ApiResponse<UserProfileResponse> updateProfile(@RequestBody UserProfileUpdateRequest request){
@@ -50,11 +44,18 @@ public class UserProfileController {
                 .build();
     }
 
-    @GetMapping("/{profileId}")
-    @PreAuthorize("hasRole('ADMIN')")
-    ApiResponse<UserProfileResponse> getProfile(@PathVariable String profileId){
+    @PostMapping("/internal/registration")
+    ApiResponse<UserProfileResponse> createProfile(@RequestBody UserProfileCreationRequest request){
         return ApiResponse.<UserProfileResponse>builder()
-                .result(userProfileService.getProfile(profileId))
+                .result(userProfileService.createProfile(request))
+                .build();
+    }
+
+    @GetMapping("/internal/user-profile/{userId}")
+    @PostAuthorize("returnObject.result.username == authentication.name")
+    ApiResponse<UserProfileResponse> getProfile(@PathVariable String userId){
+        return ApiResponse.<UserProfileResponse>builder()
+                .result(userProfileService.getProfile(userId))
                 .build();
     }
 }

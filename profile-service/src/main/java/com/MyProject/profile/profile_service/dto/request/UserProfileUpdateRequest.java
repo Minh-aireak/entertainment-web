@@ -23,13 +23,16 @@ public class UserProfileUpdateRequest {
     @Email
     String email;
 
+    @NotBlank(message = "DISPLAY_NAME_NOT_BLANK")
+    String displayName;
+
     @NotBlank(message = "NAME_INVALID")
     String lastName;
 
     @DobConstraint(min = 16, message = "INVALID_DOB")
     LocalDate dob;
 
-    @PhoneNumberConstraint(message = "INVALID_PHONENUMBER")
+    @PhoneNumberConstraint(message = "INVALID_PHONE_NUMBER")
     String phoneNumber;
 
     String city;

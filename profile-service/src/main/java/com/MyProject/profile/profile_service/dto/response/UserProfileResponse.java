@@ -6,8 +6,7 @@ import lombok.experimental.FieldDefaults;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-@Getter
-@Setter
+@Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -15,6 +14,7 @@ import java.time.LocalDateTime;
 public class UserProfileResponse {
     String username;
     String email;
+    String displayName;
     String firstName;
     String lastName;
     LocalDate dob;

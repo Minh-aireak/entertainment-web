@@ -18,7 +18,9 @@ public enum ErrorCode {
     DOB_NOTNULL(8104, "Day of birth cannot be null!", HttpStatus.BAD_REQUEST),
     INVALID_DOB(8105, "You must be at least {min} years old!", HttpStatus.BAD_REQUEST),
     ACCESS_DENIED(8106, "Token not owned by user!", HttpStatus.FORBIDDEN),
-    PROFILE_NOT_FOUND(8107, "Profile not existed!", HttpStatus.NOT_FOUND);
+    PROFILE_NOT_FOUND(8107, "Profile not existed!", HttpStatus.NOT_FOUND),
+    DISPLAY_NAME_NOT_BLANK(8108, "Display name cannot be blank!", HttpStatus.BAD_REQUEST),
+    INVALID_PHONE_NUMBER(8109, "Phone number invalid!", HttpStatus.BAD_REQUEST );
     ;
 
     int code;

@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 public class UserProfileCreationRequest {
     String username;
     String email;
+    String displayName;
     String firstName;
     String lastName;
     LocalDate dob;
