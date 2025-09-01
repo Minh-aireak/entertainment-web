@@ -21,6 +21,7 @@ public class Post {
     String id;
 
     String userId;
+    String displayName;
     String title;
     String content;
     LocalDateTime startTime;

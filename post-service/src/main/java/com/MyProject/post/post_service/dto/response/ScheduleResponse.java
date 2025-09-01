@@ -13,6 +13,7 @@ import java.time.LocalDateTime;
 public class ScheduleResponse {
    String id;
    String userId;
+   String displayName;
    String title;
    String content;
    LocalDateTime startTime;

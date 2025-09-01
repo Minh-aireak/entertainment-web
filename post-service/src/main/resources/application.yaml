@@ -22,3 +22,9 @@ spring:
 jwt:
   signerKey: "uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0"
   auto-update-status: "4000"
+
+
+app:
+  services:
+    profile:
+      url: "http://localhost:8081/profile"

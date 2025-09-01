@@ -4,11 +4,13 @@ import com.MyProject.post.post_service.configuration.DateTimeFormatter;
 import com.MyProject.post.post_service.dto.request.ScheduleRequest;
 import com.MyProject.post.post_service.dto.response.PageResponse;
 import com.MyProject.post.post_service.dto.response.ScheduleResponse;
+import com.MyProject.post.post_service.dto.response.UserProfileResponse;
 import com.MyProject.post.post_service.entity.Post;
 import com.MyProject.post.post_service.exception.AppException;
 import com.MyProject.post.post_service.exception.ErrorCode;
 import com.MyProject.post.post_service.mapper.PostMapper;
 import com.MyProject.post.post_service.repository.PostRepository;
+import com.MyProject.post.post_service.repository.httpclient.ProfileClient;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -37,15 +39,18 @@ public class PostService {
     PostRepository postRepository;
     PostMapper postMapper;
     DateTimeFormatter dateTimeFormatter;
+    ProfileClient client;
 //    SimpMessagingTemplate messagingTemplate;
 
     public ScheduleResponse createPost(ScheduleRequest request){
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         Jwt jwt = ((JwtAuthenticationToken) authentication).getToken();
+        var info = client.getProfile(jwt.getSubject()).getResult();
 
         Post post = Post.builder()
                 .id(UUID.randomUUID().toString())
                 .userId(jwt.getClaim("userId"))
+                .displayName(info.getDisplayName())
                 .title(request.getTitle())
                 .content(request.getContent())
                 .createdDate(LocalDateTime.now())
