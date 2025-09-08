@@ -12,3 +12,8 @@ spring:
     authentication:
       username: neo4j
       password: REDACTED_LEGACY_CREDENTIAL
+
+app:
+  services:
+    file:
+      url: "http://localhost:8084/file"

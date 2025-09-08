@@ -8,6 +8,7 @@ import com.MyProject.profile.profile_service.exception.AppException;
 import com.MyProject.profile.profile_service.exception.ErrorCode;
 import com.MyProject.profile.profile_service.mapper.UserProfileMapper;
 import com.MyProject.profile.profile_service.repository.UserProfileRepository;
+import com.MyProject.profile.profile_service.repository.httpclient.FileClient;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -15,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -25,6 +27,7 @@ import java.util.List;
 public class UserProfileService {
     UserProfileRepository userProfileRepository;
     UserProfileMapper userProfileMapper;
+    FileClient client;
 
     @Transactional(rollbackFor = Exception.class)
     public UserProfileResponse createProfile(UserProfileCreationRequest request){
@@ -61,5 +64,16 @@ public class UserProfileService {
                 .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
         return userProfileMapper.toUserProfileResponse(userProfile);
+    }
+
+    @Transactional
+    public UserProfileResponse updateAvatar(MultipartFile multipartFile){
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        UserProfile profile = userProfileRepository.findByUsername(authentication.getName());
+
+        var response = client.uploadAvatar(multipartFile);
+        profile.setAvatar(response.getResult().getUrl());
+
+        return userProfileMapper.toUserProfileResponse(userProfileRepository.save(profile));
     }
 }

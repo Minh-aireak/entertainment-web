@@ -21,4 +21,5 @@ public class UserProfileResponse {
     String phoneNumber;
     String city;
     LocalDateTime joinDate;
+    String avatar;
 }

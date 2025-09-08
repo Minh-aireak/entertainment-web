@@ -26,4 +26,5 @@ public class UserProfile {
     String phoneNumber;
     String city;
     LocalDateTime joinDate;
+    String avatar;
 }

@@ -49,6 +49,7 @@ public class FileService {
         }
     }
 
+    @Transactional
     public FileDownload downloadFile(String fileName) throws IOException {
         var fileMgmt = fileMgmtRepository.findById(fileName).orElseThrow(() ->
                 new AppException(ErrorCode.FILE_NOT_FOUND));
