@@ -1,0 +1,14 @@
+server:
+  port: 8086
+  servlet:
+    context-path: /chat
+
+spring:
+  application:
+    name: chat-service
+  data:
+    mongodb:
+      uri: mongodb://root:REDACTED_LEGACY_CREDENTIAL@localhost:27017/chat-service?authSource=admin
+
+jwt:
+  signerKey: "uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0"
