@@ -66,6 +66,7 @@ public class UserService {
             throw new AppException(ErrorCode.USERNAME_EXISTED);
         }
 
+        userprofileRequest.setUserId(user.getId());
         userprofileRequest.setDisplayName(user.getUsername());
         userprofileRequest.setJoinDate(LocalDateTime.now());
         client.createProfile(userprofileRequest);

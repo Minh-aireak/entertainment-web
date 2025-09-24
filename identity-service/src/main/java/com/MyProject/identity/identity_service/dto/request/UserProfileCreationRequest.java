@@ -16,6 +16,7 @@ import java.time.LocalDateTime;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @Builder
 public class UserProfileCreationRequest {
+    String userId;
     String username;
     String email;
     String displayName;

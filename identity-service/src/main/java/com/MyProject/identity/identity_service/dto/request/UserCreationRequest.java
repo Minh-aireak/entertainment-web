@@ -13,8 +13,6 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @Builder
 public class UserCreationRequest {
-    String id;
-
     @NotNull(message = "USERNAME_NOTNULL")
     @Size(min = 6, message = "USERNAME_INVALID")
     String username;

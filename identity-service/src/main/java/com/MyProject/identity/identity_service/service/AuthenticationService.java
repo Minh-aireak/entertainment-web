@@ -16,7 +16,6 @@ import com.MyProject.identity.identity_service.repository.RoleRepository;
 import com.MyProject.identity.identity_service.repository.httpclient.OutboundIdentityClient;
 import com.MyProject.identity.identity_service.repository.httpclient.OutboundUserClient;
 import com.MyProject.identity.identity_service.repository.httpclient.UserProfileClient;
-import io.jsonwebtoken.security.Keys;
 import io.jsonwebtoken.security.WeakKeyException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
