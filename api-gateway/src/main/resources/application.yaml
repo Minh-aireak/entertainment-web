@@ -53,3 +53,15 @@ spring:
                 - Path=/api/v1/file/**
               filters:
                 - StripPrefix=2
+            - id: weather_service
+              uri: http://localhost:8085
+              predicates:
+                - Path=/api/v1/weather/**
+              filters:
+                - StripPrefix=2
+            - id: chat_service
+              uri: http://localhost:8086
+              predicates:
+                - Path=/api/v1/chat/**
+              filters:
+                - StripPrefix=2
