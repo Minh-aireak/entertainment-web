@@ -1,15 +1,16 @@
 package com.MyProject.profile.profile_service.controller;
 
+import com.MyProject.profile.profile_service.dto.request.SearchUserProfileRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileCreationRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileUpdateRequest;
 import com.MyProject.profile.profile_service.dto.response.ApiResponse;
+import com.MyProject.profile.profile_service.dto.response.PageResponse;
 import com.MyProject.profile.profile_service.dto.response.UserProfileResponse;
 import com.MyProject.profile.profile_service.service.UserProfileService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.access.prepost.PostAuthorize;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -23,7 +24,7 @@ import java.util.List;
 public class UserProfileController {
     UserProfileService userProfileService;
 
-    @PostMapping("/update-my-profile")
+    @PutMapping("/update-my-profile")
     ApiResponse<UserProfileResponse> updateProfile(@RequestBody UserProfileUpdateRequest request){
         return ApiResponse.<UserProfileResponse>builder()
                 .result(userProfileService.updateProfile(request))
@@ -53,17 +54,23 @@ public class UserProfileController {
     }
 
     @GetMapping("/internal/user-profile/{userId}")
-    @PostAuthorize("returnObject.result.username == authentication.name")
     ApiResponse<UserProfileResponse> getProfile(@PathVariable String userId){
         return ApiResponse.<UserProfileResponse>builder()
                 .result(userProfileService.getProfile(userId))
                 .build();
     }
 
-    @PostMapping("/upload-avatar")
+    @PutMapping("/upload-avatar")
     ApiResponse<UserProfileResponse> updateAvatar(@RequestParam("file") MultipartFile multipartFile){
         return ApiResponse.<UserProfileResponse>builder()
                 .result(userProfileService.updateAvatar(multipartFile))
+                .build();
+    }
+
+    @PostMapping("/search")
+    ApiResponse<PageResponse<UserProfileResponse>> searchProfile(@RequestBody SearchUserProfileRequest request){
+        return ApiResponse.<PageResponse<UserProfileResponse>>builder()
+                .result(userProfileService.searchProfile(request))
                 .build();
     }
 }

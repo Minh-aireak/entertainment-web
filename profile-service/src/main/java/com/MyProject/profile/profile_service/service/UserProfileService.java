@@ -1,7 +1,9 @@
 package com.MyProject.profile.profile_service.service;
 
+import com.MyProject.profile.profile_service.dto.request.SearchUserProfileRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileCreationRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileUpdateRequest;
+import com.MyProject.profile.profile_service.dto.response.PageResponse;
 import com.MyProject.profile.profile_service.dto.response.UserProfileResponse;
 import com.MyProject.profile.profile_service.entity.UserProfile;
 import com.MyProject.profile.profile_service.exception.AppException;
@@ -13,6 +15,10 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,12 +61,14 @@ public class UserProfileService {
 
     @Transactional(rollbackFor = Exception.class)
     public List<UserProfileResponse> getAllProfiles(){
-        return userProfileMapper.toListUserProfileResponse(userProfileRepository.findAll());
+        return userProfileRepository.findAll()
+                .stream().map(userProfileMapper::toUserProfileResponse)
+                .toList();
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public UserProfileResponse getProfile(String id){
-        UserProfile userProfile = userProfileRepository.findById(id)
+    public UserProfileResponse getProfile(String userId){
+        UserProfile userProfile = userProfileRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
         return userProfileMapper.toUserProfileResponse(userProfile);
@@ -75,5 +83,24 @@ public class UserProfileService {
         profile.setAvatar(response.getResult().getUrl());
 
         return userProfileMapper.toUserProfileResponse(userProfileRepository.save(profile));
+    }
+
+    @Transactional
+    public PageResponse<UserProfileResponse> searchProfile(SearchUserProfileRequest request){
+        Sort sort = Sort.by("joinDate").ascending();
+        Pageable pageable = PageRequest.of(request.getPage() - 1, request.getSize(), sort);
+
+        Page<UserProfile> pageData = userProfileRepository.findAllByDisplayName(request.getDisplayName(), pageable);
+        List<UserProfileResponse> userProfileResponses = pageData.getContent()
+                .stream().map(userProfileMapper::toUserProfileResponse)
+                .toList();
+
+        return PageResponse.<UserProfileResponse>builder()
+                .currentPage(request.getPage())
+                .pageSize(request.getSize())
+                .totalPages(pageData.getTotalPages())
+                .totalElement(pageData.getTotalElements())
+                .data(userProfileResponses)
+                .build();
     }
 }

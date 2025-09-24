@@ -8,15 +8,11 @@ import org.mapstruct.Mapper;
 import org.mapstruct.MappingTarget;
 import org.mapstruct.NullValuePropertyMappingStrategy;
 
-import java.util.List;
-
 @Mapper(componentModel = "spring", nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
 public interface UserProfileMapper {
     UserProfile toUserProfile(UserProfileCreationRequest request);
 
     UserProfileResponse toUserProfileResponse(UserProfile userProfile);
-
-    List<UserProfileResponse> toListUserProfileResponse(List<UserProfile> list);
 
     void update(@MappingTarget UserProfile userProfile, UserProfileUpdateRequest request);
 }
