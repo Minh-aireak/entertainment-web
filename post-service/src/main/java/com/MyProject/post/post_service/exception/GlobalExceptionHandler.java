@@ -1,14 +1,20 @@
 package com.MyProject.post.post_service.exception;
 
 import com.MyProject.post.post_service.dto.response.ApiResponse;
+import jakarta.validation.ConstraintViolation;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
+import java.util.Map;
+import java.util.Objects;
+
 @ControllerAdvice
 public class GlobalExceptionHandler {
+    private static final String ATTRIBUTE = "attribute";
+
     @ExceptionHandler(value = AppException.class)
     public ResponseEntity<ApiResponse<?>> handlingAppException(AppException exception) {
         return ApiResponse.toResponseEntity(exception.getErrorCode());
@@ -17,15 +23,26 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(value = MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<?>> handlingMethodArgumentNotValidException(
             MethodArgumentNotValidException exception) {
+        Map<String, String> attributes = null;
         String enumKey = exception.getFieldError().getDefaultMessage();
-
         ErrorCode errorCode = ErrorCode.valueOf(enumKey);
+
+        var constraintViolation = exception.getBindingResult().getAllErrors().getFirst().unwrap(ConstraintViolation.class);
+        attributes = constraintViolation.getConstraintDescriptor().getAttributes();
 
         ApiResponse<?> apiResponse = new ApiResponse<>();
         apiResponse.setCode(errorCode.getCode());
-        apiResponse.setMessage(errorCode.getMessage());
+        apiResponse.setMessage(
+                Objects.nonNull(attributes)
+                        ? mapAttributes(errorCode.getMessage(), attributes)
+                : errorCode.getMessage());
 
         return ResponseEntity.status(errorCode.getStatusCode()).body(apiResponse);
+    }
+
+    private String mapAttributes(String message, Map<String, String> attributes) {
+        String attribute = String.valueOf(attributes.get(ATTRIBUTE));
+        return message.replace("{" + ATTRIBUTE + "}", attribute);
     }
 
     @ExceptionHandler(value = AccessDeniedException.class)

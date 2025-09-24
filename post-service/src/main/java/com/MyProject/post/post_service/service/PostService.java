@@ -1,25 +1,29 @@
 package com.MyProject.post.post_service.service;
 
 import com.MyProject.post.post_service.configuration.DateTimeFormatter;
+import com.MyProject.post.post_service.dto.request.DataWeatherRequest;
 import com.MyProject.post.post_service.dto.request.ScheduleRequest;
+import com.MyProject.post.post_service.dto.request.ScheduleUpdateRequest;
 import com.MyProject.post.post_service.dto.response.PageResponse;
 import com.MyProject.post.post_service.dto.response.ScheduleResponse;
-import com.MyProject.post.post_service.dto.response.UserProfileResponse;
 import com.MyProject.post.post_service.entity.Post;
+import com.MyProject.post.post_service.entity.PostType;
+import com.MyProject.post.post_service.entity.TravelItinerary;
 import com.MyProject.post.post_service.exception.AppException;
 import com.MyProject.post.post_service.exception.ErrorCode;
 import com.MyProject.post.post_service.mapper.PostMapper;
 import com.MyProject.post.post_service.repository.PostRepository;
+import com.MyProject.post.post_service.repository.TravelItineraryRepository;
 import com.MyProject.post.post_service.repository.httpclient.ProfileClient;
+import com.MyProject.post.post_service.repository.httpclient.WeatherClient;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -37,17 +41,19 @@ import java.util.UUID;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class PostService {
     PostRepository postRepository;
+    TravelItineraryRepository travelItineraryRepository;
     PostMapper postMapper;
     DateTimeFormatter dateTimeFormatter;
     ProfileClient client;
+    WeatherClient weatherClient;
 //    SimpMessagingTemplate messagingTemplate;
 
-    public ScheduleResponse createPost(ScheduleRequest request){
+    private Post buildBasePost(ScheduleRequest request) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         Jwt jwt = ((JwtAuthenticationToken) authentication).getToken();
-        var info = client.getProfile(jwt.getSubject()).getResult();
+        var info = client.getProfile(jwt.getClaim("userId")).getResult();
 
-        Post post = Post.builder()
+        return Post.builder()
                 .id(UUID.randomUUID().toString())
                 .userId(jwt.getClaim("userId"))
                 .displayName(info.getDisplayName())
@@ -58,8 +64,31 @@ public class PostService {
                 .endTime(request.getEndTime())
                 .status(calculateStatus(request.getStartTime(), request.getEndTime(), LocalDateTime.now()))
                 .build();
+    }
 
-        return postMapper.toScheduleResponse(postRepository.save(post));
+    @Transactional
+    public ScheduleResponse createPost(ScheduleRequest request){
+        if (request.getPostType().equals("BUSINESS_SCHEDULE")) {
+            var basePost = buildBasePost(request);
+            basePost.setPostType(PostType.BUSINESS_SCHEDULE);
+            return postMapper.toScheduleResponse(postRepository.save(basePost));
+        } else {
+            var basePost = buildBasePost(request);
+            var weatherStartResponse = weatherClient.getDataWeather(DataWeatherRequest.builder()
+                            .lat(request.getLatStart())
+                            .lon(request.getLonStart())
+                            .build());
+            var weatherEndResponse = weatherClient.getDataWeather(DataWeatherRequest.builder()
+                    .lat(request.getLatStart())
+                    .lon(request.getLonEnd())
+                    .build());
+            TravelItinerary travelItinerary = TravelItinerary.fromPost(basePost)
+                    .postType(PostType.TRAVEL_ITINERARY)
+                    .startPosition(weatherStartResponse.getResult())
+                    .endPosition(weatherEndResponse.getResult())
+                    .build();
+            return postMapper.toTravelItineraryResponse(travelItineraryRepository.save(travelItinerary));
+        }
     }
 
     private String calculateStatus(LocalDateTime start, LocalDateTime end, LocalDateTime now){
@@ -72,50 +101,100 @@ public class PostService {
         return status;
     }
 
-    public PageResponse<ScheduleResponse> getMyPosts(int page, int size){
+    @Transactional
+    public PageResponse<ScheduleResponse> getMyPosts(int page, int size, String type){
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         Jwt jwt = ((JwtAuthenticationToken) authentication).getToken();
 
         Sort sort = Sort.by("createdDate").descending();
         Pageable pageable = PageRequest.of(page - 1, size, sort);
-        var pageData = postRepository.findAllByUserId(jwt.getClaim("userId"), pageable);
 
-        var postList = pageData.getContent().stream().map(post -> {
-            var postResponse = postMapper.toScheduleResponse(post);
-            postResponse.setCreatedDate(dateTimeFormatter.format(post.getCreatedDate()));
-            return postResponse;
+        Page<? extends Post> pageData;
+        if (type.equals(PostType.BUSINESS_SCHEDULE.name())) {
+            pageData = postRepository.findAllByUserId(jwt.getClaim("userId"), pageable);
+        } else {
+            pageData = travelItineraryRepository.findAllByUserId(jwt.getClaim("userId"), pageable);
+        }
+
+        List<ScheduleResponse> postList = pageData.getContent().stream().map(post -> {
+            ScheduleResponse response;
+            if (post instanceof TravelItinerary travelItinerary){
+                response = postMapper.toTravelItineraryResponse(travelItinerary);
+            } else {
+                response = postMapper.toScheduleResponse(post);
+            }
+            response.setCreatedDate(dateTimeFormatter.format(post.getCreatedDate()));
+            response.setPostType(post.getPostType().toString());
+            return response;
         }).toList();
 
-        return PageResponse.<ScheduleResponse>builder()
-                .currentPage(page)
-                .pageSize(size)
-                .totalPages(pageData.getTotalPages())
-                .totalElement(pageData.getTotalElements())
-                .data(postList)
-                .build();
+            return PageResponse.<ScheduleResponse>builder()
+                    .currentPage(page)
+                    .pageSize(size)
+                    .totalPages(pageData.getTotalPages())
+                    .totalElement(pageData.getTotalElements())
+                    .data(postList)
+                    .build();
     }
 
-    public ScheduleResponse getMyPost(String postId){
-        var schedule = postRepository.findById(postId).orElseThrow(() ->
-                new AppException(ErrorCode.SCHEDULE_NOT_EXISTED));
+    @Transactional
+    public ScheduleResponse getMyPost(String id, String type){
+        if (type.equals(PostType.BUSINESS_SCHEDULE.name())) {
+            var schedule = postRepository.findById(id).orElseThrow(() ->
+                    new AppException(ErrorCode.BUSINESS_SCHEDULE_NOT_EXISTED));
 
-        return postMapper.toScheduleResponse(schedule);
+            return postMapper.toScheduleResponse(schedule);
+        } else {
+            var schedule = travelItineraryRepository.findById(id).orElseThrow(() ->
+                    new AppException(ErrorCode.TRAVEL_ITINERARY_NOT_EXISTED));
+
+            return postMapper.toTravelItineraryResponse(schedule);
+        }
     }
 
-    public ScheduleResponse updatePost(String postId, ScheduleRequest request){
-        var schedule = postRepository.findById(postId).orElseThrow(() ->
-                new AppException(ErrorCode.SCHEDULE_NOT_EXISTED));
+    @Transactional
+    public ScheduleResponse updatePost(String id, String type, ScheduleUpdateRequest request){
+        if (type.equals(PostType.BUSINESS_SCHEDULE.name())){
+            var schedule = postRepository.findById(id).orElseThrow(() ->
+                    new AppException(ErrorCode.BUSINESS_SCHEDULE_NOT_EXISTED));
+            postMapper.updateBusinessSchedule(schedule, request);
 
-        schedule.setTitle(request.getTitle());
-        schedule.setContent(request.getContent());
-        schedule.setStartTime(request.getStartTime());
-        schedule.setEndTime(request.getEndTime());
+            return postMapper.toScheduleResponse(postRepository.save(schedule));
+        } else {
+            var schedule = travelItineraryRepository.findById(id).orElseThrow(() ->
+                    new AppException(ErrorCode.TRAVEL_ITINERARY_NOT_EXISTED));
+            if (!request.getLatStart().isEmpty() && !request.getLonStart().isEmpty()) {
+                var dataWeatherChange = weatherClient.getDataWeather(DataWeatherRequest.builder()
+                        .lat(request.getLatStart())
+                        .lon(request.getLonStart())
+                        .build());
+                schedule.setStartPosition(dataWeatherChange.getResult());
+            }
 
-        return postMapper.toScheduleResponse(postRepository.save(schedule));
+            if (!request.getLatEnd().isEmpty() && !request.getLonEnd().isEmpty()) {
+                var dataWeatherChange = weatherClient.getDataWeather(DataWeatherRequest.builder()
+                        .lat(request.getLatEnd())
+                        .lon(request.getLonEnd())
+                        .build());
+                schedule.setEndPosition(dataWeatherChange.getResult());
+            }
+            postMapper.updateTravelItinerary(schedule, request);
+
+            return postMapper.toTravelItineraryResponse(travelItineraryRepository.save(schedule));
+        }
     }
 
-    public void deletePost(String postId){
-        postRepository.deleteById(postId);
+    @Transactional
+    public void deletePost(String id, String type){
+        if (type.equals(PostType.BUSINESS_SCHEDULE.name())) {
+            var businessSchedule = postRepository.findByIdType(id).orElseThrow(() ->
+                    new AppException(ErrorCode.BUSINESS_SCHEDULE_NOT_EXISTED));
+            postRepository.delete(businessSchedule);
+        } else {
+            var travelItinerary = travelItineraryRepository.findByIdType(id).orElseThrow(() ->
+                    new AppException(ErrorCode.TRAVEL_ITINERARY_NOT_EXISTED));
+            travelItineraryRepository.delete(travelItinerary);
+        }
     }
 //
 //    @Scheduled(fixedDelayString = "${jwt.auto-update-status}")

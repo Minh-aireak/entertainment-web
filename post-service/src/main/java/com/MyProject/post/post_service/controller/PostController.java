@@ -1,17 +1,17 @@
 package com.MyProject.post.post_service.controller;
 
 import com.MyProject.post.post_service.dto.request.ScheduleRequest;
+import com.MyProject.post.post_service.dto.request.ScheduleUpdateRequest;
 import com.MyProject.post.post_service.dto.response.ApiResponse;
 import com.MyProject.post.post_service.dto.response.PageResponse;
 import com.MyProject.post.post_service.dto.response.ScheduleResponse;
 import com.MyProject.post.post_service.service.PostService;
+import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -21,40 +21,44 @@ public class PostController {
     PostService postService;
 
     @PostMapping("/create")
-    ApiResponse<ScheduleResponse> postResponse(@RequestBody ScheduleRequest request){
+    ApiResponse<ScheduleResponse> createPost(@RequestBody ScheduleRequest request){
         return ApiResponse.<ScheduleResponse>builder()
                 .result(postService.createPost(request))
                 .message("Created success!")
                 .build();
     }
 
-    @PostMapping("/get-post/{postId}")
-    ApiResponse<ScheduleResponse> getMyPost(@PathVariable String postId){
-        return ApiResponse.<ScheduleResponse>builder()
-                .result(postService.getMyPost(postId))
-                .build();
-    }
-
     @GetMapping("/get-my-posts")
     ApiResponse<PageResponse<ScheduleResponse>> getMyPosts(
-            @RequestParam(value = "page", required = false) Integer page,
-            @RequestParam(value = "size", required = false) Integer size){
+            @RequestParam(value = "page", required = true) Integer page,
+            @RequestParam(value = "size", required = true) Integer size,
+            @RequestParam(value = "type", required = true) String type){
         return ApiResponse.<PageResponse<ScheduleResponse>>builder()
-                .result(postService.getMyPosts(page, size))
+                .result(postService.getMyPosts(page, size, type))
                 .build();
     }
 
-    @PostMapping("/update-post/{postId}")
-    ApiResponse<ScheduleResponse> updatePost(@PathVariable String postId, @RequestBody ScheduleRequest request){
+    @GetMapping("/get-post/{id}")
+    ApiResponse<ScheduleResponse> getMyPost(@PathVariable String id,
+                                            @RequestParam(value = "type", required = true) String type){
         return ApiResponse.<ScheduleResponse>builder()
-                .result(postService.updatePost(postId, request))
+                .result(postService.getMyPost(id, type))
+                .build();
+    }
+
+    @PutMapping("/update-post/{id}")
+    ApiResponse<ScheduleResponse> updatePost(@PathVariable String id,
+                                             @RequestParam(value = "type", required = true) String type,
+                                             @RequestBody @Valid ScheduleUpdateRequest request){
+        return ApiResponse.<ScheduleResponse>builder()
+                .result(postService.updatePost(id, type, request))
                 .message("Updated success!")
                 .build();
     }
 
-    @DeleteMapping("/delete/{postId}")
-    ApiResponse<Void> updatePost(@PathVariable String postId){
-        postService.deletePost(postId);
+    @DeleteMapping("/delete/{id}")
+    ApiResponse<Void> deletePost(@PathVariable String id, @RequestParam(value = "type", required = true) String type){
+        postService.deletePost(id, type);
         return ApiResponse.<Void>builder()
                 .message("Deleted success!")
                 .build();

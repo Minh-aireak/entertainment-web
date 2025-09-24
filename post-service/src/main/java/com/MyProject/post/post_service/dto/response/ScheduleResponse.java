@@ -1,10 +1,12 @@
 package com.MyProject.post.post_service.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDateTime;
 
+@JsonInclude(JsonInclude.Include.NON_NULL)
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -12,6 +14,7 @@ import java.time.LocalDateTime;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class ScheduleResponse {
    String id;
+   String postType;
    String userId;
    String displayName;
    String title;
@@ -20,4 +23,6 @@ public class ScheduleResponse {
    LocalDateTime endTime;
    String createdDate;
    String status;
+   DataWeatherResponse startPosition;
+   DataWeatherResponse endPosition;
 }
