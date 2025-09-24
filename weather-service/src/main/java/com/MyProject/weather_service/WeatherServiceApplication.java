@@ -2,8 +2,10 @@ package com.MyProject.weather_service;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.openfeign.EnableFeignClients;
 
 @SpringBootApplication
+@EnableFeignClients
 public class WeatherServiceApplication {
 
 	public static void main(String[] args) {
