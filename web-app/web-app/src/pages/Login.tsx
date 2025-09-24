@@ -14,6 +14,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { logIn, isAuthenticated } from "../features/hooks/useAuthApi";
 import { OAuthConfig } from "../configurations/configuration";
+import axios from "axios";
 
 export default function Login() {
   type SnackbarCloseReason = "timeout" | "clickaway" | "escapeKeyDown";
@@ -44,8 +45,6 @@ export default function Login() {
       callbackUrl
     )}&response_type=code&client_id=${googleClientId}&scope=openid%20email%20profile`;
 
-    console.log(targetUrl);
-
     window.location.href = targetUrl;
   };
 
@@ -63,9 +62,14 @@ export default function Login() {
     try {
       await logIn(username, password);
       navigate("/");
-    } catch (error: unknown) {
-      const errorResponse = (error as any).response.data;
-      setSnackBarMessage(errorResponse.message);
+    } catch (error: any) {
+      let messageToShow = error.message;
+      if (axios.isAxiosError(error)) {
+        if (error.response) {
+          messageToShow = error.response.data.message;
+        }
+      }
+      setSnackBarMessage(messageToShow);
       setSnackBarOpen(true);
     }
   };

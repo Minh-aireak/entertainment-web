@@ -4,6 +4,7 @@ import type {
   UserProfileResponse,
   UpdateProfileResponse,
 } from "../InterfaceDataType/DataType";
+import AuthClientStore from "../features/client-store/AuthClientStore";
 
 export const getMyInfo = async (): Promise<UserProfileResponse> => {
   return (await httpClient.get(API_ENDPOINTS.MY_INFO))
@@ -13,12 +14,21 @@ export const getMyInfo = async (): Promise<UserProfileResponse> => {
 export const updateProfile = async (
   formData: UserProfileResponse["result"]
 ): Promise<UpdateProfileResponse> => {
-  return (await httpClient.post(API_ENDPOINTS.UPDATE_PROFILE, formData))
+  return (await httpClient.put(API_ENDPOINTS.UPDATE_PROFILE, formData))
     .data as UpdateProfileResponse;
 };
 
-export const uploadAvatar = async (formData: FormData) => {
-  return await httpClient.post(API_ENDPOINTS.UPDATE_AVATAR, formData);
+export const uploadAvatar = async (
+  formData: FormData
+): Promise<UserProfileResponse> => {
+  return (
+    await httpClient.put(API_ENDPOINTS.UPDATE_AVATAR, formData, {
+      headers: {
+        Authorization: `Bearer ${AuthClientStore.getAccessToken()}`,
+        "Content-Type": "multipart/form-data",
+      },
+    })
+  ).data as UserProfileResponse;
 };
 
 // export const search = async (keyword: any) => {

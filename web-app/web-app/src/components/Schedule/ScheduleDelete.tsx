@@ -13,14 +13,16 @@ import { Close, Delete, WarningAmber } from "@mui/icons-material";
 interface ScheduleDeletelProps {
   open: boolean;
   scheduleId: string;
+  type: string;
   onClose: () => void;
-  onDelete: (scheduleId: string) => void;
+  onDelete: (scheduleId: string, type: string) => void;
 }
 
 const ScheduleDelete: React.FC<ScheduleDeletelProps> = ({
   open,
   scheduleId,
   onClose,
+  type,
   onDelete,
 }) => {
   return (
@@ -79,7 +81,7 @@ const ScheduleDelete: React.FC<ScheduleDeletelProps> = ({
         </Button>
 
         <Button
-          onClick={() => onDelete && onDelete(scheduleId)}
+          onClick={() => onDelete && onDelete(scheduleId, type)}
           variant="contained"
           color="error"
           startIcon={<Delete />}

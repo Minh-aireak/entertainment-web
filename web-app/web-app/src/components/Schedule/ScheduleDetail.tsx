@@ -1,10 +1,11 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   Button,
+  TextField,
   Typography,
   Box,
   Chip,
@@ -16,9 +17,15 @@ import {
   Description,
   Edit,
   Delete,
+  LocationOn,
+  Flag,
 } from "@mui/icons-material";
-import type { ScheduleResponse } from "../../InterfaceDataType/DataType";
+import type {
+  ScheduleResponse,
+  DataWeatherResponse,
+} from "../../InterfaceDataType/DataType";
 import dayjs from "dayjs";
+import ForecastList from "../ForecastCard/ForecastList";
 
 interface ScheduleDetailProps {
   schedule: ScheduleResponse | null;
@@ -26,6 +33,8 @@ interface ScheduleDetailProps {
   onCloseDetail: () => void;
   onEdit: (scheduleId: string) => void;
   onDelete: (scheduleId: string) => void;
+  weatherStart?: DataWeatherResponse;
+  weatherEnd?: DataWeatherResponse;
 }
 
 const getStatusColor = (status: string) => {
@@ -57,38 +66,41 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({
   onCloseDetail,
   onEdit,
   onDelete,
+  weatherStart,
+  weatherEnd,
 }) => {
+  const mapOpen = schedule?.postType === "TRAVEL_ITINERARY" ? true : false;
   if (!schedule) return null;
 
   return (
     <Dialog
       open={open}
       onClose={onCloseDetail}
-      maxWidth="md"
-      fullWidth
-      slotProps={{
-        root: {
-          sx: {
-            borderRadius: 2,
-            maxHeight: "90vh",
-          },
+      fullScreen
+      sx={{
+        "& .MuiDialog-paper": {
+          display: "flex",
+          flexDirection: "row",
+          width: mapOpen ? "100%" : "800px",
         },
       }}
     >
-      <DialogTitle
+      <Box
         sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          pb: 1,
+          flex: 7,
+          p: 2,
+          overflowY: "auto",
         }}
       >
-        <Typography variant="h5" component="div" sx={{ fontWeight: 600 }}>
-          Schedule Details
-        </Typography>
-      </DialogTitle>
-      <DialogContent sx={{ pt: 0 }}>
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+        <DialogTitle>Schedule Details</DialogTitle>
+        <DialogContent
+          sx={{
+            pt: 2,
+            display: "flex",
+            flexDirection: "column",
+            gap: 2,
+          }}
+        >
           <Box
             sx={{
               display: "flex",
@@ -108,29 +120,61 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({
             />
           </Box>
 
-          <Box>
-            <Paper sx={{ pb: 3, mb: 2, pl: 3, pr: 3 }}>
-              <Typography
-                variant="h6"
-                sx={{
-                  mb: 2,
-                  display: "flex",
-                  alignItems: "center",
-                  fontSize: 20,
-                }}
-              >
-                <Description sx={{ mr: 1, fontSize: 30 }} />
-                Content
-              </Typography>
-              <Typography
-                variant="body1"
-                color="text.secondary"
-                sx={{ fontSize: 15, fontWeight: "bold" }}
-              >
-                {schedule.content}
-              </Typography>
-            </Paper>
-          </Box>
+          <Paper sx={{ pb: 3, mb: 2, pl: 3, pr: 3 }}>
+            <Typography
+              variant="h6"
+              sx={{
+                mb: 2,
+                display: "flex",
+                alignItems: "center",
+                fontSize: 20,
+              }}
+            >
+              <Description sx={{ mr: 1, fontSize: 30 }} />
+              Content
+            </Typography>
+            <Typography
+              variant="body1"
+              color="text.secondary"
+              sx={{ fontSize: 15, fontWeight: "bold" }}
+            >
+              {schedule.content}
+            </Typography>
+          </Paper>
+
+          {schedule.postType === "TRAVEL_ITINERARY" && (
+            <>
+              <Paper sx={{ p: 3, height: "100%" }}>
+                <Typography
+                  variant="h6"
+                  sx={{
+                    mb: 2,
+                    display: "flex",
+                    alignItems: "center",
+                    fontSize: 20,
+                  }}
+                >
+                  <LocationOn sx={{ mr: 1, fontSize: 30 }} />
+                  Start position: {weatherStart?.city?.name ?? ""}
+                </Typography>
+              </Paper>
+
+              <Paper sx={{ p: 3, height: "100%" }}>
+                <Typography
+                  variant="h6"
+                  sx={{
+                    mb: 2,
+                    display: "flex",
+                    alignItems: "center",
+                    fontSize: 20,
+                  }}
+                >
+                  <Flag sx={{ mr: 1, fontSize: 30 }} />
+                  End position: {weatherEnd?.city?.name ?? ""}
+                </Typography>
+              </Paper>
+            </>
+          )}
 
           <Box
             sx={{
@@ -229,27 +273,94 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({
               </Box>
             </Paper>
           </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 3, pt: 0 }}>
+          <Button onClick={onCloseDetail} variant="outlined">
+            Close
+          </Button>
+          <Button
+            onClick={() => onDelete(schedule.id)}
+            sx={{ backgroundColor: "error.main", color: "white" }}
+            startIcon={<Delete />}
+          >
+            Delete
+          </Button>
+          <Button
+            onClick={() => onEdit(schedule.id)}
+            variant="contained"
+            startIcon={<Edit />}
+          >
+            Edit
+          </Button>
+        </DialogActions>
+      </Box>
+      {mapOpen && (
+        <Box
+          sx={{
+            flex: 8,
+            height: "100%",
+          }}
+        >
+          <Paper
+            sx={{
+              p: 2,
+              height: "100%",
+              width: "100%",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <TextField
+              fullWidth
+              label="Start position"
+              value={weatherStart!.city.name}
+              slotProps={{
+                inputLabel: {
+                  shrink: true,
+                  sx: {
+                    fontSize: "1.25rem",
+                    fontWeight: 700,
+                    color: "#333",
+                  },
+                },
+                input: {
+                  readOnly: true,
+                },
+              }}
+            />
+            <ForecastList weather={weatherStart!} />
+          </Paper>
+          <Paper
+            sx={{
+              p: 2,
+              height: "100%",
+              width: "100%",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <TextField
+              fullWidth
+              label="End position"
+              value={weatherStart!.city.name}
+              slotProps={{
+                inputLabel: {
+                  shrink: true,
+                  sx: {
+                    fontSize: "1.25rem",
+                    fontWeight: 700,
+                    color: "#333",
+                  },
+                },
+                input: {
+                  readOnly: true,
+                },
+              }}
+            />
+            <ForecastList weather={weatherEnd!} />
+          </Paper>
         </Box>
-      </DialogContent>
-      <DialogActions sx={{ p: 3, pt: 0 }}>
-        <Button onClick={onCloseDetail} variant="outlined">
-          Close
-        </Button>
-        <Button
-          onClick={() => onDelete(schedule.id)}
-          sx={{ backgroundColor: "error.main", color: "white" }}
-          startIcon={<Delete />}
-        >
-          Delete
-        </Button>
-        <Button
-          onClick={() => onEdit(schedule.id)}
-          variant="contained"
-          startIcon={<Edit />}
-        >
-          Edit
-        </Button>
-      </DialogActions>
+      )}
     </Dialog>
   );
 };

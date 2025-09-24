@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Container,
   Typography,
@@ -10,13 +10,20 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  CircularProgress,
   Paper,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
 } from "@mui/material";
+import * as L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import "@geoapify/leaflet-address-search-plugin";
+import "@geoapify/leaflet-address-search-plugin/dist/L.Control.GeoapifyAddressSearch.min.css";
+import {
+  type LatLon,
+  type DataWeatherResponse,
+} from "../InterfaceDataType/DataType";
 import {
   Search,
   Add,
@@ -33,12 +40,16 @@ import {
   getMySchedules,
   createSchedule,
   updateSchedule,
-} from "../services/scheduleService";
+} from "../services/ScheduleService";
+import { getDataWeather } from "../services/WeatherService";
 import { CustomAlertSnackbar } from "../components/CustomAlertSnackbar";
 import type {
   ScheduleResponse,
-  PostDataUpdate,
+  PostData,
+  UpdatePostData,
 } from "../InterfaceDataType/DataType";
+import ForecastList from "../components/ForecastCard/ForecastList";
+import axios from "axios";
 
 function Schedules() {
   const [schedules, setSchedules] = useState<ScheduleResponse[]>([]);
@@ -49,29 +60,57 @@ function Schedules() {
   const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [typeFilter, setTypeFilter] = useState<string>("BUSINESS_SCHEDULE");
   const [selectedSchedule, setSelectedSchedule] =
     useState<ScheduleResponse | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [formData, setFormData] = useState<PostDataUpdate>({
+  const [formData, setFormData] = useState<PostData>({
+    postType: "",
     title: "",
     startTime: new Date(),
     endTime: new Date(),
     content: "",
+    latStart: "",
+    lonStart: "",
+    latEnd: "",
+    lonEnd: "",
   });
   const [hasMore, setHasMore] = useState(true);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
+  const mapRef = useRef<L.Map | null>(null);
+  const [positionStart, setPositionStart] = useState<LatLon | null>(null);
+  const markerStartRef = useRef<L.Marker | null>(null);
+  const [positionEnd, setPositionEnd] = useState<LatLon | null>(null);
+  const markerEndRef = useRef<L.Marker | null>(null);
+  const [weatherStart, setWeatherStart] = useState<DataWeatherResponse | null>(
+    null
+  );
+  const [weatherEnd, setWeatherEnd] = useState<DataWeatherResponse | null>(
+    null
+  );
 
-  const loadSchedulePerPage = async (page: number, size: number) => {
+  const loadSchedulePerPage = async (
+    page: number,
+    size: number,
+    type: string
+  ) => {
     setLoading(true);
     try {
-      const response = await getMySchedules(page, size);
+      const response = await getMySchedules(page, size, type);
       setHasMore(response.data.result.data.length > 0);
       setSchedules((prev) => [...prev, ...response.data.result.data]);
       return response.data.result.data;
     } catch (error: any) {
-      setSnackbarMessage(error.message);
+      let messageToShow = error.message;
+      if (axios.isAxiosError(error)) {
+        if (error.response) {
+          messageToShow = error.response.data.message;
+        }
+      }
+      setSnackbarMessage(messageToShow);
       setSnackbarOpen(true);
       setSeverity(false);
     } finally {
@@ -83,7 +122,7 @@ function Schedules() {
     if (loading) return;
 
     const nextPage = currentPage + 1;
-    const nextData = await loadSchedulePerPage(nextPage, 6);
+    const nextData = await loadSchedulePerPage(nextPage, 6, typeFilter);
     if (nextData && nextData.length > 0) {
       setCurrentPage(nextPage);
     }
@@ -105,13 +144,13 @@ function Schedules() {
 
   useEffect(() => {
     const loadInitData = async () => {
-      const initSchedule = await loadSchedulePerPage(1, 6);
+      const initSchedule = await loadSchedulePerPage(1, 6, typeFilter);
       if (initSchedule) {
         setSchedules(initSchedule);
       }
     };
     loadInitData();
-  }, []);
+  }, [typeFilter]);
 
   const handleViewDetail = async (scheduleId: string) => {
     try {
@@ -122,7 +161,13 @@ function Schedules() {
         setDetailOpen(true);
       }
     } catch (error: any) {
-      setSnackbarMessage(error.message);
+      let messageToShow = error.message;
+      if (axios.isAxiosError(error)) {
+        if (error.response) {
+          messageToShow = error.response.data.message;
+        }
+      }
+      setSnackbarMessage(messageToShow);
       setSeverity(false);
     } finally {
       setLoading(false);
@@ -138,7 +183,13 @@ function Schedules() {
         setEditOpen(true);
       }
     } catch (error: any) {
-      setSnackbarMessage(error.message);
+      let messageToShow = error.message;
+      if (axios.isAxiosError(error)) {
+        if (error.response) {
+          messageToShow = error.response.data.message;
+        }
+      }
+      setSnackbarMessage(messageToShow);
       setSeverity(false);
     } finally {
       setLoading(false);
@@ -155,7 +206,13 @@ function Schedules() {
         setDeleteOpen(true);
       }
     } catch (error: any) {
-      setSnackbarMessage(error.message);
+      let messageToShow = error.message;
+      if (axios.isAxiosError(error)) {
+        if (error.response) {
+          messageToShow = error.response.data.message;
+        }
+      }
+      setSnackbarMessage(messageToShow);
       setSeverity(false);
     } finally {
       setLoading(false);
@@ -165,28 +222,42 @@ function Schedules() {
   const handleCreateSchedule = async () => {
     try {
       setLoading(true);
+      setMapOpen(false);
       const scheduleData = {
         ...formData,
       };
+
       const response = await createSchedule(scheduleData);
       setSnackbarMessage(response.data.message);
       setSeverity(true);
       setCreateDialogOpen(false);
       setFormData({
+        postType: "",
         title: "",
         startTime: new Date(),
         endTime: new Date(),
         content: "",
+        latStart: "",
+        lonStart: "",
+        latEnd: "",
+        lonEnd: "",
       });
       setCurrentPage(1);
+      setTypeFilter(scheduleData.postType);
       setHasMore(true);
       setSchedules([]);
-      const initSchedule = await loadSchedulePerPage(1, 6);
+      const initSchedule = await loadSchedulePerPage(1, 6, typeFilter);
       if (initSchedule) {
         setSchedules(initSchedule);
       }
     } catch (error: any) {
-      setSnackbarMessage(error.message);
+      let messageToShow = error.message;
+      if (axios.isAxiosError(error)) {
+        if (error.response) {
+          messageToShow = error.response.data.message;
+        }
+      }
+      setSnackbarMessage(messageToShow);
       setSeverity(false);
     } finally {
       setSnackbarOpen(true);
@@ -194,10 +265,10 @@ function Schedules() {
     }
   };
 
-  const handleDeleteSchedule = async (scheduleId: string) => {
+  const handleDeleteSchedule = async (scheduleId: string, type: string) => {
     try {
       setLoading(true);
-      const response = await deleteSchedule(scheduleId);
+      const response = await deleteSchedule(scheduleId, type);
       setSnackbarMessage(response.data.message);
       setSeverity(true);
       setDeleteOpen(false);
@@ -205,29 +276,46 @@ function Schedules() {
         prev.filter((schedule) => schedule.id !== scheduleId)
       );
     } catch (error: any) {
-      setSnackbarMessage(error.message);
+      let messageToShow = error.message;
+      if (axios.isAxiosError(error)) {
+        if (error.response) {
+          messageToShow = error.response.data.message;
+        }
+      }
+      setSnackbarMessage(messageToShow);
       setSeverity(false);
     } finally {
       setSnackbarOpen(true);
       setLoading(false);
+      setDetailOpen(false);
     }
   };
 
   const handleCreateButtonClick = () => {
+    setMapOpen(false);
     setCreateDialogOpen(true);
   };
 
   const handleCloseCreateDialog = () => {
     setCreateDialogOpen(false);
     setFormData({
+      postType: "",
       title: "",
       startTime: new Date(),
       endTime: new Date(),
       content: "",
+      latStart: "",
+      lonStart: "",
+      latEnd: "",
+      lonEnd: "",
     });
+    setPositionStart(null);
+    setPositionEnd(null);
+    setWeatherStart(null);
+    setWeatherEnd(null);
   };
 
-  const handleFormChange = (field: keyof PostDataUpdate, value: string) => {
+  const handleFormChange = (field: keyof PostData, value: string) => {
     setFormData((prev) => ({
       ...prev,
       [field]: value,
@@ -238,7 +326,7 @@ function Schedules() {
     setCurrentPage(1);
     setHasMore(true);
     setSchedules([]);
-    const refreshData = await loadSchedulePerPage(1, 6);
+    const refreshData = await loadSchedulePerPage(1, 6, typeFilter);
     if (refreshData) {
       setSchedules(refreshData);
     }
@@ -246,11 +334,12 @@ function Schedules() {
 
   const handleEditSchedule = async (
     scheduleId: string,
-    scheduleData: PostDataUpdate
+    type: string,
+    scheduleData: UpdatePostData
   ) => {
     try {
       setLoading(true);
-      const response = await updateSchedule(scheduleId, scheduleData);
+      const response = await updateSchedule(scheduleId, type, scheduleData);
       setSnackbarMessage(response.data.message);
       setSeverity(true);
       setEditOpen(false);
@@ -262,13 +351,181 @@ function Schedules() {
       );
       handleRefresh;
     } catch (error: any) {
-      setSnackbarMessage(error.message);
+      let messageToShow = error.message;
+      if (axios.isAxiosError(error)) {
+        if (error.response) {
+          messageToShow = error.response.data.message;
+        }
+      }
+      setSnackbarMessage(messageToShow);
       setSeverity(false);
     } finally {
       setSnackbarOpen(true);
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (mapRef.current) return;
+    if (!mapOpen) return;
+
+    const myAPIKey = "c4dcc95ab99e41eea2d7e0424ed60066";
+    const mapURLTemplate =
+      "https://maps.geoapify.com/v1/tile/{mapStyle}/{z}/{x}/{y}{r}.png?apiKey={apiKey}";
+
+    const map = L.map("my-map", {
+      center: [21.0278, 105.8342],
+      zoom: 10,
+    });
+
+    const tileUrl = mapURLTemplate
+      .replace("{mapStyle}", "osm-bright-smooth")
+      .replace("{apiKey}", myAPIKey);
+
+    L.tileLayer(tileUrl, {
+      maxZoom: 20,
+      detectRetina: true,
+    }).addTo(map);
+
+    const addressStartSearchControl = (L.control as any).addressSearch(
+      myAPIKey,
+      {
+        position: "topleft",
+        placeholder: "Choose start location...",
+        mapViewBias: true,
+        resultCallback: (selected: any) => {
+          if (selected && selected.lat && selected.lon) {
+            setPositionStart({ lat: selected.lat, lon: selected.lon });
+            if (markerStartRef.current) {
+              map.removeLayer(markerStartRef.current);
+            }
+            const coloredIcon = L.icon({
+              iconUrl:
+                "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png",
+              shadowUrl:
+                "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
+              iconSize: [25, 41],
+              iconAnchor: [12, 41],
+              popupAnchor: [1, -34],
+              shadowSize: [41, 41],
+            });
+            markerStartRef.current = L.marker([selected.lat, selected.lon], {
+              icon: coloredIcon,
+            }).addTo(map);
+            map.setView([selected.lat, selected.lon], 10);
+          }
+        },
+      }
+    );
+
+    const addressEndSearchControl = (L.control as any).addressSearch(myAPIKey, {
+      position: "topleft",
+      placeholder: "Choose place to visit...",
+      mapViewBias: true,
+      resultCallback: (selected: any) => {
+        if (selected && selected.lat && selected.lon) {
+          setPositionEnd({ lat: selected.lat, lon: selected.lon });
+          if (markerEndRef.current) {
+            map.removeLayer(markerEndRef.current);
+          }
+          const coloredIcon = L.icon({
+            iconUrl:
+              "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png",
+            shadowUrl:
+              "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowSize: [41, 41],
+          });
+          markerEndRef.current = L.marker([selected.lat, selected.lon], {
+            icon: coloredIcon,
+          }).addTo(map);
+          map.setView([selected.lat, selected.lon], 10);
+        }
+      },
+    });
+
+    map.addControl(addressStartSearchControl);
+    map.addControl(addressEndSearchControl);
+
+    return () => {
+      if (markerStartRef.current) {
+        markerStartRef.current.remove();
+        setPositionStart(null);
+        markerStartRef.current = null;
+      }
+
+      if (markerEndRef.current) {
+        markerEndRef.current.remove();
+        setPositionEnd(null);
+        markerEndRef.current = null;
+      }
+    };
+  }, [mapOpen]);
+
+  useEffect(() => {
+    (async () => {
+      if (positionStart) {
+        try {
+          const response = await getDataWeather(positionStart);
+          const listForecast = response.list;
+          const nowMs = new Date().getTime();
+
+          const forecastNext = listForecast.filter((item: any) => {
+            return new Date(item.dt).getTime() >= nowMs;
+          });
+
+          const result: DataWeatherResponse = {
+            list: forecastNext,
+            city: response.city,
+          };
+          setFormData((prev) => ({
+            ...prev,
+            latStart: positionStart.lat,
+            lonStart: positionStart.lon,
+          }));
+          setWeatherStart(result);
+        } catch (error) {
+          console.error(
+            "Error fetching weather data for start position:",
+            error
+          );
+        }
+      }
+    })();
+  }, [positionStart]);
+
+  useEffect(() => {
+    (async () => {
+      if (positionEnd) {
+        try {
+          const response = await getDataWeather(positionEnd);
+          const listForecast = response.list;
+          const nowMs = new Date().getTime();
+          console.log(response);
+
+          const forecastNext = listForecast.filter((item: any) => {
+            return new Date(item.dt).getTime() >= nowMs;
+          });
+
+          const result: DataWeatherResponse = {
+            city: response.city,
+            list: forecastNext,
+          };
+          setFormData((prev) => ({
+            ...prev,
+            latEnd: positionEnd.lat,
+            lonEnd: positionEnd.lon,
+          }));
+          setWeatherEnd(result);
+        } catch (error) {
+          console.error("Error fetching weather data for end position:", error);
+        }
+      }
+    })();
+  }, [positionEnd]);
 
   return (
     <>
@@ -282,102 +539,247 @@ function Schedules() {
       <Dialog
         open={createDialogOpen}
         onClose={handleCloseCreateDialog}
-        maxWidth="sm"
-        fullWidth
+        maxWidth={false}
+        slotProps={{
+          paper: {
+            sx: {
+              width: "90vw",
+              height: "90vh",
+              padding: "3px",
+              borderRadius: 3,
+              boxShadow: "0 8px 24px rgba(16,24,40,0.12)",
+            },
+          },
+        }}
+        sx={{
+          "& .MuiDialog-paper": {
+            display: "flex",
+            flexDirection: "row",
+            width: mapOpen ? "100%" : "800px",
+          },
+        }}
       >
-        <DialogTitle>Create New Schedule</DialogTitle>
-        <DialogContent>
-          <Box sx={{ pt: 2, display: "flex", flexDirection: "column", gap: 2 }}>
-            <TextField
-              fullWidth
-              label="Title"
-              value={formData.title}
-              onChange={(e) => handleFormChange("title", e.target.value)}
-              required
-              slotProps={{
-                inputLabel: {
-                  shrink: true,
-                  sx: {
-                    fontSize: "1.25rem",
-                    fontWeight: 700,
-                    color: "#333",
-                  },
-                },
-              }}
-            />
-            <TextField
-              fullWidth
-              label="Start Time"
-              type="datetime-local"
-              value={formData.startTime}
-              onChange={(e) => handleFormChange("startTime", e.target.value)}
-              required
-              slotProps={{
-                inputLabel: {
-                  shrink: true,
-                  sx: {
-                    fontSize: "1.25rem",
-                    fontWeight: 700,
-                    color: "#333",
-                  },
-                },
-              }}
-            />
-            <TextField
-              fullWidth
-              label="End Time"
-              type="datetime-local"
-              value={formData.endTime}
-              onChange={(e) => handleFormChange("endTime", e.target.value)}
-              required
-              slotProps={{
-                inputLabel: {
-                  shrink: true,
-                  sx: {
-                    fontSize: "1.25rem",
-                    fontWeight: 700,
-                    color: "#333",
-                  },
-                },
-              }}
-            />
-            <TextField
-              fullWidth
-              label="Content"
-              multiline
-              minRows={10}
-              value={formData.content}
-              onChange={(e) => handleFormChange("content", e.target.value)}
-              required
-              slotProps={{
-                inputLabel: {
-                  shrink: true,
-                  sx: {
-                    fontSize: "1.25rem",
-                    fontWeight: 700,
-                    color: "#333",
-                  },
-                },
-              }}
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseCreateDialog}>Cancel</Button>
-          <Button
-            onClick={handleCreateSchedule}
-            variant="contained"
-            disabled={
-              loading ||
-              !formData.title ||
-              !formData.startTime ||
-              !formData.endTime ||
-              !formData.content
-            }
+        <Box
+          sx={{
+            flex: mapOpen ? 7 : 1,
+            p: 2,
+            overflowY: "auto",
+          }}
+        >
+          <DialogTitle>Create New Schedule</DialogTitle>
+          <DialogContent
+            sx={{
+              pt: 2,
+              display: "flex",
+              flexDirection: "column",
+              gap: 2,
+            }}
           >
-            {loading ? <CircularProgress size={20} /> : "Create"}
-          </Button>
-        </DialogActions>
+            <Paper sx={{ p: 2, height: "100%", width: "100%" }}>
+              <TextField
+                select
+                fullWidth
+                label="Type"
+                value={formData.postType}
+                onChange={(e) => {
+                  const newType = e.target.value;
+                  handleFormChange("postType", newType);
+                  if (newType === "BUSINESS_SCHEDULE") {
+                    setMapOpen(false);
+                  } else if (newType === "TRAVEL_ITINERARY") {
+                    setMapOpen(true);
+                  }
+                }}
+                required
+                slotProps={{
+                  inputLabel: {
+                    shrink: true,
+                    sx: {
+                      fontSize: "1.25rem",
+                      fontWeight: 700,
+                      color: "#333",
+                    },
+                  },
+                }}
+              >
+                <MenuItem value="BUSINESS_SCHEDULE">Business Schedule</MenuItem>
+                <MenuItem value="TRAVEL_ITINERARY">Travel Itinerary</MenuItem>
+              </TextField>
+            </Paper>
+            <Paper sx={{ p: 2, height: "100%", width: "100%" }}>
+              <TextField
+                fullWidth
+                label="Title"
+                value={formData.title}
+                onChange={(e) => handleFormChange("title", e.target.value)}
+                required
+                slotProps={{
+                  inputLabel: {
+                    shrink: true,
+                    sx: {
+                      fontSize: "1.25rem",
+                      fontWeight: 700,
+                      color: "#333",
+                    },
+                  },
+                }}
+              />
+            </Paper>
+            <Paper sx={{ p: 2, height: "100%", width: "100%" }}>
+              <TextField
+                fullWidth
+                label="Start Time"
+                type="datetime-local"
+                value={formData.startTime}
+                onChange={(e) => handleFormChange("startTime", e.target.value)}
+                required
+                slotProps={{
+                  inputLabel: {
+                    shrink: true,
+                    sx: {
+                      fontSize: "1.25rem",
+                      fontWeight: 700,
+                      color: "#333",
+                    },
+                  },
+                }}
+              />
+            </Paper>
+            <Paper sx={{ p: 2, height: "100%", width: "100%" }}>
+              <TextField
+                fullWidth
+                label="End Time"
+                type="datetime-local"
+                value={formData.endTime}
+                onChange={(e) => handleFormChange("endTime", e.target.value)}
+                required
+                slotProps={{
+                  inputLabel: {
+                    shrink: true,
+                    sx: {
+                      fontSize: "1.25rem",
+                      fontWeight: 700,
+                      color: "#333",
+                    },
+                  },
+                }}
+              />
+            </Paper>
+            <Paper sx={{ p: 2, height: "100%", width: "100%" }}>
+              <TextField
+                fullWidth
+                label="Content"
+                multiline
+                minRows={10}
+                value={formData.content}
+                onChange={(e) => handleFormChange("content", e.target.value)}
+                required
+                slotProps={{
+                  inputLabel: {
+                    shrink: true,
+                    sx: {
+                      fontSize: "1.25rem",
+                      fontWeight: 700,
+                      color: "#333",
+                    },
+                  },
+                }}
+              />
+            </Paper>
+            {weatherStart !== null && (
+              <Paper
+                sx={{
+                  p: 2,
+                  height: "100%",
+                  width: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                }}
+              >
+                <TextField
+                  fullWidth
+                  label="Start position"
+                  value={weatherStart.city.name}
+                  slotProps={{
+                    inputLabel: {
+                      shrink: true,
+                      sx: {
+                        fontSize: "1.25rem",
+                        fontWeight: 700,
+                        color: "#333",
+                      },
+                    },
+                    input: {
+                      readOnly: true,
+                    },
+                  }}
+                />
+                <ForecastList weather={weatherStart} />
+              </Paper>
+            )}
+            {weatherEnd !== null && (
+              <Paper
+                sx={{
+                  p: 2,
+                  height: "100%",
+                  width: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                }}
+              >
+                <TextField
+                  fullWidth
+                  label="End position"
+                  value={weatherEnd.city.name}
+                  slotProps={{
+                    inputLabel: {
+                      shrink: true,
+                      sx: {
+                        fontSize: "1.25rem",
+                        fontWeight: 700,
+                        color: "#333",
+                      },
+                    },
+                    input: {
+                      readOnly: true,
+                    },
+                  }}
+                />
+                <ForecastList weather={weatherEnd} />
+              </Paper>
+            )}
+          </DialogContent>
+
+          <DialogActions>
+            <Button onClick={handleCloseCreateDialog}>Cancel</Button>
+            <Button
+              onClick={handleCreateSchedule}
+              variant="contained"
+              disabled={
+                loading ||
+                !formData.title ||
+                !formData.startTime ||
+                !formData.endTime ||
+                !formData.content ||
+                !formData.postType ||
+                (formData.postType === "TRAVEL_ITINERARY" &&
+                  (!positionStart || !positionEnd))
+              }
+            >
+              {loading === false ? "Create" : ""}
+            </Button>
+          </DialogActions>
+        </Box>
+        {mapOpen && (
+          <Box
+            sx={{
+              flex: 8,
+              height: "100%",
+            }}
+          >
+            <div id="my-map" style={{ width: "100%", height: "100%" }} />
+          </Box>
+        )}
       </Dialog>
 
       <Container maxWidth="xl" sx={{ py: 4 }}>
@@ -415,7 +817,7 @@ function Schedules() {
           <Box
             sx={{
               display: "grid",
-              gridTemplateColumns: { xs: "1fr", md: "2fr 1fr 1fr" },
+              gridTemplateColumns: { xs: "1fr", md: "2fr 1fr 1fr 1fr" },
               gap: 2,
               alignItems: "center",
             }}
@@ -446,6 +848,17 @@ function Schedules() {
                 <MenuItem value="Up coming">Up coming</MenuItem>
                 <MenuItem value="On going">On going</MenuItem>
                 <MenuItem value="Completed">Completed</MenuItem>
+              </Select>
+            </FormControl>
+            <FormControl fullWidth>
+              <InputLabel>Type</InputLabel>
+              <Select
+                value={typeFilter}
+                label="Type"
+                onChange={(e) => setTypeFilter(e.target.value)}
+              >
+                <MenuItem value="BUSINESS_SCHEDULE">Business Schedule</MenuItem>
+                <MenuItem value="TRAVEL_ITINERARY">Travel Itinerary</MenuItem>
               </Select>
             </FormControl>
             <Button
@@ -510,11 +923,14 @@ function Schedules() {
           onCloseDetail={() => setDetailOpen(false)}
           onEdit={handleViewEdit}
           onDelete={handleViewDelete}
+          weatherStart={selectedSchedule?.startPosition}
+          weatherEnd={selectedSchedule?.endPosition}
         />
 
         <ScheduleDelete
           open={deleteOpen}
           scheduleId={selectedSchedule?.id ?? ""}
+          type={typeFilter}
           onClose={() => setDeleteOpen(false)}
           onDelete={handleDeleteSchedule}
         />
@@ -524,6 +940,8 @@ function Schedules() {
           schedule={selectedSchedule}
           onClose={() => setEditOpen(false)}
           onSave={handleEditSchedule}
+          weatherStart={selectedSchedule?.startPosition}
+          weatherEnd={selectedSchedule?.endPosition}
         />
       </Container>
     </>

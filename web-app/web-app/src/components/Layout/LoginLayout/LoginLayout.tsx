@@ -1,12 +1,18 @@
-import styles from "./LoginLayout.module.scss";
-import classNames from "classnames/bind";
-
-const sx = classNames.bind(styles);
+import React from "react";
 
 export default function LoginLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <main className={sx("wrapper")}>{children}</main>;
+  const style: React.CSSProperties = {
+    position: "relative",
+    backgroundImage: 'url("/LoginImage.jpg")',
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    width: "100%",
+    height: "100vh",
+  };
+
+  return <main style={style}>{children}</main>;
 }

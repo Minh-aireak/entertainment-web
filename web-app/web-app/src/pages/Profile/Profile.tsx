@@ -1,18 +1,28 @@
 import { useEffect, useState, useRef } from "react";
-import { Grid, Typography, Button, Paper, TextField, Box } from "@mui/material";
+import {
+  Grid,
+  Typography,
+  Button,
+  Paper,
+  TextField,
+  Box,
+  Avatar,
+} from "@mui/material";
+import axios from "axios";
 import EditIcon from "@mui/icons-material/Edit";
 import SaveIcon from "@mui/icons-material/Save";
+import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
 import classNames from "classnames/bind";
 import styles from "./Profile.module.scss";
 import dayjs from "dayjs";
-import EditAvatar from "./EditAvatar";
 import { isAuthenticated } from "../../features/hooks/useAuthApi";
 import { CustomAlertSnackbar } from "../../components/CustomAlertSnackbar";
+import { Loading } from "../../components/Loading";
 import {
   getMyInfo,
   updateProfile,
   uploadAvatar,
-} from "../../services/userService";
+} from "../../services/UserService";
 import type { UserProfileResponse } from "../../InterfaceDataType/DataType";
 
 type ResultUserProfileResponse = UserProfileResponse["result"];
@@ -20,6 +30,7 @@ const cx = classNames.bind(styles);
 
 const Profile = () => {
   const [userData, setUserData] = useState<ResultUserProfileResponse>({
+    userId: "",
     username: "",
     email: "",
     firstName: "",
@@ -35,6 +46,8 @@ const Profile = () => {
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [severity, setSeverity] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleEditClick = () => {
     setTempData({ ...userData });
@@ -43,16 +56,25 @@ const Profile = () => {
 
   const handleSaveClick = async () => {
     try {
+      setLoading(true);
       const response = await updateProfile(tempData);
       setUserData({ ...tempData });
       setSnackbarMessage(response.message);
       setSeverity(true);
       setIsEditing(false);
     } catch (error: any) {
+      let messageToShow = error.message;
+      if (axios.isAxiosError(error)) {
+        if (error.response) {
+          messageToShow = error.response.data.message;
+        }
+      }
+      setSnackbarMessage(messageToShow);
       setSeverity(false);
-      setSnackbarMessage(error.response.data.message);
+    } finally {
+      setLoading(false);
+      setSnackbarOpen(true);
     }
-    setSnackbarOpen(true);
   };
 
   const handleChange = (e: any) => {
@@ -62,11 +84,47 @@ const Profile = () => {
     });
   };
 
-  // const handleNewAvatar = async (file: File) => {
-  //   try {
-  //     const newUrl = await uploadAvatar(file);
-  //   } catch (error: any) {}
-  // };
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleUploadAvatar = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.currentTarget.files?.[0];
+    if (!file) return;
+
+    if (!file.type.match("image.*")) {
+      setSnackbarMessage("Please select an image file");
+      setSeverity(false);
+      setSnackbarOpen(true);
+      return;
+    }
+    try {
+      setLoading(true);
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await uploadAvatar(formData);
+
+      const imageUrl = response.result.avatar;
+      setUserData({ ...userData, avatar: imageUrl });
+      setSnackbarMessage("Avatar updated successfully!");
+      setSeverity(true);
+    } catch (error: any) {
+      let messageToShow = error.message;
+      if (axios.isAxiosError(error)) {
+        if (error.response) {
+          messageToShow = error.response.data.message;
+        }
+      }
+      setSnackbarMessage(messageToShow);
+      setSeverity(false);
+    } finally {
+      setSnackbarOpen(true);
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -74,6 +132,7 @@ const Profile = () => {
         const response = await getMyInfo();
 
         setUserData({
+          userId: response.result.userId ?? "",
           username: response.result.username ?? "",
           email: response.result.email ?? "",
           firstName: response.result.firstName ?? "",
@@ -85,7 +144,13 @@ const Profile = () => {
           avatar: response.result.avatar ?? "",
         });
       } catch (error: any) {
-        setSnackbarMessage(error.message);
+        let messageToShow = error.message;
+        if (axios.isAxiosError(error)) {
+          if (error.response) {
+            messageToShow = error.response.data.message;
+          }
+        }
+        setSnackbarMessage(messageToShow);
         setSeverity(false);
         setSnackbarOpen(true);
       }
@@ -98,6 +163,7 @@ const Profile = () => {
 
   return (
     <>
+      {loading && <Loading loading={loading} />}
       <CustomAlertSnackbar
         open={snackbarOpen}
         message={snackbarMessage}
@@ -111,7 +177,52 @@ const Profile = () => {
         <Grid container spacing={7}>
           <Grid size={{ xs: 12, md: 4, sm: 6 }}>
             <Box display="flex" flexDirection="column" alignItems="center">
-              {/* <EditAvatar src={userData.avatar} onSelectFile={handleNewAvatar} /> */}
+              <Box sx={{ position: "relative", mt: 2, mb: 2 }}>
+                <Avatar
+                  src={userData.avatar}
+                  sx={{
+                    width: 200,
+                    height: 200,
+                    fontSize: 60,
+                    cursor: "pointer",
+                    transition: "opacity 0.3s",
+                    "&:hover": {
+                      opacity: 0.8,
+                    },
+                  }}
+                  onClick={handleAvatarClick}
+                ></Avatar>
+                <Box
+                  sx={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    opacity: 0,
+                    transition: "opacity 0.3s",
+                    borderRadius: "50%",
+                    backgroundColor: "rgba(0, 0, 0, 0.4)",
+                    "&:hover": {
+                      opacity: 1,
+                    },
+                    cursor: "pointer",
+                  }}
+                  onClick={handleAvatarClick}
+                >
+                  <PhotoCameraIcon sx={{ color: "white", fontSize: 39 }} />
+                </Box>
+                <input
+                  type="file"
+                  accept="image/*"
+                  ref={fileInputRef}
+                  style={{ display: "none" }}
+                  onChange={handleUploadAvatar}
+                />
+              </Box>
               <Typography>
                 Joined: {dayjs(userData.joinDate).format("DD/MM/YYYY")}
               </Typography>

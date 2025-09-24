@@ -1,11 +1,11 @@
 export const CONFIG = {
-  API_GATE_WAY: "http://localhost:8888/",
+  API_GATE_WAY: "http://localhost:8888/api/v1",
 };
 
 export const API_ENDPOINTS = {
-  LOGIN: "identity/auth/login",
-  REFRESH_TOKEN: "identity/auth/refresh",
-  REGISTER: "identity/users/registration",
+  LOGIN: "/identity/auth/login",
+  REFRESH_TOKEN: "/identity/auth/refresh",
+  REGISTER: "/identity/users/registration",
   MY_INFO: "/profile/get-my-info",
   UPDATE_PROFILE: "/profile/update-my-profile",
   DELETE_PROFILE: "/profile/delete",
@@ -14,7 +14,8 @@ export const API_ENDPOINTS = {
   MY_POSTS: "/post/get-my-posts",
   UPDATE_POST: "/post/update-post",
   DELETE_POST: "/post/delete",
-  UPDATE_AVATAR: "/profile/users/updateAvatar",
+  UPDATE_AVATAR: "/profile/upload-avatar",
+  GET_DATA_WEATHER: "/weather/get-data-weather",
 
   CREATE_CONVERSATION: "/chat/conversations/create",
   CREATE_MESSAGE: "/chat/messages/create",
