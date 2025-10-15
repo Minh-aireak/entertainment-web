@@ -1,0 +1,26 @@
+server:
+  port: 8087
+  servlet:
+    context-path: /friend
+
+spring:
+  application:
+    name: friend-service
+  datasource:
+    url: ${DBMS_CONNECTION:jdbc:mysql://localhost:3306/friend-service}
+    username: ${DBMS_USERNAME:root}
+    password: ${DBMS_PASSWORD:REDACTED_LEGACY_CREDENTIAL}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+jwt:
+  signerKey: "uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0"
+
+app:
+  services:
+    profile:
+      url: "http://localhost:8081/profile"
+
+
