@@ -1,11 +1,11 @@
 server:
   port: 8087
   servlet:
-    context-path: /friend
+    context-path: /friends
 
 spring:
   application:
-    name: friend-service
+    name: friends-service
   datasource:
     url: ${DBMS_CONNECTION:jdbc:mysql://localhost:3306/friend-service}
     username: ${DBMS_USERNAME:root}
