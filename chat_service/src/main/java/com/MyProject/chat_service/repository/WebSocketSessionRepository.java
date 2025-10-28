@@ -1,4 +1,4 @@
-package com.MyProject.friend_service.repository;
+package com.MyProject.chat_service.repository;
 
 import com.MyProject.chat_service.entity.WebSocketSession;
 import org.springframework.data.mongodb.repository.MongoRepository;

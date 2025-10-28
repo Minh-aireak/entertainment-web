@@ -1,4 +1,4 @@
-package com.MyProject.friend_service.service;
+package com.MyProject.chat_service.service;
 
 import com.MyProject.chat_service.entity.WebSocketSession;
 import com.MyProject.chat_service.repository.WebSocketSessionRepository;

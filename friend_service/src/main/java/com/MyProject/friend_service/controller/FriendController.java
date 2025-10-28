@@ -25,7 +25,7 @@ public class FriendController {
                 .build();
     }
 
-    @PutMapping
+    @PutMapping("/update-request")
     ApiResponse<Void> updateFriendRequestStatus(@RequestBody UpdateFriendRequestStatus request) {
         friendService.updateFriendRequestStatus(request);
         return ApiResponse.<Void>builder()
@@ -33,7 +33,7 @@ public class FriendController {
                 .build();
     }
 
-    @PutMapping
+    @PutMapping("/update-relationship")
     ApiResponse<Void> updateRelationshipStatus(@RequestBody UpdateRelationshipStatus request) {
         friendService.updateRelationshipStatus(request);
         return ApiResponse.<Void>builder()
@@ -42,14 +42,21 @@ public class FriendController {
     }
 
     @GetMapping("/list-friends")
-    ApiResponse<PageResponse<FriendResponse>> getListFriend(@RequestParam String conversationId,
-                                                            @RequestParam int page,
+    ApiResponse<PageResponse<FriendResponse>> getListFriend(@RequestParam int page,
                                                             @RequestParam int size) {
         return ApiResponse.<PageResponse<FriendResponse>>builder()
-                .result(friendService.getListFriend(conversationId, page, size))
+                .result(friendService.getListFriend(page, size))
                 .build();
     }
-//
+
+    @GetMapping("/list-friend-requests")
+    ApiResponse<PageResponse<FriendResponse>> getListFriendRequest(@RequestParam int page,
+                                                                   @RequestParam int size) {
+        return ApiResponse.<PageResponse<FriendResponse>>builder()
+                .result(friendService.getListFriendRequest(page, size))
+                .build();
+    }
+
 //    @DeleteMapping("/delete")
 //    ApiResponse<ChatMessageResponse> deleteChatMessage(@RequestBody ChatMessageDeleteRequest request) {
 //        return ApiResponse.<ChatMessageResponse>builder()
@@ -57,12 +64,6 @@ public class FriendController {
 //                .build();
 //    }
 //
-//    @PutMapping("/update")
-//    ApiResponse<ChatMessageResponse> updateChatMessage(@RequestBody @Valid ChatMessageUpdateRequest request) {
-//        return ApiResponse.<ChatMessageResponse>builder()
-//                .result(chatMessageService.updateChatMessage(request))
-//                .build();
-//    }
 //
 //    @PutMapping("/mark-as-seen/{conversationId}")
 //    ApiResponse<Void> seenAt(@PathVariable String conversationId) {

@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+import java.time.Instant;
+
 @Entity
 @Getter
 @Setter
@@ -32,4 +34,7 @@ public class UserRelationship {
     @Enumerated(EnumType.STRING)
     @Column(name = "relationship_status", nullable = false)
     RelationshipStatus relationshipStatus;
+
+    @Column(name = "created_date", nullable = false)
+    Instant createdDate;
 }

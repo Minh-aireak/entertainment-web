@@ -1,4 +1,4 @@
-package com.MyProject.friend_service.repository.httpclient;
+package com.MyProject.chat_service.repository.httpclient;
 
 import com.MyProject.chat_service.dto.request.IntrospectRequest;
 import com.MyProject.chat_service.dto.response.ApiResponse;

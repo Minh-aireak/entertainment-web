@@ -1,6 +1,5 @@
-package com.MyProject.friend_service.validator;
+package com.MyProject.chat_service.validator;
 
-import com.MyProject.chat_service.validator.NotBlankChatMessageConstraint;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 

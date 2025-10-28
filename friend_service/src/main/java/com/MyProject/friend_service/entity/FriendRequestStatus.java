@@ -4,5 +4,5 @@ import lombok.Getter;
 
 @Getter
 public enum FriendRequestStatus {
-    PENDING, ACCEPTED, REJECTED_FROM_SENDER, CANCELLED_FROM_RECEIVER
+    PENDING, ACCEPTED, CANCEL
 }

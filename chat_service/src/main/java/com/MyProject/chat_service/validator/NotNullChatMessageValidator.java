@@ -1,4 +1,4 @@
-package com.MyProject.friend_service.validator;
+package com.MyProject.chat_service.validator;
 
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
