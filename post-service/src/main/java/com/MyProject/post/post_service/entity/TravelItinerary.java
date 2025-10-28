@@ -28,6 +28,7 @@ public class TravelItinerary extends Post{
                 .id(p.getId())
                 .userId(p.getUserId())
                 .displayName(p.getDisplayName())
+                .avatar(p.getAvatar())
                 .title(p.getTitle())
                 .content(p.getContent())
                 .startTime(p.getStartTime())

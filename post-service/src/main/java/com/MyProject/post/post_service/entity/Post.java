@@ -24,6 +24,7 @@ public class Post {
 
     String userId;
     String displayName;
+    String avatar;
     String title;
     String content;
     LocalDateTime startTime;

@@ -5,21 +5,21 @@ server:
 
 spring:
   datasource:
-    url: ${DBMS_CONNECTION:jdbc:mysql://localhost:3306/travel-service}
-    username: ${DBMS_USERNAME:root}
-    password: ${DBMS_PASSWORD:REDACTED_LEGACY_CREDENTIAL}
+      url: ${DBMS_CONNECTION:jdbc:mysql://localhost:3306/travel-service}
+      username: ${DBMS_USERNAME:root}
+      password: ${MYSQL_ROOT_PASSWORD:REDACTED_LEGACY_CREDENTIAL}
   jpa:
     hibernate:
       ddl-auto: update
     show-sql: true
   kafka:
-    bootstrap-servers: localhost:9094
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
 jwt:
-  signerKey: "uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0"
+  signerKey: ${JWT_SIGNER_KEY:uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0}
   valid-duration: 3600
   refreshable-duration: 360000
   client-id: "266132262326-islopun9fjajf96gds894ncmi43ugcku.apps.googleusercontent.com"

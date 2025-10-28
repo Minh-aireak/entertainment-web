@@ -4,12 +4,9 @@ import java.text.ParseException;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.Date;
-import java.util.Set;
-import java.util.StringJoiner;
-import java.util.UUID;
+import java.util.*;
 
-import com.MyProject.event.dto.NotificationEvent;
+import event.dto.NotificationEvent;
 import com.MyProject.identity.identity_service.dto.request.*;
 import com.MyProject.identity.identity_service.entity.Role;
 import com.MyProject.identity.identity_service.repository.RoleRepository;
@@ -179,17 +176,23 @@ public class AuthenticationService {
         return signedJWT;
     }
 
-    public IntrospectResponse introspectResponse(IntrospectRequest request) {
+    public IntrospectResponse introspectResponse(IntrospectRequest request) throws ParseException {
         boolean checkValid = true;
         var token = request.getToken();
+        SignedJWT signedJWT = null;
 
         try {
-            var signedJWT = verifyToken(token, false);
+            signedJWT = verifyToken(token, false);
         } catch (Exception exception) {
             checkValid = false;
         }
 
-        return IntrospectResponse.builder().valid(checkValid).build();
+        return IntrospectResponse.builder()
+                .valid(checkValid)
+                .userId(Objects.nonNull(signedJWT) ?
+                        signedJWT.getJWTClaimsSet().getClaim("userId").toString()
+                        : null)
+                .build();
     }
 
     @Transactional(rollbackFor = Exception.class)

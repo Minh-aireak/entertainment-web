@@ -1,6 +1,6 @@
 import { Route, Routes } from "react-router-dom";
 import { publicRoutes } from "./PublicRoutes";
-import DefaultLayout from "../components/Layout/DefaultLayout/DefaultLayout";
+import { DefaultLayout } from "../components/Layout/CustomLayout";
 
 export default function AppRoutes() {
   return (

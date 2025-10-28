@@ -117,7 +117,6 @@ class AuthenticationServiceTest {
         user = User.builder()
                 .username("NguyenTuanMinh")
                 .password("decoded!")
-                .lastName("Minh")
                 .roles(Set.of(role))
                 .build();
 

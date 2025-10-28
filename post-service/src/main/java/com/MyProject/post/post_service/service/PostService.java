@@ -1,6 +1,7 @@
 package com.MyProject.post.post_service.service;
 
 import com.MyProject.post.post_service.configuration.DateTimeFormatter;
+import event.dto.ProfileUpdatedEvent;
 import com.MyProject.post.post_service.dto.request.DataWeatherRequest;
 import com.MyProject.post.post_service.dto.request.ScheduleRequest;
 import com.MyProject.post.post_service.dto.request.ScheduleUpdateRequest;
@@ -57,6 +58,7 @@ public class PostService {
                 .id(UUID.randomUUID().toString())
                 .userId(jwt.getClaim("userId"))
                 .displayName(info.getDisplayName())
+                .avatar(info.getAvatar())
                 .title(request.getTitle())
                 .content(request.getContent())
                 .createdDate(LocalDateTime.now())
@@ -195,6 +197,22 @@ public class PostService {
                     new AppException(ErrorCode.TRAVEL_ITINERARY_NOT_EXISTED));
             travelItineraryRepository.delete(travelItinerary);
         }
+    }
+
+    public void updateUserProfile(ProfileUpdatedEvent profileUpdatedEvent) {
+        var businessPosts = postRepository.findAllByUserIdForUpdate(profileUpdatedEvent.getUserId());
+        businessPosts.forEach(post -> {
+            post.setDisplayName(profileUpdatedEvent.getDisplayName());
+            post.setAvatar(profileUpdatedEvent.getAvatar());
+            postRepository.save(post);
+        });
+
+        var travelPosts = travelItineraryRepository.findAllByUserIdForUpdate(profileUpdatedEvent.getUserId());
+        travelPosts.forEach(post -> {
+            post.setDisplayName(profileUpdatedEvent.getDisplayName());
+            post.setAvatar(profileUpdatedEvent.getAvatar());
+            travelItineraryRepository.save(post);
+        });
     }
 //
 //    @Scheduled(fixedDelayString = "${jwt.auto-update-status}")

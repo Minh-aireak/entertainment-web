@@ -17,6 +17,7 @@ public class ScheduleResponse {
    String postType;
    String userId;
    String displayName;
+   String avatar;
    String title;
    String content;
    LocalDateTime startTime;

@@ -6,11 +6,13 @@ server:
 spring:
   application:
     name: notification-service
-  data:
-    mongodb:
-      uri: mongodb://root:REDACTED_LEGACY_CREDENTIAL@localhost:27017/notification-service?authSource=admin
   kafka:
-    bootstrap-servers: localhost:9094
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: true
     consumer:
       group-id: notification-group
       auto-offset-reset: earliest
@@ -22,7 +24,7 @@ spring:
 notification:
   email:
     brevo-url: https://api.brevo.com
-    brevo-apikey: <key>
+    brevo-apikey: ${BREVO_API_KEY:<your-brevo-key>}
 
 jwt:
-  signerKey: "uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0"
+  signerKey: ${JWT_SIGNER_KEY:uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0}

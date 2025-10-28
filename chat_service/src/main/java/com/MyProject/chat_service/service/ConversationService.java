@@ -10,6 +10,7 @@ import com.MyProject.chat_service.exception.ErrorCode;
 import com.MyProject.chat_service.mapper.ConversationMapper;
 import com.MyProject.chat_service.repository.ConversationDirectRepository;
 import com.MyProject.chat_service.repository.ConversationGroupRepository;
+import com.MyProject.chat_service.repository.ConversationRepository;
 import com.MyProject.chat_service.repository.httpclient.ProfileClient;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ import java.util.stream.Collectors;
 public class ConversationService {
     ProfileClient profileClient;
     ConversationMapper conversationMapper;
+    ConversationRepository conversationRepository;
     ConversationDirectRepository conversationDirectRepository;
     ConversationGroupRepository conversationGroupRepository;
 
@@ -57,8 +59,8 @@ public class ConversationService {
             conversationResponse.getParticipantInfos().stream()
                     .filter(participantInfo -> !participantInfo.getUserId().equals(currentUserId))
                     .findFirst().ifPresent(participantInfo -> {
-                        conversationResponse.setConversationDirectName(participantInfo.getDisplayName());
-                        conversationResponse.setConversationDirectAvatar(participantInfo.getAvatar());
+                        conversationResponse.setDirectName(participantInfo.getDisplayName());
+                        conversationResponse.setDirectAvatar(participantInfo.getAvatar());
                     });
         } else if (conversation instanceof ConversationGroup conversationGroup) {
             conversationResponse = conversationMapper.toConversationGroupResponse(conversationGroup);
@@ -67,6 +69,23 @@ public class ConversationService {
         }
 
         return conversationResponse;
+    }
+
+    private String createGroupName(List<ParticipantInfo> participantsInfo) {
+        StringBuilder baseName = new StringBuilder();
+        int limit = Math.min(3, participantsInfo.size());
+
+        for (int i = 0; i < limit; i++) {
+            String name = participantsInfo.get(i).getDisplayName();
+            baseName.append(", ").append(name);
+        }
+
+        if (participantsInfo.size() > 3) {
+            int more = participantsInfo.size() - 3;
+            baseName.append(" + ").append(more).append(" more");
+        }
+
+        return baseName.toString();
     }
 
     @Transactional
@@ -79,7 +98,7 @@ public class ConversationService {
 
         if (request.getParticipantInfos().isEmpty()) {
             return null;
-        } else if (request.getParticipantInfos().size() == 1) {
+        } else if (request.getType().equals("DIRECT")) {
             UserProfileResponse participantInfoResponse = profileClient.getUserProfile(request.getParticipantInfos().getFirst().getUserId()).getResult();
             List<String> ids = new ArrayList<>();
             ids.add(userProfileResponse.getUserId());
@@ -87,29 +106,32 @@ public class ConversationService {
 
             var sortedIds = ids.stream().sorted().toList();
             String userIdsHash = generateParticipantsHash(sortedIds);
+            var conversation = conversationDirectRepository.findByParticipantsHash(userIdsHash)
+                    .orElseGet(() -> {
+                        List<ParticipantInfo> participantInfos = List.of(
+                                ParticipantInfo.builder()
+                                        .userId(userId)
+                                        .displayName(userProfileResponse.getDisplayName())
+                                        .avatar(userProfileResponse.getAvatar())
+                                        .build(),
+                                ParticipantInfo.builder()
+                                        .userId(participantInfoResponse.getUserId())
+                                        .displayName(participantInfoResponse.getDisplayName())
+                                        .avatar(participantInfoResponse.getAvatar())
+                                        .build()
+                        );
 
-            List<ParticipantInfo> participantInfos = List.of(
-                    ParticipantInfo.builder()
-                            .userId(userId)
-                            .displayName(userProfileResponse.getDisplayName())
-                            .avatar(userProfileResponse.getAvatar())
-                            .build(),
-                    ParticipantInfo.builder()
-                            .userId(participantInfoResponse.getUserId())
-                            .displayName(participantInfoResponse.getDisplayName())
-                            .avatar(participantInfoResponse.getAvatar())
-                            .build()
-            );
+                        ConversationDirect conversationDirect = ConversationDirect
+                                .fromConversation(baseConversation(request))
+                                .participantInfos(participantInfos)
+                                .participantsHash(userIdsHash)
+                                .build();
 
-            ConversationDirect conversationDirect = ConversationDirect
-                    .fromConversation(baseConversation(request))
-                    .participantInfos(participantInfos)
-                    .participantsHash(userIdsHash)
-                    .build();
+                        conversationDirect = conversationDirectRepository.save(conversationDirect);
+                        return conversationDirect;
+                    });
 
-            conversationDirect = conversationDirectRepository.save(conversationDirect);
-
-            return toConversationResponse(conversationDirect);
+            return toConversationResponse(conversation);
         } else {
             List<ParticipantInfo> participantsInfo = request.getParticipantInfos().stream().map(s -> {
                 var response = profileClient.getUserProfile(s.getUserId()).getResult();
@@ -131,10 +153,7 @@ public class ConversationService {
             ConversationGroup conversationGroup = ConversationGroup
                     .fromConversation(baseConversation(request))
                     .participantInfos(listParticipantInfo)
-                    .groupName(userProfileResponse.getDisplayName() + ", "
-                            + participantsInfo.get(1).getDisplayName() +  ", "
-                            + participantsInfo.get(2).getDisplayName() + " + "
-                            + (participantsInfo.size() - 3) + " more")
+                    .groupName(createGroupName(participantsInfo))
                     .groupOwner(userId)
                     .groupAvatar("")
                     .build();
@@ -146,30 +165,23 @@ public class ConversationService {
     }
 
     @Transactional
-    public List<ConversationResponse> getMyConversations(String type) {
+    public List<ConversationResponse> getMyConversations() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         Jwt jwt = ((JwtAuthenticationToken) authentication).getToken();
         String userId = jwt.getClaim("userId");
 
-        List<ConversationResponse> list;
-        switch (type) {
-            case "DIRECT": {
-                list = conversationDirectRepository.findAllDirectByUserId(userId)
-                        .stream()
-                        .map(conversationMapper::toConversationDirectResponse
-                        ).toList();
-                break;
-            }
-            case "GROUP": {
-                list = conversationGroupRepository.findAllGroupByUserId(userId)
-                        .stream()
-                        .map(conversationMapper::toConversationGroupResponse
-                        ).toList();
-                break;
-            }
-            default: throw new AppException(ErrorCode.TYPE_CONVERSATION_ERROR);
-        }
-        return list;
+        return conversationRepository.findAllByUserId(userId)
+                .stream()
+                .map(a -> {
+                    ConversationResponse response = null;
+                    if (a instanceof ConversationDirect conversationDirect) {
+                        response = toConversationResponse(conversationDirect);
+                    } else if (a instanceof ConversationGroup conversationGroup){
+                        response = toConversationResponse(conversationGroup);
+                    }
+                    return response;
+                })
+                .toList();
     }
 
     private String generateParticipantsHash(List<String> ids) {

@@ -1,5 +1,6 @@
 package com.MyProject.profile.profile_service.service;
 
+import com.MyProject.profile.profile_service.dto.request.BulkUserProfileRequest;
 import com.MyProject.profile.profile_service.dto.request.SearchUserProfileRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileCreationRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileUpdateRequest;
@@ -11,6 +12,7 @@ import com.MyProject.profile.profile_service.exception.ErrorCode;
 import com.MyProject.profile.profile_service.mapper.UserProfileMapper;
 import com.MyProject.profile.profile_service.repository.UserProfileRepository;
 import com.MyProject.profile.profile_service.repository.httpclient.FileClient;
+import event.dto.ProfileUpdatedEvent;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -19,12 +21,14 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Objects;
 
 @Slf4j
 @Service
@@ -34,6 +38,7 @@ public class UserProfileService {
     UserProfileRepository userProfileRepository;
     UserProfileMapper userProfileMapper;
     FileClient client;
+    KafkaTemplate<String, Object> kafkaTemplate;
 
     @Transactional(rollbackFor = Exception.class)
     public UserProfileResponse createProfile(UserProfileCreationRequest request){
@@ -45,10 +50,24 @@ public class UserProfileService {
     public UserProfileResponse updateProfile(UserProfileUpdateRequest request){
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         UserProfile profile = userProfileRepository.findByUsername(authentication.getName());
+        String oldDisplayName = profile.getDisplayName();
 
         userProfileMapper.update(profile, request);
+        UserProfile savedProfile = userProfileRepository.save(profile);
 
-        return userProfileMapper.toUserProfileResponse(userProfileRepository.save(profile));
+        boolean changed = !Objects.equals(oldDisplayName, savedProfile.getDisplayName());
+
+        if (changed) {
+            ProfileUpdatedEvent event = ProfileUpdatedEvent.builder()
+                    .userId(savedProfile.getUserId())
+                    .avatar(savedProfile.getAvatar())
+                    .displayName(savedProfile.getDisplayName())
+                    .build();
+
+            kafkaTemplate.send("profile-updated", event);
+        }
+
+        return userProfileMapper.toUserProfileResponse(savedProfile);
     }
 
     @Transactional
@@ -75,14 +94,34 @@ public class UserProfileService {
     }
 
     @Transactional
+    public List<UserProfileResponse> getBulkProfiles(BulkUserProfileRequest request){
+        List<UserProfile> userProfiles = userProfileRepository.findAllById(request.getUserIds());
+        
+        return userProfiles.stream()
+                .map(userProfileMapper::toUserProfileResponse)
+                .toList();
+    }
+
+    @Transactional
     public UserProfileResponse updateAvatar(MultipartFile multipartFile){
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         UserProfile profile = userProfileRepository.findByUsername(authentication.getName());
 
         var response = client.uploadAvatar(multipartFile);
-        profile.setAvatar(response.getResult().getUrl());
+        String newAvatar = response.getResult().getUrl();
+        profile.setAvatar(newAvatar);
+        
+        UserProfile savedProfile = userProfileRepository.save(profile);
 
-        return userProfileMapper.toUserProfileResponse(userProfileRepository.save(profile));
+        ProfileUpdatedEvent event = ProfileUpdatedEvent.builder()
+                .userId(savedProfile.getUserId())
+                .avatar(savedProfile.getAvatar())
+                .displayName(savedProfile.getDisplayName())
+                .build();
+
+        kafkaTemplate.send("profile-updated", event);
+
+        return userProfileMapper.toUserProfileResponse(savedProfile);
     }
 
     @Transactional

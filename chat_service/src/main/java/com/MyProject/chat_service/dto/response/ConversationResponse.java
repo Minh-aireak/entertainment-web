@@ -19,8 +19,8 @@ public class ConversationResponse {
    String type;
    String participantsHash;
    List<ParticipantInfo> participantInfos;
-   String conversationDirectName;
-   String conversationDirectAvatar;
+   String directName;
+   String directAvatar;
    String groupName;
    String groupOwner;
    String groupAvatar;

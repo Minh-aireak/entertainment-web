@@ -7,7 +7,6 @@ public class DataUpdatePostValidator implements ConstraintValidator<DataUpdatePo
 
     @Override
     public void initialize(DataUpdatePostConstraint constraintAnnotation) {
-        String attribute = constraintAnnotation.attribute();
         ConstraintValidator.super.initialize(constraintAnnotation);
     }
 

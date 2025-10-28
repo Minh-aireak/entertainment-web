@@ -1,13 +1,12 @@
-import Login from "../pages/Login";
+import Login from "../pages/Login/Login";
 import Home from "../pages/Home";
 import Profile from "../pages/Profile/Profile";
-import Messages from "../pages/Message";
+import Message from "../pages/Message/Message";
 import Groups from "../pages/Groups";
-import Schedules from "../pages/Schedules";
+import Schedules from "../pages/Schedule/Schedules";
 import Authenticate from "../pages/Authenticate";
-import Friends from "../pages/Friends";
-import HeaderContentLayout from "../components/Layout/HeaderContentLayout/HeaderContentLayout";
-import LoginLayout from "../components/Layout/LoginLayout/LoginLayout";
+import Friends from "../pages/Friend/Friends";
+import { LoginLayout, ContentLayout } from "../components/Layout/CustomLayout";
 
 const publicRoutes = [
   { path: "/login", component: Login, layout: LoginLayout },
@@ -17,7 +16,7 @@ const publicRoutes = [
   { path: "/schedules", component: Schedules },
   { path: "/friends", component: Friends },
   { path: "/groups", component: Groups },
-  { path: "/messages", component: Messages },
+  { path: "/messages", component: Message, layout: ContentLayout },
 ];
 
 export { publicRoutes };

@@ -20,4 +20,7 @@ public interface PostRepository extends MongoRepository<Post, String> {
 
     @Query(value = "{'_class': 'business-schedule', 'id': ?0}")
     Optional<Post> findByIdType(String id);
+
+    @Query("{'_class': 'business-schedule', 'userId': ?0 }")
+    List<Post> findAllByUserIdForUpdate(String userId);
 }

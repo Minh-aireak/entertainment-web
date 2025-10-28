@@ -5,7 +5,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import com.MyProject.event.dto.NotificationEvent;
+import event.dto.NotificationEvent;
 import com.MyProject.identity.identity_service.dto.request.UserProfileCreationRequest;
 import com.MyProject.identity.identity_service.mapper.UserProfileMapper;
 import com.MyProject.identity.identity_service.repository.httpclient.UserProfileClient;
@@ -78,7 +78,7 @@ public class UserService {
                 .body("Hello, " + request.getUsername())
                 .build();
 
-        kafkaTemplate.send("notification-delivery", notificationEvent);
+        kafkaTemplate.send("onboard-email", notificationEvent);
 
         return userMapper.toUserResponse(user);
     }

@@ -10,6 +10,7 @@ import {
   Box,
   Chip,
   Paper,
+  Avatar,
 } from "@mui/material";
 import {
   AccessTime,
@@ -101,6 +102,28 @@ const ScheduleDetail: React.FC<ScheduleDetailProps> = ({
             gap: 2,
           }}
         >
+          {/* User info section */}
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              mb: 2,
+            }}
+          >
+            <Avatar
+              src={schedule.avatar}
+              alt={schedule.displayName}
+              sx={{ width: 40, height: 40, mr: 2 }}
+            />
+            <Typography
+              variant="h6"
+              color="text.secondary"
+              sx={{ fontWeight: 500 }}
+            >
+              Created by {schedule.displayName}
+            </Typography>
+          </Box>
+
           <Box
             sx={{
               display: "flex",

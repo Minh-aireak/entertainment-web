@@ -11,6 +11,7 @@ export interface UserProfileResponse {
     city: string;
     joinDate: Date;
     avatar?: string;
+    displayName?: string;
   };
 }
 
@@ -30,6 +31,8 @@ export interface Schedule {
   id: string;
   postType: string;
   userId: string;
+  displayName: string;
+  avatar: string;
   title: string;
   content: string;
   startTime: Date;
@@ -43,6 +46,8 @@ export interface ScheduleResponse {
   id: string;
   postType: string;
   userId: string;
+  displayName: string;
+  avatar: string;
   title: string;
   content: string;
   startTime: Date;
@@ -171,4 +176,136 @@ export interface City {
 export interface DataWeatherResponse {
   city: City;
   list: ListForecast[];
+}
+
+export interface ParticipantInfo {
+  userId: string;
+  displayName: string;
+  avatar: string;
+}
+
+export interface ConversationRequest {
+  type: string;
+  participantInfos: ParticipantInfo[];
+}
+
+export interface ConversationResponse {
+  id: string;
+  type: string;
+  participantsHash: string;
+  participantInfos: ParticipantInfo[];
+  directName: string;
+  directAvatar: string;
+  groupName: string;
+  groupOwner: string;
+  groupAvatar: string;
+  createdDate: Date;
+  modifiedDate: Date;
+}
+
+export type MessageType =
+  | "DELETED_FOR_SENDER"
+  | "DELETED_FOR_EVERYONE"
+  | "TEXT"
+  | "IMAGE"
+  | "AUDIO"
+  | "VIDEO"
+  | "FILE"
+  | "STICKER"
+  | "POST";
+export type MessageStatus =
+  | "SENDING"
+  | "SENT"
+  | "DELIVERED"
+  | "SEEN"
+  | "FAILED";
+
+export interface ChatMessageCreateRequest {
+  conversationId: string;
+  messageType: MessageType;
+  content: string;
+  attachmentFileUrl: string;
+  replyToMessageId: string;
+}
+
+export interface ChatMessageResponse {
+  id: string;
+  conversationId: string;
+  me: boolean;
+  sender: ParticipantInfo;
+  messageType: MessageType;
+  content: string;
+  attachmentFileUrl: string;
+  replyToMessageId: string;
+  createdDate: Date;
+  modifiedDate: Date;
+  messageStatus: MessageStatus;
+  seenAtMap: Record<string, Date> | null;
+}
+
+export interface ChatMessageDeleteRequest {
+  chatMessageId: string;
+  deleteType: string;
+}
+
+export interface ChatMessageUpdateRequest {
+  chatMessageId: string;
+  content: string;
+}
+
+export interface BulkUserProfileRequest {
+  userIds: string[];
+}
+
+export type FriendRequestStatus = "PENDING" | "ACCEPTED" | "CANCEL";
+
+export interface FriendRequest {
+  id: string;
+  userId: string;
+  toUserId: string;
+  hashFriendRequest: string;
+  friendRequestStatus: FriendRequestStatus;
+  createdAt: Date;
+}
+
+export interface UpdateFriendRequestStatus {
+  userId: string;
+  friendRequestStatus: FriendRequestStatus;
+}
+
+export type RelationshipStatus =
+  | "FRIEND"
+  | "UNFRIEND"
+  | "BLOCKED_FROM_SENDER"
+  | "BLOCK_FROM_RECEIVER";
+
+export interface UserRelationship {
+  id: string;
+  userId: string;
+  toUserId: string;
+  hashFriendRequest: string;
+  relationshipStatus: RelationshipStatus;
+  createdDate: Date;
+}
+
+export interface UpdateRelationshipStatus {
+  userId: string;
+  friendStatus: RelationshipStatus;
+}
+
+export interface FriendResponse {
+  userId: string;
+  displayName: string;
+  avatar: string;
+  hash: string;
+  date: Date;
+  status: RelationshipStatus;
+}
+
+export interface FriendResponsePerPage {
+  currentPage: number;
+  totalPages: number;
+  pageSize: number;
+  totalElements: number;
+  data: FriendResponse[];
 }

@@ -1,10 +1,45 @@
-version: "3"
+version: "3.8"
 services:
+  # Databases
+  mysql:
+    image: mysql:9.3.0
+    container_name: mysql
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=REDACTED_LEGACY_CREDENTIAL
+      - MYSQL_DATABASE=identity-service
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  mongodb:
+    image: bitnami/mongodb:latest
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=REDACTED_LEGACY_CREDENTIAL
+    volumes:
+      - mongodb_data:/data/db
+
+  neo4j:
+    image: neo4j:latest
+    container_name: neo4j
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/REDACTED_LEGACY_CREDENTIAL
+    volumes:
+      - neo4j_data:/data
+
   kafka:
     image: 'bitnami/kafka:4.0.0-debian-12-r10'
     container_name: kafka
     hostname: kafka
     ports:
+      - '9092:9092'
       - '9094:9094'
     environment:
       - KAFKA_CFG_NODE_ID=0
@@ -14,3 +49,8 @@ services:
       - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
       - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
       - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+
+volumes:
+  mysql_data:
+  mongodb_data:
+  neo4j_data:

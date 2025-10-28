@@ -1,5 +1,6 @@
 package com.MyProject.profile.profile_service.controller;
 
+import com.MyProject.profile.profile_service.dto.request.BulkUserProfileRequest;
 import com.MyProject.profile.profile_service.dto.request.SearchUserProfileRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileCreationRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileUpdateRequest;
@@ -57,6 +58,13 @@ public class UserProfileController {
     ApiResponse<UserProfileResponse> getProfile(@PathVariable String userId){
         return ApiResponse.<UserProfileResponse>builder()
                 .result(userProfileService.getProfile(userId))
+                .build();
+    }
+
+    @PostMapping("/internal/bulk-user-profiles")
+    ApiResponse<List<UserProfileResponse>> getBulkProfiles(@RequestBody BulkUserProfileRequest request){
+        return ApiResponse.<List<UserProfileResponse>>builder()
+                .result(userProfileService.getBulkProfiles(request))
                 .build();
     }
 

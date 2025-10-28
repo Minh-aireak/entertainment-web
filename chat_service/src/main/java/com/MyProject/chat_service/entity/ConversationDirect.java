@@ -20,7 +20,7 @@ import java.util.List;
 @TypeAlias("direct")
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class ConversationDirect extends Conversation{
-    @Indexed(unique = true)
+    @Indexed(unique = true, sparse = true)
     String participantsHash;
 
     public static ConversationDirectBuilder<?, ?> fromConversation(Conversation c) {

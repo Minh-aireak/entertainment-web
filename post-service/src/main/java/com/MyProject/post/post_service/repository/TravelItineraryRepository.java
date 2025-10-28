@@ -20,4 +20,7 @@ public interface TravelItineraryRepository extends MongoRepository<TravelItinera
 
     @Query(value = "{'_class': 'travel-itinerary', 'id': ?0}")
     Optional<TravelItinerary> findByIdType(String id);
+
+    @Query("{'_class': 'travel-itinerary', 'userId': ?0 }")
+    List<TravelItinerary> findAllByUserIdForUpdate(String userId);
 }

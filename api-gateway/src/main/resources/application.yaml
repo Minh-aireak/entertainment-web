@@ -65,3 +65,9 @@ spring:
                 - Path=/api/v1/chat/**
               filters:
                 - StripPrefix=2
+            - id: friend_service
+              uri: http://localhost:8087
+              predicates:
+                - Path=/api/v1/friends/**
+              filters:
+                - StripPrefix=2

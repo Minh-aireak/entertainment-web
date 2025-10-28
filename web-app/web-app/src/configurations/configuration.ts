@@ -16,12 +16,22 @@ export const API_ENDPOINTS = {
   DELETE_POST: "/post/delete",
   UPDATE_AVATAR: "/profile/upload-avatar",
   GET_DATA_WEATHER: "/weather/get-data-weather",
-
   CREATE_CONVERSATION: "/chat/conversations/create",
+  GET_MY_CONVERSATIONS: "/chat/conversations/my-conversations",
   CREATE_MESSAGE: "/chat/messages/create",
-  GET_CONVERSATION_MESSAGES: "/chat/messages",
-  MY_CONVERSATIONS: "/chat/conversations/my-conversations",
+  GET_MY_MESSAGES: "/chat/messages",
+  DELETE_MESSAGE: "/chat/messages/delete",
+  UPDATE_MESSAGE: "/chat/messages/update",
+  MARK_AS_SEEN: "/chat/messages/mark-as-seen",
+
   SEARCH_USER: "/profile/users/search",
+
+  // Friend Service Endpoints
+  SEND_FRIEND_REQUEST: "/friends/send-friend",
+  UPDATE_FRIEND_REQUEST: "/friends/update-request",
+  UPDATE_RELATIONSHIP: "/friends/update-relationship", 
+  GET_MY_FRIENDS: "/friends/list-friends",
+  GET_FRIEND_REQUESTS: "/friends/list-friend-requests",
 
   // SCHEDULE_DETAIL: "/schedule/getScheduleById",
 };
