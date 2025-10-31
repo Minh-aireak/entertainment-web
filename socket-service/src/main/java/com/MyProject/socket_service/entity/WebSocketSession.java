@@ -1,4 +1,4 @@
-package com.MyProject.chat_service.entity;
+package com.MyProject.socket_service.entity;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;

@@ -15,11 +15,11 @@ import org.springframework.stereotype.Service;
 public class EventRouterService {
     KafkaTemplate<String, Object> kafkaTemplate;
 
-    public void routeProfileUpdatedEvent(ProfileUpdatedEvent event) {
-        kafkaTemplate.send("post-profile-updated", event);
-
-        kafkaTemplate.send("chat-profile-updated", event);
-    }
+//    public void routeProfileUpdatedEvent(ProfileUpdatedEvent event) {
+//        kafkaTemplate.send("post-profile-updated", event);
+//
+//        kafkaTemplate.send("chat-profile-updated", event);
+//    }
 
 //    public void routeNotificationEvent(String topic, Object event) {
 //        try {

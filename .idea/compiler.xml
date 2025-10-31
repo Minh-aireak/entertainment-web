@@ -40,7 +40,7 @@
         <module name="identity-service" />
         <module name="file-service" />
       </profile>
-      <profile name="Annotation profile for friend_service" enabled="true">
+      <profile name="Annotation profile for socket-service" enabled="true">
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
@@ -54,6 +54,7 @@
           <entry name="$MAVEN_REPOSITORY$/org/mapstruct/mapstruct/1.6.3/mapstruct-1.6.3.jar" />
         </processorPath>
         <module name="profile-service" />
+        <module name="socket-service" />
         <module name="notification-service" />
         <module name="friend_service" />
       </profile>
@@ -73,6 +74,7 @@
       <module name="notification-service" options="-parameters -Astruct.suppressGeneratorTimestamp=true -Astruct.defaultComponentModel=spring -Astruct.verbose=true" />
       <module name="post-service" options="-parameters -Astruct.suppressGeneratorTimestamp=true -Astruct.defaultComponentModel=spring -Astruct.verbose=true" />
       <module name="profile-service" options="-parameters -Astruct.suppressGeneratorTimestamp=true -Astruct.defaultComponentModel=spring -Astruct.verbose=true" />
+      <module name="socket-service" options="-parameters -Astruct.suppressGeneratorTimestamp=true -Astruct.defaultComponentModel=spring -Astruct.verbose=true" />
       <module name="weather-service" options="-parameters -Astruct.suppressGeneratorTimestamp=true -Astruct.defaultComponentModel=spring -Astruct.verbose=true" />
     </option>
   </component>

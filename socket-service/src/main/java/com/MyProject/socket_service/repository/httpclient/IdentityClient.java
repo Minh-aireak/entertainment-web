@@ -1,8 +1,8 @@
-package com.MyProject.chat_service.repository.httpclient;
+package com.MyProject.socket_service.repository.httpclient;
 
-import com.MyProject.chat_service.dto.request.IntrospectRequest;
-import com.MyProject.chat_service.dto.response.ApiResponse;
-import com.MyProject.chat_service.dto.response.IntrospectResponse;
+import com.MyProject.socket_service.dto.request.IntrospectRequest;
+import com.MyProject.socket_service.dto.response.ApiResponse;
+import com.MyProject.socket_service.dto.response.IntrospectResponse;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

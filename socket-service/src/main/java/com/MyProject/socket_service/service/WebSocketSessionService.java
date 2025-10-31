@@ -1,7 +1,7 @@
-package com.MyProject.chat_service.service;
+package com.MyProject.socket_service.service;
 
-import com.MyProject.chat_service.entity.WebSocketSession;
-import com.MyProject.chat_service.repository.WebSocketSessionRepository;
+import com.MyProject.socket_service.entity.WebSocketSession;
+import com.MyProject.socket_service.repository.WebSocketSessionRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;

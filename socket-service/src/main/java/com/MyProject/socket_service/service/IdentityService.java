@@ -1,8 +1,8 @@
-package com.MyProject.chat_service.service;
+package com.MyProject.socket_service.service;
 
-import com.MyProject.chat_service.dto.request.IntrospectRequest;
-import com.MyProject.chat_service.dto.response.IntrospectResponse;
-import com.MyProject.chat_service.repository.httpclient.IdentityClient;
+import com.MyProject.socket_service.repository.httpclient.IdentityClient;
+import com.MyProject.socket_service.dto.request.IntrospectRequest;
+import com.MyProject.socket_service.dto.response.IntrospectResponse;
 import feign.FeignException;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;

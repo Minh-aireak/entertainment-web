@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: socket-service
+  data:
+    mongodb:
+      uri: mongodb://root:${MONGODB_ROOT_PASSWORD:REDACTED_LEGACY_CREDENTIAL}@localhost:27017/socket-service?authSource=admin
+      auto-index-creation: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+    consumer:
+      group-id: socket-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+
+jwt:
+  signerKey: ${JWT_SIGNER_KEY:uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0}
+
+app:
+  services:
+    identity:
+      url: "http://localhost:8080/identity"
+
+

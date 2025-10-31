@@ -1,11 +1,11 @@
-package com.MyProject.chat_service.controller;
+package com.MyProject.socket_service.controller;
 
-import com.MyProject.chat_service.dto.request.IntrospectRequest;
-import com.MyProject.chat_service.entity.WebSocketSession;
-import com.MyProject.chat_service.exception.AppException;
-import com.MyProject.chat_service.exception.ErrorCode;
-import com.MyProject.chat_service.service.IdentityService;
-import com.MyProject.chat_service.service.WebSocketSessionService;
+import com.MyProject.socket_service.service.WebSocketSessionService;
+import com.MyProject.socket_service.dto.request.IntrospectRequest;
+import com.MyProject.socket_service.entity.WebSocketSession;
+import com.MyProject.socket_service.exception.AppException;
+import com.MyProject.socket_service.exception.ErrorCode;
+import com.MyProject.socket_service.service.IdentityService;
 import com.corundumstudio.socketio.SocketIOClient;
 import com.corundumstudio.socketio.SocketIOServer;
 import com.corundumstudio.socketio.annotation.OnConnect;

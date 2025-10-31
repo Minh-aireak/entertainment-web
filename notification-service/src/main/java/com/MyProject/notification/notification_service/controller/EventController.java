@@ -6,7 +6,6 @@ import com.MyProject.notification.notification_service.dto.request.Recipient;
 import com.MyProject.notification.notification_service.dto.request.SendEmailRequest;
 import com.MyProject.notification.notification_service.service.EmailService;
 import com.MyProject.notification.notification_service.service.EventRouterService;
-import event.dto.ProfileUpdatedEvent;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -18,7 +17,7 @@ import java.util.List;
 @Component
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-public class EventRouterController {
+public class EventController {
     EmailService emailService;
     EventRouterService eventRouterService;
 
@@ -31,11 +30,6 @@ public class EventRouterController {
                         .subject(message.getSubject())
                         .htmlContent(message.getBody())
                 .build());
-    }
-
-    @KafkaListener(topics = "profile-updated")
-    public void handleProfileUpdated(ProfileUpdatedEvent event) {
-        eventRouterService.routeProfileUpdatedEvent(event);
     }
 
     @KafkaListener(topics = "friend-request-events")

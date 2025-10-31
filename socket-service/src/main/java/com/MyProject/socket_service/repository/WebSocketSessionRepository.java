@@ -1,6 +1,6 @@
-package com.MyProject.chat_service.repository;
+package com.MyProject.socket_service.repository;
 
-import com.MyProject.chat_service.entity.WebSocketSession;
+import com.MyProject.socket_service.entity.WebSocketSession;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 

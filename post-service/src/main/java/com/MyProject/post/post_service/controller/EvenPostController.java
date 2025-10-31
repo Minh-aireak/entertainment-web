@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 public class EvenPostController {
     PostService postService;
 
-    @KafkaListener(topics = "post-profile-updated")
+    @KafkaListener(topics = "profile-updated")
     public void handleProfileUpdatedEvent(ProfileUpdatedEvent event) {
         postService.updateUserProfile(event);
     }

@@ -1,4 +1,4 @@
-package com.MyProject.chat_service.configuration;
+package com.MyProject.socket_service.configuration;
 
 import com.corundumstudio.socketio.SocketIOServer;
 import org.springframework.context.annotation.Bean;

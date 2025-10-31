@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 public class EventChatController {
     UserProfileService userProfileService;
 
-    @KafkaListener(topics = "chat-profile-updated")
+    @KafkaListener(topics = "profile-updated")
     public void handleProfileUpdatedEvent(ProfileUpdatedEvent event) {
         userProfileService.updateUserProfile(event);
     }
