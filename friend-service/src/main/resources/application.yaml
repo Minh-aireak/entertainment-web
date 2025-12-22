@@ -7,7 +7,7 @@ spring:
   application:
     name: friends-service
   datasource:
-    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/friend-service
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/friend-service?createDatabaseIfNotExist=true
     username: ${MYSQL_ROOT_USERNAME}
     password: ${MYSQL_ROOT_PASSWORD}
   jpa:

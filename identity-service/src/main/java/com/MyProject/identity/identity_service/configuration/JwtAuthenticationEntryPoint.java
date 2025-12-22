@@ -9,9 +9,10 @@ import org.springframework.http.MediaType;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.MyProject.identity.identity_service.dto.response.ApiResponse;
 import com.MyProject.identity.identity_service.exception.ErrorCode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
     @Override
@@ -28,7 +29,7 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
                 .message(errorCode.getMessage())
                 .build();
 
-        ObjectMapper objectMapper = new ObjectMapper();
+        ObjectMapper objectMapper = JsonMapper.builder().build();
 
         response.getWriter().write(objectMapper.writeValueAsString(apiResponse));
         response.flushBuffer();

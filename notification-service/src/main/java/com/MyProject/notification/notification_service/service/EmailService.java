@@ -29,7 +29,7 @@ public class EmailService {
                 .htmlContent(request.getHtmlContent())
                 .build();
         try {
-            String apiKey = "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";
+            String apiKey = "${notification.email.brevo-apikey}";
             emailClient.sendEmail(apiKey, emailRequest);
         } catch (FeignException exception){
             throw new AppException(ErrorCode.CANNOT_SEND_EMAIL);

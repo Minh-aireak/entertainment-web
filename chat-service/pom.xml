@@ -10,12 +10,14 @@
 	</parent>
 
 	<artifactId>chat-service</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
 	<name>chat-service</name>
 
 	<dependencies>
+
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-web</artifactId>
+			<artifactId>spring-boot-starter-webmvc</artifactId>
 		</dependency>
 
 		<dependency>
@@ -36,7 +38,7 @@
 
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-test</artifactId>
+			<artifactId>spring-boot-starter-test-classic</artifactId>
 			<scope>test</scope>
 		</dependency>
 
@@ -52,7 +54,7 @@
 
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+			<artifactId>spring-boot-starter-security-oauth2-resource-server</artifactId>
 		</dependency>
 
 		<dependency>
@@ -68,6 +70,7 @@
 		<dependency>
 			<groupId>com.project</groupId>
 			<artifactId>common-dto</artifactId>
+			<version>1.0.0</version>
 		</dependency>
 
 	</dependencies>

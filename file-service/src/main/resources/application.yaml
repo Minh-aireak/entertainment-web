@@ -11,7 +11,7 @@ spring:
       uri: mongodb://${MONGODB_ROOT_USERNAME}:${MONGODB_ROOT_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/file-service?authSource=admin
   servlet:
     multipart:
-      max-file-size: ${MAX_FILE_SIZ}
+      max-file-size: ${MAX_FILE_SIZE}
       max-request-size: ${MAX_REQUEST_SIZE}
 
 jwt:

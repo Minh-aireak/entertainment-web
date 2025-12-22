@@ -3,13 +3,14 @@ package com.MyProject.notification.notification_service.configuration;
 
 import com.MyProject.notification.notification_service.dto.response.ApiResponse;
 import com.MyProject.notification.notification_service.exception.ErrorCode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
 
@@ -28,7 +29,7 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
                 .message(errorCode.getMessage())
                 .build();
 
-        ObjectMapper objectMapper = new ObjectMapper();
+        ObjectMapper objectMapper = JsonMapper.builder().build();
 
         response.getWriter().write(objectMapper.writeValueAsString(apiResponse));
         response.flushBuffer();

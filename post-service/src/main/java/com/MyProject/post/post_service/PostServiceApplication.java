@@ -9,7 +9,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableFeignClients
 @EnableScheduling
 public class PostServiceApplication {
-    public static void main(String[] args) {
+    static void main(String[] args) {
         SpringApplication.run(PostServiceApplication.class, args);
     }
 }

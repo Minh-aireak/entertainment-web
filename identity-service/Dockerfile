@@ -1,30 +1,25 @@
-# --- 1. Build stage: dùng Maven để đóng gói JDK: 24, Mvn: 3.9.10---
-FROM maven:3.9.10-amazoncorretto-24 AS build
+# ---- 1. Build stage ----
+FROM maven:4.0.0-rc-5-amazoncorretto-25-al2023 AS build
 
-# Copy pom và source to /app folder
 WORKDIR /app
-COPY pom.xml .
-COPY src ./src
 
-# Bạn có thể thêm ARG để bật tắt skip-tests
-RUN mvn clean package -DskipTests
+# Đây là quan trọng: copy **toàn bộ project**
+COPY . .
 
-# docker build -t identity_service:0.0.1 .
+# Build toàn bộ project
+RUN mvn -B clean package -DskipTests
 
-# --- 2. Create image: Run stage: chỉ chạy JAR đã được build ---
+# ---- 2. Runtime stage ----
 FROM amazoncorretto:24.0.1-alpine3.21
 
-# Copy JAR từ stage build, đổi tên thành app.jar (tuỳ chọn)
 WORKDIR /app
-COPY --from=build /app/target/*.jar app.jar
 
-# Expose port (có thể override qua build-arg hoặc env)
+# Copy jar của module identity-service
+COPY --from=build /app/identity-service/target/identity-service-*.jar app.jar
+
 EXPOSE 8080
 
-# Cho phép override port runtime qua biến môi trường
-ENV SERVER_PORT=8080
-
-ENTRYPOINT ["java","-jar","app.jar"]
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "app.jar"]
 
 # Do chạy trên localhost của 1 container là local host của chính container đó nên phải thay localhost thanh network server cua container mysql
 # docker run --name identity_service -p 8080:8080 -e DBMS_CONNECTION=jdbc:mysql://172.17.0.2:3306/identity_service identity_service:0.0.1

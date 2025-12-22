@@ -3,7 +3,6 @@ server:
   servlet:
     context-path: /common-dto
 
-
 spring:
   application:
     name: common-dto
