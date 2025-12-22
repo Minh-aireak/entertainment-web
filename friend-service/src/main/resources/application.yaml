@@ -1,0 +1,39 @@
+server:
+  port: 8087
+  servlet:
+    context-path: /friends
+
+spring:
+  application:
+    name: friends-service
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/friend-service
+    username: ${MYSQL_ROOT_USERNAME}
+    password: ${MYSQL_ROOT_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: true
+    consumer:
+      group-id: friend-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+jwt:
+  signerKey: ${JWT_SIGNER_KEY}
+
+app:
+  services:
+    profile:
+      url: "http://localhost:8081/profile"
+
+

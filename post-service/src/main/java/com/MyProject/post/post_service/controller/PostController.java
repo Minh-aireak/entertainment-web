@@ -5,6 +5,7 @@ import com.MyProject.post.post_service.dto.request.ScheduleUpdateRequest;
 import com.MyProject.post.post_service.dto.response.ApiResponse;
 import com.MyProject.post.post_service.dto.response.PageResponse;
 import com.MyProject.post.post_service.dto.response.ScheduleResponse;
+import com.MyProject.post.post_service.dto.response.StatusResponse;
 import com.MyProject.post.post_service.service.PostService;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
@@ -61,6 +62,13 @@ public class PostController {
         postService.deletePost(id, type);
         return ApiResponse.<Void>builder()
                 .message("Deleted success!")
+                .build();
+    }
+
+    @GetMapping("status")
+    ApiResponse<StatusResponse> getStatus(){
+        return ApiResponse.<StatusResponse>builder()
+                .result(postService.getStatus())
                 .build();
     }
 }

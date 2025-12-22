@@ -1,7 +1,7 @@
 package com.MyProject.post.post_service.controller;
 
+import com.MyProject.common_dto.event.dto.ProfileUpdatedEvent;
 import com.MyProject.post.post_service.service.PostService;
-import event.dto.ProfileUpdatedEvent;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;

@@ -6,8 +6,12 @@ server:
 spring:
   application:
     name: notification-service
+  data:
+    mongodb:
+      uri: mongodb://${MONGODB_ROOT_USERNAME}:${MONGODB_ROOT_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/post-service?authSource=admin
+      auto-index-creation: true
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -21,10 +25,14 @@ spring:
       properties:
         spring.json.trusted.packages: "*"
 
+app:
+  services:
+    profile: http://localhost:8081/profile
+
 notification:
   email:
-    brevo-url: https://api.brevo.com
-    brevo-apikey: ${BREVO_API_KEY:<your-brevo-key>}
+    brevo-url: ${BREVO_URL}
+    brevo-apikey: ${BREVO_API_KEY}
 
 jwt:
-  signerKey: ${JWT_SIGNER_KEY:uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0}
+  signerKey: ${JWT_SIGNER_KEY}

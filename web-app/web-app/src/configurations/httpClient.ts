@@ -1,6 +1,6 @@
 import axios from "axios";
 import AuthClientStore from "../features/client-store/AuthClientStore";
-import { refreshToken } from "../features/hooks/useAuthApi";
+import { refreshToken } from "../services/Authenticate";
 import { CONFIG, API_ENDPOINTS } from "./configuration";
 
 let isRefreshing = false;

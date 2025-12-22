@@ -6,7 +6,7 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
-import event.dto.NotificationEvent;
+import com.MyProject.common_dto.event.dto.NotificationEvent;
 import com.MyProject.identity.identity_service.dto.request.*;
 import com.MyProject.identity.identity_service.entity.Role;
 import com.MyProject.identity.identity_service.repository.RoleRepository;
@@ -84,6 +84,7 @@ public class AuthenticationService {
     @Value("${jwt.grant-type}")
     String authorizationCode;
 
+    @Transactional(rollbackFor = Exception.class)
     public AuthenticationResponse authentication(AuthenticationRequest request) throws JOSEException {
         var user = userRepository
                 .findByUsername(request.getUsername())

@@ -1,15 +1,16 @@
 package com.MyProject.socket_service.controller;
 
-import com.MyProject.socket_service.service.WebSocketSessionService;
 import com.MyProject.socket_service.dto.request.IntrospectRequest;
 import com.MyProject.socket_service.entity.WebSocketSession;
 import com.MyProject.socket_service.exception.AppException;
 import com.MyProject.socket_service.exception.ErrorCode;
 import com.MyProject.socket_service.service.IdentityService;
+import com.MyProject.socket_service.service.WebSocketSessionService;
 import com.corundumstudio.socketio.SocketIOClient;
 import com.corundumstudio.socketio.SocketIOServer;
 import com.corundumstudio.socketio.annotation.OnConnect;
 import com.corundumstudio.socketio.annotation.OnDisconnect;
+import com.corundumstudio.socketio.annotation.OnEvent;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.AccessLevel;
@@ -19,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.util.Set;
 
 @Slf4j
 @Component
@@ -46,6 +48,8 @@ public class SocketHandler {
                 .userId(response.getUserId())
                 .createdAt(Instant.now())
                 .build();
+
+        socketIOClient.joinRoom(response.getUserId());
         webSocketSessionService.createSession(webSocketSession);
     }
 
@@ -53,6 +57,16 @@ public class SocketHandler {
     public void clientDisconnected(SocketIOClient socketIOClient){
         webSocketSessionService.deleteSession(socketIOClient.getSessionId().toString());
     }
+
+//    @OnEvent("join-rooms")
+//    public void handleJoinRoom(SocketIOClient socketIOClient, Set<String> listRooms) {
+//        socketIOClient.joinRooms(listRooms);
+//    }
+//
+//    @OnEvent("send-to-room")
+//    public void handleSendToRoom(String roomId, String eventName, Object payload) {
+//        socketIOServer.getRoomOperations(roomId).sendEvent(eventName, payload);
+//    }
 
     @PostConstruct
     public void startServer() {

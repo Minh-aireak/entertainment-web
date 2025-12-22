@@ -1,6 +1,5 @@
 package com.MyProject.notification.notification_service.service;
 
-import event.dto.ProfileUpdatedEvent;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;

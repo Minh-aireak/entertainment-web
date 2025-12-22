@@ -14,6 +14,7 @@ export const API_ENDPOINTS = {
   MY_POSTS: "/post/get-my-posts",
   UPDATE_POST: "/post/update-post",
   DELETE_POST: "/post/delete",
+  STATUS_POSTS: "/post/status",
   UPDATE_AVATAR: "/profile/upload-avatar",
   GET_DATA_WEATHER: "/weather/get-data-weather",
   CREATE_CONVERSATION: "/chat/conversations/create",
@@ -29,9 +30,12 @@ export const API_ENDPOINTS = {
   // Friend Service Endpoints
   SEND_FRIEND_REQUEST: "/friends/send-friend",
   UPDATE_FRIEND_REQUEST: "/friends/update-request",
-  UPDATE_RELATIONSHIP: "/friends/update-relationship", 
+  UPDATE_RELATIONSHIP: "/friends/update-relationship",
   GET_MY_FRIENDS: "/friends/list-friends",
   GET_FRIEND_REQUESTS: "/friends/list-friend-requests",
+
+  // Notification Service Endpoints
+  GET_MY_NOTIFICATIONS: "/notifications/my-notifications",
 
   // SCHEDULE_DETAIL: "/schedule/getScheduleById",
 };

@@ -1,7 +1,7 @@
 package com.MyProject.socket_service.configuration;
 
-import com.MyProject.chat_service.dto.response.ApiResponse;
-import com.MyProject.chat_service.exception.ErrorCode;
+import com.MyProject.socket_service.dto.response.ApiResponse;
+import com.MyProject.socket_service.exception.ErrorCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

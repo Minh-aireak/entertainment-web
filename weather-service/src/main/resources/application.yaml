@@ -4,14 +4,14 @@ server:
     context-path: /weather
 
 jwt:
-  signerKey: ${JWT_SIGNER_KEY:uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0}
+  signerKey: ${JWT_SIGNER_KEY}
 
 app:
   service:
     url:
-      weather-client: "https://api.openweathermap.org"
+      weather-client: ${WEATHER_CLIENT}
 
 open-weather-map:
-  api-key: ${WEATHER_API_KEY:7a1fa87d35a45bdf79db80f19f4f3c56}
-  lang: "en"
-  units: "metric"
+  api-key: ${WEATHER_API_KEY}
+  lang: ${WEATHER_LANG}
+  units: ${WEATHER_UNITS}

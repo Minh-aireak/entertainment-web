@@ -1,5 +1,5 @@
-# Install Kafka
-'docker-compose up -d'
+# Chay docker-compose
+'docker-compose up'
 
 # Install MySQL:
 'create container mysql:

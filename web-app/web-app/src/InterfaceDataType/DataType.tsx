@@ -184,11 +184,6 @@ export interface ParticipantInfo {
   avatar: string;
 }
 
-export interface ConversationRequest {
-  type: string;
-  participantInfos: ParticipantInfo[];
-}
-
 export interface ConversationResponse {
   id: string;
   type: string;
@@ -308,4 +303,32 @@ export interface FriendResponsePerPage {
   pageSize: number;
   totalElements: number;
   data: FriendResponse[];
+}
+
+export interface NotificationResponse {
+  id: string;
+  type: string;
+  userId: string;
+  displayName: string;
+  avatar: string;
+  isRead: boolean;
+  message: string;
+  actionUrl: string;
+  createdAt: Date;
+}
+
+export interface NotificationPageResponse {
+  currentPage: number;
+  totalPages: number;
+  pageSize: number;
+  totalElements: number;
+  data: NotificationResponse[];
+}
+
+export interface StatusResponse {
+  code: number;
+  result: {
+    quantityOnGoing: number;
+    quantityUpComing: number;
+  };
 }

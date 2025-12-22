@@ -12,7 +12,9 @@ import org.springframework.http.HttpStatusCode;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public enum ErrorCode {
     UNAUTHENTICATED(8201, "Unauthenticated!", HttpStatus.UNAUTHORIZED),
-    CANNOT_SEND_EMAIL(8202, "Cannot send email!", HttpStatus.BAD_REQUEST);
+    UNAUTHORIZED(8202, "Forbidden!", HttpStatus.UNAUTHORIZED),
+    CANNOT_SEND_EMAIL(8203, "Cannot send email!", HttpStatus.BAD_REQUEST),
+    MAP_STRATEGY_EXCEPTION(8204, "Strategy got some problem!", HttpStatus.BAD_REQUEST);
 
     int code;
     String message;

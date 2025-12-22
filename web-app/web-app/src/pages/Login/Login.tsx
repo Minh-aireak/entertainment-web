@@ -12,7 +12,7 @@ import {
 import GoogleIcon from "@mui/icons-material/Google";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { logIn, isAuthenticated } from "../../features/hooks/useAuthApi";
+import { logIn, isAuthenticated } from "../../services/Authenticate";
 import { OAuthConfig } from "../../configurations/configuration";
 import axios from "axios";
 import styles from "./Login.module.scss";

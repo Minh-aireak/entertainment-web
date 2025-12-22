@@ -49,7 +49,12 @@ const ScheduleDelete: React.FC<ScheduleDeletelProps> = ({
         }}
       >
         <WarningAmber sx={{ color: "error.main", fontSize: 28 }} />
-        <Typography variant="h6" fontWeight="bold" fontSize={23}>
+        <Typography
+          variant="h6"
+          component="div"
+          fontWeight="bold"
+          fontSize={23}
+        >
           Confirm Deletion
         </Typography>
         <IconButton

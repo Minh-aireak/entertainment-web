@@ -1,43 +1,22 @@
 import { useState, useEffect } from "react";
+import type { SyntheticEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Card,
   CardContent,
   Typography,
-  Avatar,
-  Button,
-  Chip,
   TextField,
   InputAdornment,
   Tab,
   Tabs,
-  Grid,
   Badge,
-  Divider,
-  List,
-  ListItem,
-  ListItemAvatar,
-  ListItemText,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Snackbar,
-  Alert,
-  CircularProgress,
 } from "@mui/material";
+import { Box } from "@mui/material";
 import {
   Search as SearchIcon,
-  PersonAdd as PersonAddIcon,
-  Check as CheckIcon,
-  Close as CloseIcon,
-  Message as MessageIcon,
-  MoreVert as MoreVertIcon,
   People as PeopleIcon,
   PersonAddAlt1 as PersonAddAlt1Icon,
   Notifications as NotificationsIcon,
-  Person as PersonIcon,
-  PersonRemove as PersonRemoveIcon,
 } from "@mui/icons-material";
 import styles from "./Friend.module.scss";
 import { CustomAlertSnackbar } from "../../components/CustomAlertSnackbar";
@@ -51,7 +30,6 @@ import {
   getListFriendRequest,
 } from "../../services/FriendService";
 import type {
-  ConversationRequest,
   FriendResponse,
   RelationshipStatus,
   UpdateFriendRequestStatus,
@@ -61,15 +39,15 @@ import axios from "axios";
 import { Loading } from "../../components/Loading";
 import { createConversation } from "../../services/ChatService";
 
-import { socketIoService } from "../../services/SocketIoService";
+import { on, off } from "../../services/SocketIOService";
 
 export default function Friends() {
   const navigate = useNavigate();
   const [friends, setFriends] = useState<FriendResponse[]>([]);
   const [friendRequests, setFriendRequests] = useState<FriendResponse[]>([]);
-  const [selectedFriend, setSelectedFriend] = useState<FriendResponse | null>(
-    null
-  );
+  // const [selectedFriend, setSelectedFriend] = useState<FriendResponse | null>(
+  //   null
+  // );
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
@@ -177,7 +155,7 @@ export default function Friends() {
       setFriendRequests((prev) =>
         prev.filter((req) => req.userId !== data.userId)
       );
-      if (data.status === "ACCEPTED") {
+      if (data.status === "FRIEND") {
         setFriends((prev) => {
           if (!prev.some((friend) => friend.userId === data.userId)) {
             setSnackbarMessage(
@@ -189,23 +167,19 @@ export default function Friends() {
           }
           return prev;
         });
-      } else if (data.status === "DECLINED") {
-        setSnackbarMessage(`${data.displayName} declined your friend request`);
-        setSnackbarOpen(true);
-        setSeverity(false);
       }
     };
 
-    socketIoService.on("FriendRequestSent", handleFriendRequestSent);
-    socketIoService.on("FriendRequestUpdated", handleFriendRequestUpdated);
+    on("friend-request-sent", handleFriendRequestSent);
+    on("friend-request-updated", handleFriendRequestUpdated);
 
     return () => {
-      socketIoService.off("FriendRequestSent", handleFriendRequestSent);
-      socketIoService.off("FriendRequestUpdated", handleFriendRequestUpdated);
+      on("friend-request-sent", handleFriendRequestSent);
+      on("friend-request-updated", handleFriendRequestUpdated);
     };
   }, []);
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+  const handleTabChange = (_: SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
   };
 
@@ -283,20 +257,8 @@ export default function Friends() {
       const friend = friends.find((f) => f.userId === friendId);
       if (!friend) return;
 
-      const conversationRequest: ConversationRequest = {
-        type: "DIRECT",
-        participantInfos: [
-          {
-            userId: friendId,
-            displayName: friend.displayName,
-            avatar: friend.avatar,
-          },
-        ],
-      };
-
-      const conversation = await createConversation(conversationRequest);
-
-      navigate(`/messages?conversationId=${conversation.id}`);
+      const participantIds: string[] = [friendId];
+      await createConversation(participantIds);
     } catch (error: any) {
       let messageToShow = error.message;
       if (axios.isAxiosError(error)) {

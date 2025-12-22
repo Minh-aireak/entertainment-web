@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import {
   AppBar,
@@ -12,35 +12,24 @@ import {
   ListItemIcon,
   Divider,
   Badge,
-  InputBase,
-  Button,
   Chip,
 } from "@mui/material";
 import {
-  Search as SearchIcon,
-  Notifications,
   Settings,
   Logout,
   MessageTwoTone,
-  Home,
   TravelExplore,
-  People,
-  Schedule,
 } from "@mui/icons-material";
-import { logOut } from "../../features/hooks/useAuthApi";
+import { logOut } from "../../services/Authenticate";
 import styles from "./Header.module.scss";
-
-const navigationItems = [
-  { label: "Home", icon: <Home />, path: "/" },
-  { label: "Friends", icon: <People />, path: "/friends" },
-  { label: "Schedules", icon: <Schedule />, path: "/schedules" },
-];
+import { getMyInfo } from "../../services/UserService";
+import NotificationBell from "../NotificationBell/NotificationBell";
 
 export default function Header() {
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [searchValue, setSearchValue] = useState("");
   const open = Boolean(anchorEl);
+  const [currentUserAvatar, setCurrentUserAvatar] = useState<string>("");
 
   const handleClick = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -55,139 +44,29 @@ export default function Header() {
     if (action === "logout") {
       logOut();
       navigate("/login");
-    } else if (action === "settings") {
-      navigate("/settings");
     } else if (action === "profile") {
       navigate("/profile");
     }
   };
 
-  const handleSearch = (event: React.FormEvent) => {
-    event.preventDefault();
-    if (searchValue.trim()) {
-      navigate(`/search?q=${encodeURIComponent(searchValue.trim())}`);
-    }
-  };
+  useEffect(() => {
+    getMyInfo()
+      .then((profile) => {
+        setCurrentUserAvatar(profile.result?.avatar || "");
+      })
+      .catch(() => {});
+  }, []);
 
   return (
-    <AppBar 
-      position="sticky" 
-      className={styles.header}
-      sx={{
-        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-        boxShadow: "0 4px 20px rgba(102, 126, 234, 0.3)",
-        backdropFilter: "blur(10px)",
-      }}
-    >
+    <AppBar position="sticky" className={styles.header}>
       <Toolbar sx={{ justifyContent: "space-between", px: { xs: 2, md: 4 } }}>
-        {/* Logo Section */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-          <Box
-            component={Link}
-            to="/"
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              textDecoration: "none",
-              color: "inherit",
-            }}
-          >
-            <Box
-              sx={{
-                width: 40,
-                height: 40,
-                borderRadius: "50%",
-                background: "linear-gradient(45deg, #ff6b6b, #4ecdc4)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                mr: 2,
-                boxShadow: "0 4px 15px rgba(255, 107, 107, 0.3)",
-              }}
-            >
-              <TravelExplore sx={{ color: "white", fontSize: 24 }} />
+          <Box component={Link} to="/">
+            <Box>
+              <TravelExplore />
             </Box>
-            <Typography
-              variant="h6"
-              sx={{
-                fontWeight: 700,
-                background: "linear-gradient(45deg, #fff, #f0f0f0)",
-                backgroundClip: "text",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                fontSize: "1.5rem",
-              }}
-            >
-              TravelPlanner
-            </Typography>
+            <Typography variant="h6">TravelPlanner</Typography>
           </Box>
-        </Box>
-
-        {/* Navigation Links */}
-        <Box sx={{ display: { xs: "none", md: "flex" }, gap: 1 }}>
-          {navigationItems.map((item) => (
-            <Button
-              key={item.label}
-              component={Link}
-              to={item.path}
-              startIcon={item.icon}
-              sx={{
-                color: "rgba(255, 255, 255, 0.9)",
-                textTransform: "none",
-                fontWeight: 500,
-                px: 2,
-                py: 1,
-                borderRadius: 2,
-                transition: "all 0.3s ease",
-                "&:hover": {
-                  background: "rgba(255, 255, 255, 0.1)",
-                  transform: "translateY(-1px)",
-                  color: "white",
-                },
-              }}
-            >
-              {item.label}
-            </Button>
-          ))}
-        </Box>
-
-        {/* Search Bar */}
-        <Box
-          component="form"
-          onSubmit={handleSearch}
-          sx={{
-            display: { xs: "none", sm: "flex" },
-            alignItems: "center",
-            background: "rgba(255, 255, 255, 0.15)",
-            borderRadius: 3,
-            px: 2,
-            py: 0.5,
-            backdropFilter: "blur(10px)",
-            border: "1px solid rgba(255, 255, 255, 0.2)",
-            transition: "all 0.3s ease",
-            "&:hover": {
-              background: "rgba(255, 255, 255, 0.2)",
-            },
-            "&:focus-within": {
-              background: "rgba(255, 255, 255, 0.25)",
-              border: "1px solid rgba(255, 255, 255, 0.4)",
-            },
-          }}
-        >
-          <SearchIcon sx={{ color: "rgba(255, 255, 255, 0.7)", mr: 1 }} />
-          <InputBase
-            placeholder="Search destinations..."
-            value={searchValue}
-            onChange={(e) => setSearchValue(e.target.value)}
-            sx={{
-              color: "white",
-              "& ::placeholder": {
-                color: "rgba(255, 255, 255, 0.7)",
-                opacity: 1,
-              },
-              minWidth: 200,
-            }}
-          />
         </Box>
 
         {/* Right Section */}
@@ -209,22 +88,8 @@ export default function Header() {
           </IconButton>
 
           {/* Notifications */}
-          <IconButton
-            sx={{
-              color: "rgba(255, 255, 255, 0.9)",
-              transition: "all 0.3s ease",
-              "&:hover": {
-                background: "rgba(255, 255, 255, 0.1)",
-                transform: "scale(1.1)",
-              },
-            }}
-          >
-            <Badge badgeContent={5} color="error">
-              <Notifications />
-            </Badge>
-          </IconButton>
+          <NotificationBell />
 
-          {/* User Menu */}
           <IconButton
             onClick={handleClick}
             sx={{
@@ -236,7 +101,7 @@ export default function Header() {
             }}
           >
             <Avatar
-              src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT4g49MMXD8rb1kFPrVEy7BQ0K3GQo8fZYkMQ&s"
+              src={currentUserAvatar}
               sx={{
                 width: 36,
                 height: 36,
@@ -246,7 +111,6 @@ export default function Header() {
             />
           </IconButton>
 
-          {/* Online Status */}
           <Chip
             label="Online"
             size="small"
@@ -301,30 +165,9 @@ export default function Header() {
             </ListItemIcon>
             <Typography sx={{ fontWeight: 500 }}>Profile</Typography>
           </MenuItem>
-          
-          <MenuItem
-            onClick={() => handleMenuAccount("settings")}
-            sx={{
-              py: 1.5,
-              px: 2,
-              borderRadius: 1,
-              mx: 1,
-              mb: 0.5,
-              "&:hover": {
-                background: "rgba(102, 126, 234, 0.1)",
-              },
-            }}
-          >
-            <ListItemIcon>
-              <Avatar sx={{ width: 24, height: 24 }}>
-                <Settings sx={{ fontSize: 16 }} />
-              </Avatar>
-            </ListItemIcon>
-            <Typography sx={{ fontWeight: 500 }}>Settings</Typography>
-          </MenuItem>
-          
+
           <Divider sx={{ my: 1 }} />
-          
+
           <MenuItem
             onClick={() => handleMenuAccount("logout")}
             sx={{

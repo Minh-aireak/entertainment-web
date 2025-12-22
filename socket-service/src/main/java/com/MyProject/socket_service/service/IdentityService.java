@@ -1,8 +1,8 @@
 package com.MyProject.socket_service.service;
 
-import com.MyProject.socket_service.repository.httpclient.IdentityClient;
 import com.MyProject.socket_service.dto.request.IntrospectRequest;
 import com.MyProject.socket_service.dto.response.IntrospectResponse;
+import com.MyProject.socket_service.repository.httpclient.IdentityClient;
 import feign.FeignException;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;

@@ -1,12 +1,12 @@
 package com.MyProject.profile.profile_service.controller;
 
+import com.MyProject.common_dto.event.dto.UserProfileResponse;
 import com.MyProject.profile.profile_service.dto.request.BulkUserProfileRequest;
 import com.MyProject.profile.profile_service.dto.request.SearchUserProfileRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileCreationRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileUpdateRequest;
 import com.MyProject.profile.profile_service.dto.response.ApiResponse;
 import com.MyProject.profile.profile_service.dto.response.PageResponse;
-import com.MyProject.profile.profile_service.dto.response.UserProfileResponse;
 import com.MyProject.profile.profile_service.service.UserProfileService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;

@@ -23,4 +23,6 @@ public interface PostRepository extends MongoRepository<Post, String> {
 
     @Query("{'_class': 'business-schedule', 'userId': ?0 }")
     List<Post> findAllByUserIdForUpdate(String userId);
+
+    int countByStatus(String status);
 }

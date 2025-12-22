@@ -1,18 +1,18 @@
 package com.MyProject.profile.profile_service.service;
 
+import com.MyProject.common_dto.event.dto.ProfileUpdatedEvent;
+import com.MyProject.common_dto.event.dto.UserProfileResponse;
 import com.MyProject.profile.profile_service.dto.request.BulkUserProfileRequest;
 import com.MyProject.profile.profile_service.dto.request.SearchUserProfileRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileCreationRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileUpdateRequest;
 import com.MyProject.profile.profile_service.dto.response.PageResponse;
-import com.MyProject.profile.profile_service.dto.response.UserProfileResponse;
 import com.MyProject.profile.profile_service.entity.UserProfile;
 import com.MyProject.profile.profile_service.exception.AppException;
 import com.MyProject.profile.profile_service.exception.ErrorCode;
 import com.MyProject.profile.profile_service.mapper.UserProfileMapper;
 import com.MyProject.profile.profile_service.repository.UserProfileRepository;
 import com.MyProject.profile.profile_service.repository.httpclient.FileClient;
-import event.dto.ProfileUpdatedEvent;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;

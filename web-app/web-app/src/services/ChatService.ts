@@ -5,12 +5,11 @@ import type {
   ChatMessageDeleteRequest,
   ChatMessageResponse,
   ChatMessageUpdateRequest,
-  ConversationRequest,
   ConversationResponse,
 } from "../InterfaceDataType/DataType";
 
 export const createConversation = async (
-  data: ConversationRequest
+  data: string[]
 ): Promise<ConversationResponse> => {
   return (await httpClient.post(API_ENDPOINTS.CREATE_CONVERSATION, data)).data
     .result as ConversationResponse;

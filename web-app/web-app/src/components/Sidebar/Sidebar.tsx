@@ -20,11 +20,12 @@ import {
   MessageTwoTone as MessagesIcon,
   ScheduleTwoTone as SchedulesIcon,
   AccountCircle as ProfileIcon,
-  Settings,
   ExpandLess,
   ExpandMore,
-  Notifications,
 } from "@mui/icons-material";
+import { getMyInfo } from "../../services/UserService";
+import { countScheduleByStatus } from "../../services/ScheduleService";
+import axios from "axios";
 
 const secondaryMenuItems = [
   {
@@ -33,59 +34,61 @@ const secondaryMenuItems = [
     path: "/profile",
     badge: null,
   },
-  {
-    text: "Settings",
-    icon: <Settings />,
-    path: "/settings",
-    badge: null,
-  },
 ];
 
 const Sidebar = () => {
   const location = useLocation();
   const [selectedItem, setSelectedItem] = useState("");
-  const [isCollapsed, setIsCollapsed] = useState(false);
   const [showSecondary, setShowSecondary] = useState(true);
   const [scheduleStats, setScheduleStats] = useState({
-    active: 2,
-    upcoming: 3
+    active: 0,
+    upcoming: 0,
   });
+  const [userAvatar, setUserAvatar] = useState<string>("");
+  const [userDisplayName, setUserDisplayName] = useState<string>("");
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState("");
+  const [severity, setSeverity] = useState(true);
 
   useEffect(() => {
     setSelectedItem(location.pathname);
   }, [location.pathname]);
 
-  // Simulate fetching schedule data
+  useEffect(() => {
+    getMyInfo()
+      .then((profile) => {
+        setUserAvatar(profile.result?.avatar || "");
+        setUserDisplayName(profile.result?.displayName || "");
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     const fetchScheduleStats = async () => {
       try {
-        // TODO: Replace with actual API call
-        // const response = await fetch('/api/schedules/stats');
-        // const data = await response.json();
-        
-        // Mock data for demonstration
-        const mockStats = {
-          active: 2, // Schedules currently happening
-          upcoming: 3 // Schedules starting soon
+        const response = await countScheduleByStatus();
+        const data = {
+          active: response.data?.result?.quantityOnGoing || 0,
+          upcoming: response.data?.result?.quantityUpComing || 0,
         };
-        
-        setScheduleStats(mockStats);
-      } catch (error) {
-        console.error('Error fetching schedule stats:', error);
-        // Set default values on error
+
+        setScheduleStats(data);
+      } catch (error: any) {
+        let messageToShow = error.message;
+        if (axios.isAxiosError(error)) {
+          if (error.response) {
+            messageToShow = error.response.data.message;
+          }
+        }
+        setSnackbarMessage(messageToShow);
+        setSeverity(false);
         setScheduleStats({ active: 0, upcoming: 0 });
       }
     };
 
     fetchScheduleStats();
-    
-    // Optional: Set up interval to refresh stats periodically
-    const interval = setInterval(fetchScheduleStats, 60000); // Refresh every minute
-    
-    return () => clearInterval(interval);
   }, []);
 
-  // Function to get schedule badge text
   const getScheduleBadgeText = () => {
     const { active, upcoming } = scheduleStats;
     if (active > 0 && upcoming > 0) {
@@ -139,12 +142,14 @@ const Sidebar = () => {
           position: "relative",
           overflow: "hidden",
           "&:hover": {
-            background: "linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)",
+            background:
+              "linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)",
             transform: "translateX(8px)",
             boxShadow: "0 4px 20px rgba(102, 126, 234, 0.2)",
           },
           "&.Mui-selected": {
-            background: "linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%)",
+            background:
+              "linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%)",
             color: "#667eea",
             "&::before": {
               content: '""',
@@ -167,7 +172,8 @@ const Sidebar = () => {
             left: "-100%",
             width: "100%",
             height: "100%",
-            background: "linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent)",
+            background:
+              "linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent)",
             transition: "left 0.5s ease",
           },
           "&:hover::after": {
@@ -207,11 +213,12 @@ const Sidebar = () => {
             sx={{
               height: item.text === "My Schedules" ? 24 : 20,
               fontSize: item.text === "My Schedules" ? "0.6rem" : "0.7rem",
-              background: item.text === "My Schedules" 
-                ? "linear-gradient(45deg, #667eea, #764ba2)" 
-                : item.badge === "New" 
-                ? "linear-gradient(45deg, #ff6b6b, #4ecdc4)"
-                : "linear-gradient(45deg, #ff6b6b, #4ecdc4)",
+              background:
+                item.text === "My Schedules"
+                  ? "linear-gradient(45deg, #667eea, #764ba2)"
+                  : item.badge === "New"
+                  ? "linear-gradient(45deg, #ff6b6b, #4ecdc4)"
+                  : "linear-gradient(45deg, #ff6b6b, #4ecdc4)",
               color: "white",
               fontWeight: 600,
               maxWidth: item.text === "My Schedules" ? 120 : "auto",
@@ -251,17 +258,17 @@ const Sidebar = () => {
         },
       }}
     >
-      {/* User Profile Section */}
       <Box
         sx={{
           p: 3,
-          background: "linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%)",
+          background:
+            "linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%)",
           borderBottom: "1px solid rgba(102, 126, 234, 0.1)",
         }}
       >
         <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
           <Avatar
-            src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT4g49MMXD8rb1kFPrVEy7BQ0K3GQo8fZYkMQ&s"
+            src={userAvatar}
             sx={{
               width: 48,
               height: 48,
@@ -279,7 +286,7 @@ const Sidebar = () => {
                 lineHeight: 1.2,
               }}
             >
-              John Doe
+              {userDisplayName || ""}
             </Typography>
             <Typography
               variant="caption"
@@ -303,27 +310,8 @@ const Sidebar = () => {
             </Typography>
           </Box>
         </Box>
-        
-        {/* Quick Stats */}
-        <Box sx={{ display: "flex", gap: 1 }}>
-          <Chip
-            icon={<SchedulesIcon sx={{ fontSize: 16 }} />}
-            label="5 Trips"
-            size="small"
-            variant="outlined"
-            sx={{ fontSize: "0.7rem" }}
-          />
-          <Chip
-            icon={<FriendsIcon sx={{ fontSize: 16 }} />}
-            label="12 Friends"
-            size="small"
-            variant="outlined"
-            sx={{ fontSize: "0.7rem" }}
-          />
-        </Box>
       </Box>
 
-      {/* Main Navigation */}
       <Box sx={{ py: 2 }}>
         <Typography
           variant="overline"
@@ -357,7 +345,7 @@ const Sidebar = () => {
           }}
         >
           <ListItemIcon>
-            <Settings sx={{ color: "text.secondary" }} />
+            <ProfileIcon sx={{ color: "text.secondary" }} />
           </ListItemIcon>
           <ListItemText
             primary="More"
@@ -371,15 +359,15 @@ const Sidebar = () => {
           />
           {showSecondary ? <ExpandLess /> : <ExpandMore />}
         </ListItemButton>
-        
+
         <Collapse in={showSecondary} timeout="auto" unmountOnExit>
           <List sx={{ px: 1, mt: 1 }}>
-            {secondaryMenuItems.map((item, index) => renderMenuItem(item, index))}
+            {secondaryMenuItems.map((item, index) =>
+              renderMenuItem(item, index)
+            )}
           </List>
         </Collapse>
       </Box>
-
-
 
       <style>
         {`

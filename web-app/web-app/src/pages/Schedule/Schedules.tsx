@@ -20,8 +20,6 @@ import {
   Fade,
   Zoom,
   Divider,
-  Chip,
-  Avatar,
 } from "@mui/material";
 import * as L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -38,7 +36,6 @@ import {
   Schedule as ScheduleIcon,
   FilterList,
   ViewModule,
-  CalendarToday,
   TrendingUp,
 } from "@mui/icons-material";
 import InfiniteScroll from "react-infinite-scroll-component";
@@ -805,12 +802,14 @@ function Schedules() {
             }}
           >
             <CardContent sx={{ p: 3 }}>
-              <Box sx={{ 
-                display: "flex", 
-                alignItems: "center", 
-                justifyContent: "space-between",
-                mb: 3 
-              }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  mb: 3,
+                }}
+              >
                 <Box sx={{ display: "flex", alignItems: "center" }}>
                   <FilterList sx={{ color: "primary.main", mr: 2 }} />
                   <Typography
@@ -828,13 +827,15 @@ function Schedules() {
                     borderRadius: 2,
                     px: 3,
                     py: 1,
-                    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                    background:
+                      "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
                     color: "white",
                     fontWeight: 600,
                     textTransform: "none",
                     boxShadow: "0 4px 12px rgba(102, 126, 234, 0.3)",
                     "&:hover": {
-                      background: "linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)",
+                      background:
+                        "linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)",
                       transform: "translateY(-2px)",
                       boxShadow: "0 6px 20px rgba(102, 126, 234, 0.4)",
                     },
@@ -848,10 +849,10 @@ function Schedules() {
               <Box
                 sx={{
                   display: "grid",
-                  gridTemplateColumns: { 
-                    xs: "1fr", 
-                    sm: "1fr 1fr", 
-                    md: "2fr 1fr 1fr 1fr" 
+                  gridTemplateColumns: {
+                    xs: "1fr",
+                    sm: "1fr 1fr",
+                    md: "2fr 1fr 1fr 1fr",
                   },
                   gap: 3,
                   alignItems: "center",

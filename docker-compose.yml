@@ -1,56 +1,81 @@
-version: "3.8"
 services:
   # Databases
   mysql:
-    image: mysql:9.3.0
-    container_name: mysql
+    image: ${MYSQL_IMAGE}
+    container_name: ${MYSQL_CONTAINER_NAME}
+    restart: always
     ports:
-      - "3306:3306"
+      - '${MYSQL_PORT}:3306'
+    env_file:
+      - .env
     environment:
-      - MYSQL_ROOT_PASSWORD=REDACTED_LEGACY_CREDENTIAL
-      - MYSQL_DATABASE=identity-service
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     volumes:
       - mysql_data:/var/lib/mysql
+#    networks:
+#      - backend
 
   mongodb:
-    image: bitnami/mongodb:latest
-    container_name: mongodb
+    image: ${MONGODB_IMAGE}
+    container_name: ${MONGODB_CONTAINER_NAME}
+    restart: always
     ports:
-      - "27017:27017"
+      - '${MONGODB_PORT}:27017'
+    env_file:
+      - .env
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=root
-      - MONGO_INITDB_ROOT_PASSWORD=REDACTED_LEGACY_CREDENTIAL
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_ROOT_PASSWORD}
     volumes:
       - mongodb_data:/data/db
+#    networks:
+#      - backend
 
   neo4j:
-    image: neo4j:latest
-    container_name: neo4j
+    image: ${NEO4J_IMAGE}
+    container_name: ${NEO4J_CONTAINER_NAME}
+    restart: always
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - '${NEO4J_PORT_BROWSER}:7474'
+      - '${NEO4J_PORT_BOLT}:7687'
+    env_file:
+      - .env
     environment:
-      - NEO4J_AUTH=neo4j/REDACTED_LEGACY_CREDENTIAL
+      NEO4J_AUTH: ${NEO4J_USERNAME}/${NEO4J_PASSWORD}
+      NEO4J_ACCEPT_LICENSE_AGREEMENT: "yes"
     volumes:
       - neo4j_data:/data
+#    networks:
+#      - backend
 
   kafka:
-    image: 'bitnami/kafka:4.0.0-debian-12-r10'
-    container_name: kafka
-    hostname: kafka
+    image: ${KAFKA_IMAGE}
+    container_name: ${KAFKA_CONTAINER_NAME}
+    restart: always
     ports:
-      - '9092:9092'
-      - '9094:9094'
+      - "9092:9092"
+      - "9094:9094"
+    env_file:
+      - .env
     environment:
-      - KAFKA_CFG_NODE_ID=0
-      - KAFKA_CFG_PROCESS_ROLES=controller,broker
-      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
-      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
-      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
-      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
-      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_NODE_ID=1
+      - KAFKA_PROCESS_ROLES=controller,broker
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+#    networks:
+#      - backend
+    depends_on:
+      - mysql
+      - mongodb
+      - neo4j
 
 volumes:
   mysql_data:
   mongodb_data:
   neo4j_data:
+  kafka_data:

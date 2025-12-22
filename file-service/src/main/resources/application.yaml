@@ -8,16 +8,16 @@ spring:
     name: file-service
   data:
     mongodb:
-      uri: mongodb://root:${MONGODB_ROOT_PASSWORD:REDACTED_LEGACY_CREDENTIAL}@localhost:27017/file-service?authSource=admin
+      uri: mongodb://${MONGODB_ROOT_USERNAME}:${MONGODB_ROOT_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/file-service?authSource=admin
   servlet:
     multipart:
-      max-file-size: 7MB
-      max-request-size: 7MB
+      max-file-size: ${MAX_FILE_SIZ}
+      max-request-size: ${MAX_REQUEST_SIZE}
 
 jwt:
-  signerKey: ${JWT_SIGNER_KEY:uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0}
+  signerKey: ${JWT_SIGNER_KEY}
 
 app:
   file:
-    storage-dir: D:/Video
-    download-prefix: http://localhost:8888/api/v1/file/media/download/
+    storage-dir: ${FILE_STORAGE_DIR}
+    download-prefix: ${FILE_DOWNLOAD_PREFIX}

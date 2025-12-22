@@ -4,19 +4,21 @@ server:
     context-path: /profile
 
 jwt:
-  signerKey: ${JWT_SIGNER_KEY:uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0}
+  signerKey: ${JWT_SIGNER_KEY}
 
 spring:
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: true
   neo4j:
-    uri: bolt://localhost:7687
+    uri: bolt://${NEO4J_HOST}:${NEO4J_PORT}
     authentication:
-      username: neo4j
-      password: ${NEO4J_PASSWORD:REDACTED_LEGACY_CREDENTIAL}
+      username: ${NEO4J_USERNAME}
+      password: ${NEO4J_PASSWORD}
 
 app:
   services:

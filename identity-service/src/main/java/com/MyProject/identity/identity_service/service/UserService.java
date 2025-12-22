@@ -5,7 +5,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import event.dto.NotificationEvent;
+import com.MyProject.common_dto.event.dto.NotificationEvent;
 import com.MyProject.identity.identity_service.dto.request.UserProfileCreationRequest;
 import com.MyProject.identity.identity_service.mapper.UserProfileMapper;
 import com.MyProject.identity.identity_service.repository.httpclient.UserProfileClient;

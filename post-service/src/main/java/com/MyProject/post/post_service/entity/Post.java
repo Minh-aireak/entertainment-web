@@ -8,6 +8,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.MongoId;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Setter
@@ -31,4 +32,7 @@ public class Post {
     LocalDateTime endTime;
     LocalDateTime createdDate;
     String status;
+    String startJobKey;
+    String endJobKey;
+    List<String> listUserJoin;
 }

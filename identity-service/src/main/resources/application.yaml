@@ -5,29 +5,31 @@ server:
 
 spring:
   datasource:
-      url: ${DBMS_CONNECTION:jdbc:mysql://localhost:3306/travel-service}
-      username: ${DBMS_USERNAME:root}
-      password: ${MYSQL_ROOT_PASSWORD:REDACTED_LEGACY_CREDENTIAL}
+      url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/identity-service
+      username: ${MYSQL_ROOT_USERNAME}
+      password: ${MYSQL_ROOT_PASSWORD}
   jpa:
     hibernate:
       ddl-auto: update
     show-sql: true
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: true
 
 jwt:
-  signerKey: ${JWT_SIGNER_KEY:uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0}
-  valid-duration: 3600
-  refreshable-duration: 360000
-  client-id: "266132262326-islopun9fjajf96gds894ncmi43ugcku.apps.googleusercontent.com"
-  client-secret: "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"
-  redirect-uri: "http://localhost:5173/authenticate"
-  grant-type: "authorization_code"
+  signerKey: ${JWT_SIGNER_KEY}
+  valid-duration: ${VALID_DURATION}
+  refreshable-duration: ${REFRESHABLE_DURATION}
+  client-id: ${CLIENT_ID}
+  client-secret: ${CLIENT_SECRET}
+  redirect-uri: ${REDIRECT_URI}
+  grant-type: ${GRANT_TYPE}
   cleanup:
-    delay: 3600000
+    delay: ${CLEANUP_DELAY}
 
 app:
   services:
