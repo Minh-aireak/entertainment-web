@@ -32,9 +32,6 @@ public class SecurityConfig {
 
         httpSecurity.csrf(AbstractHttpConfigurer::disable);
 
-        // Thiết lập domain được truy cập:
-        // Thiết jwt để decode token truyen vao gồm header, payload, signature; Prefix để authorized;
-        // bắt lỗi authenticated từ entrypoint
         httpSecurity.oauth2ResourceServer(oauth2 -> oauth2.jwt(jwtConfigurer ->
                         jwtConfigurer.decoder(jwtDecoder).jwtAuthenticationConverter(jwtAuthenticationConverter()))
                 .authenticationEntryPoint(new JwtAuthenticationEntryPoint()));

@@ -28,7 +28,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
-import java.util.Objects;
 
 @Slf4j
 @Service
@@ -58,22 +57,18 @@ public class UserProfileService {
     public UserProfileResponse updateProfile(UserProfileUpdateRequest request){
         String userName = getUserName();
         UserProfile profile = userProfileRepository.findByUsername(userName);
-        String oldDisplayName = profile.getDisplayName();
 
         userProfileMapper.update(profile, request);
+
         UserProfile savedProfile = userProfileRepository.save(profile);
 
-        boolean changed = !Objects.equals(oldDisplayName, savedProfile.getDisplayName());
+        ProfileUpdatedEvent event = ProfileUpdatedEvent.builder()
+                .userId(savedProfile.getUserId())
+                .avatar(savedProfile.getAvatar())
+                .displayName(savedProfile.getDisplayName())
+                .build();
 
-        if (changed) {
-            ProfileUpdatedEvent event = ProfileUpdatedEvent.builder()
-                    .userId(savedProfile.getUserId())
-                    .avatar(savedProfile.getAvatar())
-                    .displayName(savedProfile.getDisplayName())
-                    .build();
-
-            kafkaTemplate.send("profile-updated", event);
-        }
+        kafkaTemplate.send("profile-updated", event);
 
         return userProfileMapper.toUserProfileResponse(savedProfile);
     }
@@ -115,8 +110,8 @@ public class UserProfileService {
         String userName = getUserName();
         UserProfile profile = userProfileRepository.findByUsername(userName);
 
-        var response = client.uploadAvatar(multipartFile);
-        String newAvatar = response.getResult().getUrl();
+        var response = client.uploadAvatar(multipartFile).getResult();
+        String newAvatar = response.getUrl();
         profile.setAvatar(newAvatar);
         
         UserProfile savedProfile = userProfileRepository.save(profile);

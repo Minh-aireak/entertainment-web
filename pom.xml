@@ -178,8 +178,9 @@
 						<exclude>**/dto/**</exclude>
 						<exclude>**/entity/**</exclude>
 						<exclude>**/mapper/**</exclude>
-						<exclude>**/configuration/**</exclude>\
+						<exclude>**/configuration/**</exclude>
 						<exclude>**/IdentityApplication.class</exclude>
+						<exclude>**/ProfileServiceApplication.class</exclude>
 					</excludes>
 				</configuration>
 			</plugin>

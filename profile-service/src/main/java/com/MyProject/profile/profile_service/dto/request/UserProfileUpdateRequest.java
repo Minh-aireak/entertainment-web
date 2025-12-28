@@ -17,10 +17,9 @@ import java.time.LocalDate;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @Builder
 public class UserProfileUpdateRequest {
-    String username;
     String firstName;
 
-    @Email
+    @Email(message = "EMAIL_INVALID")
     String email;
 
     @NotBlank(message = "DISPLAY_NAME_NOT_BLANK")

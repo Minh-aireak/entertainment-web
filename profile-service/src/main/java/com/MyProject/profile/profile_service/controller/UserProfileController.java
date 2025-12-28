@@ -8,6 +8,7 @@ import com.MyProject.profile.profile_service.dto.request.UserProfileUpdateReques
 import com.MyProject.profile.profile_service.dto.response.ApiResponse;
 import com.MyProject.profile.profile_service.dto.response.PageResponse;
 import com.MyProject.profile.profile_service.service.UserProfileService;
+import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -25,32 +26,32 @@ import java.util.List;
 public class UserProfileController {
     UserProfileService userProfileService;
 
-    @PutMapping("/update-my-profile")
-    ApiResponse<UserProfileResponse> updateProfile(@RequestBody UserProfileUpdateRequest request){
+    @PostMapping("/internal/registration")
+    ApiResponse<UserProfileResponse> createProfile(@RequestBody UserProfileCreationRequest request){
+        return ApiResponse.<UserProfileResponse>builder()
+                .result(userProfileService.createProfile(request))
+                .build();
+    }
+
+    @PutMapping("/my-profile")
+    ApiResponse<UserProfileResponse> updateProfile(@RequestBody @Valid UserProfileUpdateRequest request){
         return ApiResponse.<UserProfileResponse>builder()
                 .result(userProfileService.updateProfile(request))
                 .build();
     }
 
-    @GetMapping("/get-my-info")
+    @GetMapping("/my-profile")
     ApiResponse<UserProfileResponse> getMyInfo(){
         return ApiResponse.<UserProfileResponse>builder()
                 .result(userProfileService.getMyInfo())
                 .build();
     }
 
-    @GetMapping("/read")
+    @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
     ApiResponse<List<UserProfileResponse>> getAllProfiles(){
         return ApiResponse.<List<UserProfileResponse>>builder()
                 .result(userProfileService.getAllProfiles())
-                .build();
-    }
-
-    @PostMapping("/internal/registration")
-    ApiResponse<UserProfileResponse> createProfile(@RequestBody UserProfileCreationRequest request){
-        return ApiResponse.<UserProfileResponse>builder()
-                .result(userProfileService.createProfile(request))
                 .build();
     }
 
@@ -68,7 +69,7 @@ public class UserProfileController {
                 .build();
     }
 
-    @PutMapping("/upload-avatar")
+    @PostMapping("/avatar")
     ApiResponse<UserProfileResponse> updateAvatar(@RequestParam("file") MultipartFile multipartFile){
         return ApiResponse.<UserProfileResponse>builder()
                 .result(userProfileService.updateAvatar(multipartFile))

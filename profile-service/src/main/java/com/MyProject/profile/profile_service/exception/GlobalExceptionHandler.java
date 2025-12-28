@@ -37,10 +37,7 @@ public class GlobalExceptionHandler {
 
         ApiResponse<Object> apiResponse = new ApiResponse<>();
         apiResponse.setCode(errorCode.getCode());
-        apiResponse.setMessage(
-                Objects.nonNull(attributes)
-                        ? mapAttributes(errorCode.getMessage(), attributes)
-                        : errorCode.getMessage());
+        apiResponse.setMessage(mapAttributes(errorCode.getMessage(), attributes));
 
         return ResponseEntity.status(errorCode.getStatusCode()).body(apiResponse);
     }
@@ -52,6 +49,6 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(value = AccessDeniedException.class)
     public ResponseEntity<ApiResponse<Object>> handlingAccessDeniedException() {
-        return ApiResponse.toResponseEntity(ErrorCode.ACCESS_DENIED);
+        return ApiResponse.toResponseEntity(ErrorCode.UNAUTHORIZED);
     }
 }

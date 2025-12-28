@@ -1,0 +1,22 @@
+server:
+  port: 0
+  servlet:
+    context-path: /profile
+
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.neo4j.Neo4jAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.neo4j.Neo4jDataAutoConfiguration
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+
+  neo4j:
+    uri: bolt://localhost:7687
+    authentication:
+      username: fake
+      password: fake
+  kafka:
+    bootstrap-servers: localhost:9092
+
+jwt:
+  signerKey: "z7vB9pL2kR5xN8mQ1wJ4hG7sA0dF3gH6jK9lP2oI5uY8tR1eW4qZ7xX0cM3vB6nN"
