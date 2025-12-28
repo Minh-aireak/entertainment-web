@@ -22,14 +22,14 @@ public class ApiResponse<Object> {
 
     Object result;
 
-    public static ApiResponse<?> of(ErrorCode errorCode) {
+    public static ApiResponse<java.lang.Object> of(ErrorCode errorCode) {
         return ApiResponse.builder()
                 .code(errorCode.getCode())
                 .message(errorCode.getMessage())
                 .build();
     }
 
-    public static ResponseEntity<ApiResponse<?>> toResponseEntity(ErrorCode errorCode) {
+    public static ResponseEntity<ApiResponse<java.lang.Object>> toResponseEntity(ErrorCode errorCode) {
         return ResponseEntity.status(errorCode.getStatusCode()).body(ApiResponse.of(errorCode));
     }
 }

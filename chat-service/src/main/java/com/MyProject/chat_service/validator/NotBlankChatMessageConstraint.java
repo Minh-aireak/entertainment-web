@@ -1,8 +1,6 @@
 package com.MyProject.chat_service.validator;
 
 import jakarta.validation.Constraint;
-import jakarta.validation.Payload;
-
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -13,10 +11,6 @@ import java.lang.annotation.Target;
 @Constraint(validatedBy = {NotBlankChatMessageValidator.class})
 public @interface NotBlankChatMessageConstraint {
     String message() default "{Invalid data chat message}";
-
-    Class<?>[] groups() default {};
-
-    Class<? extends Payload>[] payload() default {};
 
     String attribute();
 }

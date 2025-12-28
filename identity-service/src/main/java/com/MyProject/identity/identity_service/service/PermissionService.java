@@ -38,9 +38,9 @@ public class PermissionService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public PermissionResponse updatePermission(String name, PermissionUpdateRequest request) {
+    public PermissionResponse updatePermission(PermissionUpdateRequest request) {
         Permission permission = permissionRepository
-                .findById(name)
+                .findById(request.getName())
                 .orElseThrow(() -> new AppException(ErrorCode.PERMISSION_NOT_EXISTED));
 
         permissionMapper.update(permission, request);
@@ -62,8 +62,7 @@ public class PermissionService {
 
         permissionRepository.deleteById(name);
     }
-
-    @Transactional
+    
     public List<PermissionResponse> getAllPermissions() {
         return permissionMapper.toListPermissionResponse(permissionRepository.findAll());
     }

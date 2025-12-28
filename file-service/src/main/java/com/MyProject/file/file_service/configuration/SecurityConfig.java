@@ -1,6 +1,5 @@
 package com.MyProject.file.file_service.configuration;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -17,9 +16,6 @@ import org.springframework.security.web.SecurityFilterChain;
 public class SecurityConfig {
     private final String[] publicEndpoint = {"/media/download/**"};
 
-    @Value("${jwt.signerKey}")
-    private String signerKey;
-
     private final CustomJwtDecoder jwtDecoder;
 
     public SecurityConfig(CustomJwtDecoder jwtDecoder) {
@@ -27,7 +23,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity httpSecurity) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity httpSecurity) {
         httpSecurity.authorizeHttpRequests(request ->
                 request.requestMatchers(publicEndpoint)
                         .permitAll()

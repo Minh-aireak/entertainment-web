@@ -7,6 +7,8 @@ import com.MyProject.common_dto.event.dto.UserProfileResponse;
 import com.MyProject.notification.notification_service.dto.response.PageResponse;
 import com.MyProject.notification.notification_service.entity.Notification;
 import com.MyProject.notification.notification_service.entity.TypeNotification;
+import com.MyProject.notification.notification_service.exception.AppException;
+import com.MyProject.notification.notification_service.exception.ErrorCode;
 import com.MyProject.notification.notification_service.mapper.NotificationMapper;
 import com.MyProject.notification.notification_service.repository.NotificationRepository;
 import com.MyProject.notification.notification_service.repository.httpclient.ProfileClient;
@@ -42,6 +44,9 @@ public class NotificationService {
 
     private String getUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getPrincipal() == null) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
         Jwt jwt = ((JwtAuthenticationToken) authentication).getToken();
         return jwt.getClaim("userId");
     }
@@ -62,7 +67,6 @@ public class NotificationService {
         return response;
     }
 
-    @Transactional
     public NotificationResponse createNotification(TypeNotification typeNotification,
                                                    String fromUserId,
                                                    List<String> toUserIds,

@@ -7,11 +7,11 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
-import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
@@ -31,7 +31,7 @@ import lombok.experimental.FieldDefaults;
 @SpringBootTest
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @AutoConfigureMockMvc
-@TestPropertySource("/test.properties")
+@ActiveProfiles("test")
 class PermissionControllerTest {
     @Autowired
     MockMvc mockMvc;
@@ -54,6 +54,7 @@ class PermissionControllerTest {
                 .build();
 
         updateRequest = PermissionUpdateRequest.builder()
+                .name("TEST_PERMISSION")
                 .description("Permission for test updated")
                 .build();
 
@@ -65,12 +66,12 @@ class PermissionControllerTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void createPermission_validRequest_success() throws Exception {
+    void createPermission_success() throws Exception {
         String content = objectMapper.writeValueAsString(creationRequest);
 
         when(permissionService.createPermission(creationRequest)).thenReturn(permissionResponse);
 
-        mockMvc.perform(MockMvcRequestBuilders.post("/permissions/create")
+        mockMvc.perform(MockMvcRequestBuilders.post("/permissions")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isOk())
@@ -83,61 +84,61 @@ class PermissionControllerTest {
 
     @Test
     @WithMockUser(roles = "OtherRoles")
-    void createPermission_unAuthority_return403() throws Exception {
+    void createPermission_unAuthority() throws Exception {
         String content = objectMapper.writeValueAsString(creationRequest);
 
-        mockMvc.perform(MockMvcRequestBuilders.post("/permissions/create")
+        mockMvc.perform(MockMvcRequestBuilders.post("/permissions")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isForbidden())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1013))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8012))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("You don't have permission!"));
 
-        verify(permissionService, never()).createPermission(any());
+        verify(permissionService, never()).createPermission(creationRequest);
     }
 
     @Test
-    void createPermission_unAuthentication_return401() throws Exception {
+    void createPermission_unAuthentication() throws Exception {
         String content = objectMapper.writeValueAsString(creationRequest);
 
-        mockMvc.perform(MockMvcRequestBuilders.post("/permissions/create")
+        mockMvc.perform(MockMvcRequestBuilders.post("/permissions")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isUnauthorized())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1012))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8011))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Unauthenticated!"));
 
-        verify(permissionService, never()).createPermission(any());
+        verify(permissionService, never()).createPermission(creationRequest);
     }
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void createRole_permissionExisted_returnAppException() throws Exception {
+    void createRole_permissionExisted() throws Exception {
         String content = objectMapper.writeValueAsString(creationRequest);
 
-        when(permissionService.createPermission(any())).thenThrow(new AppException(ErrorCode.PERMISSION_EXISTED));
+        when(permissionService.createPermission(creationRequest)).thenThrow(new AppException(ErrorCode.PERMISSION_EXISTED));
 
-        mockMvc.perform(MockMvcRequestBuilders.post("/permissions/create")
+        mockMvc.perform(MockMvcRequestBuilders.post("/permissions")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isBadRequest())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1008))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8008))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Permission existed!"));
 
-        verify(permissionService, times(1)).createPermission(any());
+        verify(permissionService, times(1)).createPermission(creationRequest);
     }
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void updatePermission_validRequest_success() throws Exception {
+    void updatePermission_success() throws Exception {
         String content = objectMapper.writeValueAsString(updateRequest);
 
         permissionResponse.setDescription("Permission for test updated");
 
-        when(permissionService.updatePermission("TEST_PERMISSION", updateRequest))
+        when(permissionService.updatePermission(updateRequest))
                 .thenReturn(permissionResponse);
 
-        mockMvc.perform(MockMvcRequestBuilders.put("/permissions/TEST_PERMISSION")
+        mockMvc.perform(MockMvcRequestBuilders.put("/permissions")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isOk())
@@ -145,59 +146,57 @@ class PermissionControllerTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("result.name").value("TEST_PERMISSION"))
                 .andExpect(MockMvcResultMatchers.jsonPath("result.description").value("Permission for test updated"));
 
-        verify(permissionService, times(1)).updatePermission("TEST_PERMISSION", updateRequest);
+        verify(permissionService, times(1)).updatePermission(updateRequest);
     }
 
     @Test
     @WithMockUser(roles = "OtherRoles")
-    void updatePermission_unAuthority_return403() throws Exception {
-        String content = objectMapper.writeValueAsString(updateRequest);
-
-        mockMvc.perform(MockMvcRequestBuilders.put("/permissions/TEST_PERMISSION")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
+    void updatePermission_unAuthority() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.put("/permissions")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(updateRequest)))
                 .andExpect(MockMvcResultMatchers.status().isForbidden())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1013))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8012))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("You don't have permission!"));
 
-        verify(permissionService, never()).updatePermission(any(), any());
+        verify(permissionService, never()).updatePermission(updateRequest);
     }
 
     @Test
-    void updatePermission_unAuthentication_return401() throws Exception {
+    void updatePermission_unAuthentication() throws Exception {
         String content = objectMapper.writeValueAsString(updateRequest);
 
-        mockMvc.perform(MockMvcRequestBuilders.put("/permissions/TEST_PERMISSION")
+        mockMvc.perform(MockMvcRequestBuilders.put("/permissions")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isUnauthorized())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1012))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8011))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Unauthenticated!"));
 
-        verify(permissionService, never()).updatePermission(any(), any());
+        verify(permissionService, never()).updatePermission(updateRequest);
     }
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void updateRole_permissionNotExisted_returnAppException() throws Exception {
+    void updateRole_permissionNotExisted() throws Exception {
         String content = objectMapper.writeValueAsString(updateRequest);
 
-        when(permissionService.updatePermission(any(), any()))
+        when(permissionService.updatePermission(updateRequest))
                 .thenThrow(new AppException(ErrorCode.PERMISSION_NOT_EXISTED));
 
-        mockMvc.perform(MockMvcRequestBuilders.put("/permissions/TEST_PERMISSION")
+        mockMvc.perform(MockMvcRequestBuilders.put("/permissions")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isNotFound())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1009))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8009))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Permission not found!"));
 
-        verify(permissionService, times(1)).updatePermission(any(), any());
+        verify(permissionService, times(1)).updatePermission(updateRequest);
     }
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void deletePermission_authority_success() throws Exception {
+    void deletePermission_success() throws Exception {
         doNothing().when(permissionService).deletePermission("TEST_PERMISSION");
 
         mockMvc.perform(MockMvcRequestBuilders.delete("/permissions/TEST_PERMISSION"))
@@ -210,22 +209,22 @@ class PermissionControllerTest {
 
     @Test
     @WithMockUser(roles = "OtherRoles")
-    void deletePermission_unAuthority_return403() throws Exception {
+    void deletePermission_unAuthority() throws Exception {
 
         mockMvc.perform(MockMvcRequestBuilders.delete("/permissions/TEST_PERMISSION"))
                 .andExpect(MockMvcResultMatchers.status().isForbidden())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1013))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8012))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("You don't have permission!"));
 
         verify(permissionService, never()).deletePermission(any());
     }
 
     @Test
-    void deletePermission_unAuthentication_return401() throws Exception {
+    void deletePermission_unAuthentication() throws Exception {
 
         mockMvc.perform(MockMvcRequestBuilders.delete("/permissions/TEST_PERMISSION"))
                 .andExpect(MockMvcResultMatchers.status().isUnauthorized())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1012))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8011))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Unauthenticated!"));
 
         verify(permissionService, never()).deletePermission(any());
@@ -233,25 +232,26 @@ class PermissionControllerTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void deleteRole_permissionNotExisted_returnAppException() throws Exception {
+    void deleteRole_permissionNotExisted() throws Exception {
+        String value = "TEST_PERMISSION";
         doThrow(new AppException(ErrorCode.PERMISSION_NOT_EXISTED))
                 .when(permissionService)
-                .deletePermission(any());
+                .deletePermission(value);
 
         mockMvc.perform(MockMvcRequestBuilders.delete("/permissions/TEST_PERMISSION"))
                 .andExpect(MockMvcResultMatchers.status().isNotFound())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1009))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8009))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Permission not found!"));
 
-        verify(permissionService, times(1)).deletePermission(any());
+        verify(permissionService, times(1)).deletePermission(value);
     }
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void getAllPermissions_validAuthority_success() throws Exception {
+    void getAllPermissions_success() throws Exception {
         when(permissionService.getAllPermissions()).thenReturn(List.of(permissionResponse));
 
-        mockMvc.perform(MockMvcRequestBuilders.get("/permissions/read"))
+        mockMvc.perform(MockMvcRequestBuilders.get("/permissions"))
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(1000))
                 .andExpect(MockMvcResultMatchers.jsonPath("result[0].name").value("TEST_PERMISSION"))
@@ -263,22 +263,22 @@ class PermissionControllerTest {
 
     @Test
     @WithMockUser(authorities = "OtherRoles")
-    void getAllPermission_unAuthority_return403() throws Exception {
+    void getAllPermission_unAuthority() throws Exception {
 
-        mockMvc.perform(MockMvcRequestBuilders.get("/permissions/read"))
+        mockMvc.perform(MockMvcRequestBuilders.get("/permissions"))
                 .andExpect(MockMvcResultMatchers.status().isForbidden())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1013))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8012))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("You don't have permission!"));
 
         verify(permissionService, never()).getAllPermissions();
     }
 
     @Test
-    void getAllPermissions_unAuthentication_return401() throws Exception {
+    void getAllPermissions_unAuthentication() throws Exception {
 
-        mockMvc.perform(MockMvcRequestBuilders.get("/permissions/read"))
+        mockMvc.perform(MockMvcRequestBuilders.get("/permissions"))
                 .andExpect(MockMvcResultMatchers.status().isUnauthorized())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1012))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8011))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Unauthenticated!"));
 
         verify(permissionService, never()).getAllPermissions();

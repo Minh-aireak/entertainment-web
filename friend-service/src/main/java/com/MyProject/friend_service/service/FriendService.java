@@ -49,6 +49,8 @@ public class FriendService {
 
     private String getUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getPrincipal() == null)
+            throw new AppException(ErrorCode.UNAUTHORIZED);
         Jwt jwt = ((JwtAuthenticationToken) authentication).getToken();
         return jwt.getClaim("userId");
     }

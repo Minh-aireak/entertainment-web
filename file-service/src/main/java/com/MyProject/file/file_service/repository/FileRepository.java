@@ -30,7 +30,7 @@ public class FileRepository {
         Path folder = Paths.get(storageDir);
         String fileExtension = StringUtils.getFilenameExtension(multipartFile.getOriginalFilename());
 
-        String fileName = UUID.randomUUID().toString() + (Objects.isNull(fileExtension) ? "" : "." + fileExtension);
+        String fileName = UUID.randomUUID() + (Objects.isNull(fileExtension) ? "" : "." + fileExtension);
 
         Path filePath = folder.resolve(fileName).normalize().toAbsolutePath();
 

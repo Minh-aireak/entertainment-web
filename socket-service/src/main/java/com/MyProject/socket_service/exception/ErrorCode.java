@@ -15,7 +15,7 @@ public enum ErrorCode {
     UNAUTHORIZED(8802, "Forbidden!", HttpStatus.UNAUTHORIZED),
     USERID_NOT_FOUND(8803, "User not found!", HttpStatus.NOT_FOUND),
     UNAUTHENTICATED_SOCKET(8804, "Unauthenticated socket!", HttpStatus.BAD_REQUEST),
-    JSON_PROCESSING(8805, "Json processing had problem!", HttpStatus.PROCESSING);
+    JSON_PROCESSING(8805, "Json processing had problem!", HttpStatus.INTERNAL_SERVER_ERROR);
 
     int code;
     String message;

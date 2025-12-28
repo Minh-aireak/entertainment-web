@@ -1,10 +1,8 @@
 package com.MyProject.identity.identity_service.dto.request;
 
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.Size;
-
 import com.fasterxml.jackson.annotation.JsonInclude;
-
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
@@ -14,12 +12,10 @@ import lombok.experimental.FieldDefaults;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @Builder
-public class UserUpdateRequest {
-    String id;
+public class ResetPasswordRequest {
+    @NotNull(message = "INVALID_TOKEN_RESET")
+    String token;
 
     @Size(min = 8, message = "PASSWORD_INVALID")
     String password;
-
-    @Email
-    String email;
 }

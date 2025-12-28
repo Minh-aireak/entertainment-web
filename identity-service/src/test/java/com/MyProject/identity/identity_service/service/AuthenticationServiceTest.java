@@ -1,51 +1,53 @@
 package com.MyProject.identity.identity_service.service;
 
+import com.MyProject.common_dto.event.dto.IntrospectRequest;
+import com.MyProject.common_dto.event.dto.IntrospectResponse;
+import com.MyProject.identity.identity_service.dto.request.ExchangeTokenRequest;
+import com.MyProject.identity.identity_service.dto.response.ExchangeTokenResponse;
+import com.MyProject.identity.identity_service.dto.response.OutboundUserResponse;
+import com.MyProject.identity.identity_service.exception.ErrorCode;
+import com.MyProject.identity.identity_service.repository.RoleRepository;
+import com.MyProject.identity.identity_service.repository.httpclient.OutboundIdentityClient;
+import com.MyProject.identity.identity_service.repository.httpclient.OutboundUserClient;
+import com.MyProject.identity.identity_service.repository.httpclient.UserProfileClient;
 import com.nimbusds.jose.*;
+import com.nimbusds.jose.crypto.MACSigner;
 import com.nimbusds.jwt.JWTClaimsSet;
-import com.nimbusds.jwt.SignedJWT;
 import com.MyProject.identity.identity_service.dto.request.AuthenticationRequest;
-import com.MyProject.identity.identity_service.dto.request.IntrospectRequest;
 import com.MyProject.identity.identity_service.dto.request.LogoutRequest;
 import com.MyProject.identity.identity_service.dto.request.RefreshRequest;
 import com.MyProject.identity.identity_service.dto.response.AuthenticationResponse;
-import com.MyProject.identity.identity_service.dto.response.IntrospectResponse;
 import com.MyProject.identity.identity_service.entity.Permission;
 import com.MyProject.identity.identity_service.entity.Role;
 import com.MyProject.identity.identity_service.entity.User;
 import com.MyProject.identity.identity_service.exception.AppException;
 import com.MyProject.identity.identity_service.repository.InvalidatedTokenRepository;
 import com.MyProject.identity.identity_service.repository.UserRepository;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
-import io.jsonwebtoken.security.Keys;
-import io.jsonwebtoken.security.WeakKeyException;
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
-import org.assertj.core.api.Assertions;
+import lombok.experimental.NonFinal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.util.AopTestUtils;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.transaction.annotation.Transactional;
 
-import javax.crypto.SecretKey;
 import java.text.ParseException;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.Date;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.assertj.core.api.AssertionsForClassTypes.within;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -54,7 +56,6 @@ import static org.mockito.Mockito.*;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@TestPropertySource("/test.properties")
 class AuthenticationServiceTest {
     @Autowired
     AuthenticationService authenticationService;
@@ -68,442 +69,673 @@ class AuthenticationServiceTest {
     @MockitoBean
     PasswordEncoder passwordEncoder;
 
+    @MockitoBean
+    OutboundIdentityClient outboundIdentityClient;
+
+    @MockitoBean
+    OutboundUserClient outboundUserClient;
+
+    @MockitoBean
+    RoleRepository roleRepository;
+
+    @MockitoBean
+    UserProfileClient client;
+
+    @MockitoBean
+    KafkaTemplate<String, Object> kafkaTemplate;
+
+    @NonFinal
+    @Value("${jwt.signerKey}")
+    String signerKey;
+
     User user;
-    AuthenticationRequest request;
-    AuthenticationResponse response;
-    LogoutRequest logoutRequest;
-    AuthenticationService spyService;
-    Jwt jwt;
-    IntrospectRequest introspectRequest;
-    IntrospectResponse introspectResponse;
-    RefreshRequest refreshRequest;
-    final String signerKey = "uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0";
-    final String expectedJid = "EXPECTED_JID";
-    String validToken;
-    SecretKey secretKey;
-    long validDuration;
-    long refreshableDuration;
+    AuthenticationRequest authenticationRequest;
     Role role;
-    Permission permission;
-    SignedJWT signedJWT;
-    JWTClaimsSet jwtClaimsSet;
 
     @BeforeEach
-    void initData() throws JOSEException {
-        signedJWT = mock(SignedJWT.class);
-        jwtClaimsSet = mock(JWTClaimsSet.class);
-
-        secretKey = Keys.hmacShaKeyFor(signerKey.getBytes());
-        validToken = Jwts.builder()
-                .setId(expectedJid)
-                .setIssuedAt(new Date())
-                .signWith(secretKey, SignatureAlgorithm.HS512)
-                .compact();
-        validDuration = 3600;
-        refreshableDuration = 7200;
-
-        AuthenticationService realService = AopTestUtils.getTargetObject(authenticationService);
-        spyService = spy(realService);
-
-        permission = Permission.builder()
-                .name("READ")
+    void initData() {
+        ReflectionTestUtils.setField(authenticationService, "signerKey", signerKey);
+        Permission permission = Permission.builder()
+                .name("ADD_FRIEND")
+                .description("Add new friends")
                 .build();
 
         role = Role.builder()
                 .name("USER")
+                .description("User role")
                 .permissions(Set.of(permission))
                 .build();
 
         user = User.builder()
-                .username("NguyenTuanMinh")
-                .password("decoded!")
+                .id("123456789")
+                .username("aireak")
+                .password("decoded")
                 .roles(Set.of(role))
+                .active(true)
                 .build();
 
-        request = AuthenticationRequest.builder()
-                .username("NguyenTuanMinh")
+        authenticationRequest = AuthenticationRequest.builder()
+                .username("aireak")
                 .password("REDACTED_LEGACY_CREDENTIAL")
                 .build();
+    }
 
-        response = AuthenticationResponse.builder()
-                .token("123456789")
+    private void mockAuthenticatedUser() {
+        Jwt jwt = Jwt.withTokenValue("token")
+                .header("alg", "none")
+                .claim("userId", "123456789")
                 .build();
 
-        logoutRequest = LogoutRequest.builder()
-                .token("123456789")
+        JwtAuthenticationToken jwtAuthenticationToken =
+                new JwtAuthenticationToken(jwt);
+
+        SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
+        securityContext.setAuthentication(jwtAuthenticationToken);
+        SecurityContextHolder.setContext(securityContext);
+    }
+
+    private String createValidRefreshToken(String userId) throws Exception {
+        JWSHeader header = new JWSHeader(JWSAlgorithm.HS512);
+
+        JWTClaimsSet claimsSet = new JWTClaimsSet.Builder()
+                .subject("aireak")
+                .issuer("aireak.com")
+                .issueTime(new Date(System.currentTimeMillis() - 3600000))
+                .expirationTime(new Date(System.currentTimeMillis() + 7200000))
+                .jwtID(UUID.randomUUID().toString())
+                .claim("scope", "ROLE_USER ADD_FRIEND")
+                .claim("userId", userId)
                 .build();
 
-        jwt = mock(Jwt.class);
-        when(jwt.getId()).thenReturn("REDACTED_LEGACY_CREDENTIAL");
+        Payload payload = new Payload(claimsSet.toJSONObject());
+        JWSObject jwsObject = new JWSObject(header, payload);
+        jwsObject.sign(new MACSigner(signerKey.getBytes()));
 
-        introspectRequest = IntrospectRequest.builder()
-                .token("123456789")
+        return jwsObject.serialize();
+    }
+
+    private String createExpiredRefreshToken() throws Exception {
+        JWSHeader header = new JWSHeader(JWSAlgorithm.HS512);
+
+        JWTClaimsSet claimsSet = new JWTClaimsSet.Builder()
+                .subject("aireak")
+                .issuer("aireak.com")
+                .issueTime(new Date(System.currentTimeMillis() - 7200000))
+                .expirationTime(new Date(System.currentTimeMillis() - 3600000))
+                .jwtID(UUID.randomUUID().toString())
+                .claim("scope", "ROLE_USER ADD_FRIEND")
+                .claim("userId", "123456789")
                 .build();
 
-        refreshRequest = RefreshRequest.builder()
-                .token("123456789")
+        Payload payload = new Payload(claimsSet.toJSONObject());
+        JWSObject jwsObject = new JWSObject(header, payload);
+        jwsObject.sign(new MACSigner(signerKey.getBytes()));
+
+        return jwsObject.serialize();
+    }
+
+    private String createValidAccessToken(String userId) throws Exception {
+        JWSHeader header = new JWSHeader(JWSAlgorithm.HS512);
+
+        JWTClaimsSet claimsSet = new JWTClaimsSet.Builder()
+                .subject("aireak")
+                .issuer("aireak.com")
+                .issueTime(new Date())
+                .expirationTime(new Date(System.currentTimeMillis() + 3600000))
+                .jwtID(UUID.randomUUID().toString())
+                .claim("scope", "ROLE_USER ADD_FRIEND")
+                .claim("userId", userId)
                 .build();
+
+        Payload payload = new Payload(claimsSet.toJSONObject());
+        JWSObject jwsObject = new JWSObject(header, payload);
+        jwsObject.sign(new MACSigner(signerKey.getBytes()));
+
+        return jwsObject.serialize();
     }
 
     @Test
-    void buildScope_success(){
-        String scope = authenticationService.buildScope(user);
+    void authentication_success() throws ParseException {
+        when(userRepository.findByUsername(authenticationRequest.getUsername())).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches(authenticationRequest.getPassword(), user.getPassword())).thenReturn(true);
 
-        Assertions.assertThat(scope)
-                .contains("ROLE_USER")
-                .contains("READ")
-                .contains(" ")
-                .doesNotContain(",")
-                .doesNotContain(".");
+        var response = authenticationService.authentication(authenticationRequest);
+
+        String token = response.getToken();
+
+        JWSObject jwsObject = JWSObject.parse(token);
+        JWTClaimsSet claims = JWTClaimsSet.parse(jwsObject.getPayload().toJSONObject());
+
+        assertThat(claims.getSubject()).isEqualTo("aireak");
+        assertThat(claims.getIssuer()).isEqualTo("aireak.com");
+        Date expirationTime = claims.getExpirationTime();
+        Date issueTime = claims.getIssueTime();
+        assertThat(expirationTime).isAfter(issueTime);
+        long duration = (expirationTime.getTime() - issueTime.getTime()) / 1000;
+        assertThat(duration).isCloseTo(duration, within(5L));
+        assertThat(claims.getJWTID()).isNotNull();
+        assertThat(claims.getClaim("scope")).isEqualTo("ROLE_USER ADD_FRIEND");
+        assertThat(claims.getClaim("userId")).isEqualTo("123456789");
+
+        verify(userRepository, times(1)).findByUsername(anyString());
+        verify(passwordEncoder, times(1)).matches(anyString(), anyString());
     }
 
     @Test
-    void buildScope_roleEmpty(){
-        user.setRoles(null);
+    void authentication_userNotExisted() {
+        when(userRepository.findByUsername(authenticationRequest.getUsername())).thenReturn(Optional.empty());
 
-        String scope = authenticationService.buildScope(user);
+        var exception = assertThrows(AppException.class, () -> authenticationService.authentication(authenticationRequest));
 
-        assertEquals(scope, "");
+        assertEquals(ErrorCode.USER_NOT_EXISTED, exception.getErrorCode());
+
+        verify(userRepository, times(1)).findByUsername(any());
+        verify(passwordEncoder, never()).matches(any(), any());
     }
 
     @Test
-    void buildScope_roleNotEmpty_permissionEmpty(){
-        role.setPermissions(null);
+    void authentication_userNotActive(){
+        user.setActive(false);
+        when(userRepository.findByUsername(authenticationRequest.getUsername())).thenReturn(Optional.of(user));
 
-        String scope = authenticationService.buildScope(user);
+        var exception = assertThrows(AppException.class, () -> authenticationService.authentication(authenticationRequest));
 
-        assertEquals(scope, "ROLE_USER");
+        assertEquals(ErrorCode.USER_NOT_ACTIVE, exception.getErrorCode());
+
+        verify(userRepository, times(1)).findByUsername(any());
+        verify(passwordEncoder, never()).matches(any(), any());
     }
 
     @Test
-    void generateToken_success() throws JOSEException, ParseException {
-        Instant fixedTime = Instant.parse("2023-01-01T00:00:00Z");
-        try (MockedStatic<Instant> mockedStatic = mockStatic(Instant.class, Mockito.CALLS_REAL_METHODS)) {
-            mockedStatic.when(Instant::now).thenReturn(fixedTime);
-            doReturn("ROLE_USER READ").when(spyService).buildScope(user);
+    void authentication_passwordIncorrect(){
+        when(userRepository.findByUsername(authenticationRequest.getUsername())).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches(authenticationRequest.getUsername(), user.getPassword())).thenReturn(false);
 
-            String token = spyService.generateToken(user);
+        var exception = assertThrows(AppException.class, () -> authenticationService.authentication(authenticationRequest));
 
-            assertNotNull(token);
+        assertEquals(ErrorCode.PASSWORD_INCORRECT, exception.getErrorCode());
 
-            JWSObject jwsObject = JWSObject.parse(token);
-            JWTClaimsSet jwtClaimsSet = JWTClaimsSet.parse(jwsObject.getPayload().toJSONObject());
-
-            assertEquals("NguyenTuanMinh", jwtClaimsSet.getSubject());
-            assertEquals("aireak.com", jwtClaimsSet.getIssuer());
-            assertEquals(fixedTime.plus(validDuration, ChronoUnit.SECONDS).toEpochMilli()
-                    , jwtClaimsSet.getExpirationTime().getTime());
-            assertEquals("ROLE_USER READ", jwtClaimsSet.getClaim("scope").toString());
-        }
-    }
-
-    @Test
-    void authentication_login_success() throws JOSEException {
-        when(userRepository.findByUsername("NguyenTuanMinh")).thenReturn(Optional.of(user));
-        when(passwordEncoder.matches(any(), any())).thenReturn(true);
-
-        doReturn(response.getToken()).when(spyService).generateToken(user);
-
-        var actual = spyService.authentication(request);
-
-        verify(userRepository).findByUsername(any());
+        verify(userRepository, times(1)).findByUsername(any());
         verify(passwordEncoder, times(1)).matches(any(), any());
-        verify(spyService).generateToken(any());
-
-        assertNotNull(actual);
-        Assertions.assertThat(actual.getToken()).isEqualTo("123456789");
     }
 
     @Test
-    void authentication_userNotExisted_return1002(){
-        when(userRepository.findByUsername(any())).thenReturn(Optional.empty());
+    void authentication_signerKeyException() {
+        ReflectionTestUtils.setField(authenticationService, "signerKey", "");
+        when(userRepository.findByUsername(authenticationRequest.getUsername())).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches(authenticationRequest.getPassword(), user.getPassword())).thenReturn(true);
 
         var exception = assertThrows(AppException.class,
-                () -> authenticationService.authentication(request));
+                () -> authenticationService.authentication(authenticationRequest));
 
-        verify(userRepository).findByUsername(any());
+        assertEquals(ErrorCode.SIGNER_EXCEPTION, exception.getErrorCode());
 
-        Assertions.assertThat(exception.getErrorCode().getCode()).isEqualTo(1002);
-        Assertions.assertThat(exception.getErrorCode().getMessage()).isEqualTo("User not existed!");
+        verify(userRepository, times(1)).findByUsername(anyString());
+        verify(passwordEncoder, times(1)).matches(anyString(), anyString());
     }
 
     @Test
-    void authentication_wrongPassword_return1011(){
-        when(userRepository.findByUsername("NguyenTuanMinh")).thenReturn(Optional.of(user));
-        when(passwordEncoder.matches(any(), any())).thenReturn(false);
+    void authentication_permissionEmpty() throws ParseException {
+        role.setPermissions(null);
+        when(userRepository.findByUsername(authenticationRequest.getUsername())).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches(authenticationRequest.getPassword(), user.getPassword())).thenReturn(true);
 
-        var exception = assertThrows(AppException.class,
-                () -> authenticationService.authentication(request));
+        var response = authenticationService.authentication(authenticationRequest);
 
-        verify(userRepository).findByUsername(any());
-        verify(passwordEncoder).matches(any(), any());
+        String token = response.getToken();
 
-        Assertions.assertThat(exception.getErrorCode().getCode()).isEqualTo(1011);
-        Assertions.assertThat(exception.getErrorCode().getMessage()).isEqualTo("Password incorrect!");
+        JWSObject jwsObject = JWSObject.parse(token);
+        JWTClaimsSet claims = JWTClaimsSet.parse(jwsObject.getPayload().toJSONObject());
+
+        assertThat(claims.getSubject()).isEqualTo("aireak");
+        assertThat(claims.getIssuer()).isEqualTo("aireak.com");
+        Date expirationTime = claims.getExpirationTime();
+        Date issueTime = claims.getIssueTime();
+        assertThat(expirationTime).isAfter(issueTime);
+        long duration = (expirationTime.getTime() - issueTime.getTime()) / 1000;
+        assertThat(duration).isCloseTo(duration, within(5L));
+        assertThat(claims.getJWTID()).isNotNull();
+        assertThat(claims.getClaim("scope")).isEqualTo("ROLE_USER");
+        assertThat(claims.getClaim("userId")).isEqualTo("123456789");
+
+        verify(userRepository, times(1)).findByUsername(anyString());
+        verify(passwordEncoder, times(1)).matches(anyString(), anyString());
     }
 
     @Test
-    void checkJidAndSignerKey_success_returnTrue(){
-        boolean result = authenticationService.checkJidAndSignerKey(validToken, expectedJid);
+    void authentication_roleEmpty() throws ParseException {
+        user.setRoles(null);
+        when(userRepository.findByUsername(authenticationRequest.getUsername())).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches(authenticationRequest.getPassword(), user.getPassword())).thenReturn(true);
 
-        assertTrue(result);
-    }
+        var response = authenticationService.authentication(authenticationRequest);
 
-    @Test
-    void checkJidAndSignerKey_invalidToken_returnFalse(){
-        validToken = Jwts.builder()
-                .setId("gbjWtBF9h0hhdoKBiZrDTA")
-                .signWith(secretKey, SignatureAlgorithm.HS512)
-                .compact();
+        String token = response.getToken();
 
-        boolean result = authenticationService.checkJidAndSignerKey(validToken, expectedJid);
+        JWSObject jwsObject = JWSObject.parse(token);
+        JWTClaimsSet claims = JWTClaimsSet.parse(jwsObject.getPayload().toJSONObject());
 
-        assertFalse(result);
-    }
+        assertThat(claims.getSubject()).isEqualTo("aireak");
+        assertThat(claims.getIssuer()).isEqualTo("aireak.com");
+        Date expirationTime = claims.getExpirationTime();
+        Date issueTime = claims.getIssueTime();
+        assertThat(expirationTime).isAfter(issueTime);
+        long duration = (expirationTime.getTime() - issueTime.getTime()) / 1000;
+        assertThat(duration).isCloseTo(duration, within(5L));
+        assertThat(claims.getJWTID()).isNotNull();
+        assertThat(claims.getClaim("scope")).isEqualTo("");
+        assertThat(claims.getClaim("userId")).isEqualTo("123456789");
 
-    @Test
-    void checkJidAndSignerKey_throwsWeakKeyException_return1021(){
-        validToken = Jwts.builder()
-                .setId("EXPECTED_JID")
-                .signWith(Keys.hmacShaKeyFor(signerKey.getBytes()))
-                .compact();
-
-        ReflectionTestUtils.setField(authenticationService, "signerKey", "1");
-
-        var exception = assertThrows(AppException.class, () -> authenticationService.checkJidAndSignerKey(validToken, expectedJid));
-
-        assertEquals(exception.getErrorCode().getCode(), 1021);
-        assertEquals(exception.getErrorCode().getMessage(), "Key length is weak!");
-    }
-
-    @Test
-    void whenUsingWeakKey_throwWeakKeyException() {
-        String shortKey = "123";
-
-        assertThrows(WeakKeyException.class, () -> {
-            Keys.hmacShaKeyFor(shortKey.getBytes());
-        });
-    }
-
-    @Test
-    void checkJidAndSignerKey_invalidJid_returnFalse(){
-        boolean result = authenticationService.checkJidAndSignerKey(validToken, "12345");
-        assertFalse(result);
-    }
-
-    @Test
-    void verifyToken_success_booleanIsTrue() throws JOSEException, ParseException {
-        try (MockedStatic<SignedJWT> mockedStatic = mockStatic(SignedJWT.class)){
-            String token = "valid.access.token";
-
-            mockedStatic.when(() -> SignedJWT.parse(token)).thenReturn(signedJWT);
-            when(signedJWT.getJWTClaimsSet()).thenReturn(jwtClaimsSet);
-            when(jwtClaimsSet.getIssueTime())
-                    .thenReturn(Date.from(Instant.now().plusSeconds(refreshableDuration)));
-            when(invalidatedTokenRepository.existsById(any())).thenReturn(false);
-            when(signedJWT.verify(any())).thenReturn(true);
-
-            var result = authenticationService.verifyToken(token, true);
-
-            assertNotNull(result);
-        }
-    }
-
-    @Test
-    void verifyToken_success_booleanIsFalse() throws JOSEException, ParseException {
-        try (MockedStatic<SignedJWT> mockedStatic = mockStatic(SignedJWT.class)){
-            String token = "valid.access.token";
-
-            mockedStatic.when(() -> SignedJWT.parse(token)).thenReturn(signedJWT);
-            when(signedJWT.getJWTClaimsSet()).thenReturn(jwtClaimsSet);
-            when(jwtClaimsSet.getExpirationTime())
-                    .thenReturn(Date.from(Instant.now().plusSeconds(validDuration)));
-            when(invalidatedTokenRepository.existsById(any())).thenReturn(false);
-            when(signedJWT.verify(any())).thenReturn(true);
-
-            var result = authenticationService.verifyToken(token, false);
-
-            assertNotNull(result);
-        }
-    }
-
-    @Test
-    void verifyToken_invalidSignature_throwsTokenInvalid() throws Exception{
-        try (MockedStatic<SignedJWT> mockedStatic = mockStatic(SignedJWT.class)){
-            String token = "valid.access.token";
-
-            mockedStatic.when(() -> SignedJWT.parse(token)).thenReturn(signedJWT);
-            when(signedJWT.getJWTClaimsSet()).thenReturn(jwtClaimsSet);
-            when(jwtClaimsSet.getExpirationTime())
-                    .thenReturn(Date.from(Instant.now().plusSeconds(validDuration)));
-            when(invalidatedTokenRepository.existsById(any())).thenReturn(false);
-            when(signedJWT.verify(any())).thenReturn(false);
-
-            var exception = assertThrows(AppException.class
-                    , () -> authenticationService.verifyToken(token, false));
-
-            assertEquals(exception.getErrorCode().getCode(), 1015);
-            assertEquals(exception.getErrorCode().getMessage(), "Token invalid!");
-        }
-    }
-
-    @Test
-    void verifyToken_expiredAccessToken_throwsTokenInvalid() throws Exception {
-        try (MockedStatic<SignedJWT> mockedSignedJWT = mockStatic(SignedJWT.class)) {
-            String token = "expired.access.token";
-
-            mockedSignedJWT.when(() -> SignedJWT.parse(token)).thenReturn(signedJWT);
-            when(signedJWT.verify(any())).thenReturn(true);
-            when(signedJWT.getJWTClaimsSet()).thenReturn(jwtClaimsSet);
-            when(jwtClaimsSet.getExpirationTime())
-                    .thenReturn(Date.from(Instant.now()));
-
-            var exception = assertThrows(AppException.class, () ->
-                            authenticationService.verifyToken(token, false));
-
-            assertEquals(exception.getErrorCode().getCode(), 1015);
-            assertEquals(exception.getErrorCode().getMessage(), "Token invalid!");
-        }
-    }
-
-    @Test
-    void verifyToken_tokenAlreadyInvalidated_throwsAppException() throws Exception{
-        try (MockedStatic<SignedJWT> mockedSignedJWT = mockStatic(SignedJWT.class)) {
-            String token = "invalid.token.success";
-
-            mockedSignedJWT.when(() -> SignedJWT.parse(token)).thenReturn(signedJWT);
-            when(signedJWT.getJWTClaimsSet()).thenReturn(jwtClaimsSet);
-            when(jwtClaimsSet.getExpirationTime())
-                    .thenReturn(Date.from(Instant.now().plusSeconds(validDuration)));
-            when(signedJWT.verify(any())).thenReturn(true);
-            when(invalidatedTokenRepository.existsById(signedJWT.getJWTClaimsSet().getJWTID()))
-                    .thenReturn(true);
-
-            var exception = assertThrows(AppException.class, () ->
-                    authenticationService.verifyToken(token, false));
-
-            assertEquals(exception.getErrorCode().getCode(), 1016);
-            assertEquals(exception.getErrorCode().getMessage(), "Token already invalidated!");
-        }
-    }
-
-    @Test
-    void logout_shouldHaveTransactionalAnnotation() throws Exception{
-        Assertions.assertThat(AuthenticationService.class.getMethod("logout", LogoutRequest.class, Jwt.class)
-                .isAnnotationPresent(Transactional.class));
+        verify(userRepository, times(1)).findByUsername(anyString());
+        verify(passwordEncoder, times(1)).matches(anyString(), anyString());
     }
 
     @Test
     void logout_success() throws Exception {
-        doReturn(true).when(spyService).checkJidAndSignerKey(any(), any());
-        doReturn(signedJWT).when(spyService).verifyToken(anyString(), anyBoolean());
-        when(signedJWT.getJWTClaimsSet()).thenReturn(jwtClaimsSet);
-        when(jwtClaimsSet.getJWTID()).thenReturn("REDACTED_LEGACY_CREDENTIAL");
-        when(jwtClaimsSet.getExpirationTime()).thenReturn(Date.from(Instant.now()));
+        mockAuthenticatedUser();
+        String logoutToken = createValidAccessToken("123456789");
+        LogoutRequest request = new LogoutRequest(logoutToken);
 
-        spyService.logout(logoutRequest, jwt);
+        when(invalidatedTokenRepository.existsById(anyString())).thenReturn(false);
 
+        authenticationService.logout(request);
+
+        verify(invalidatedTokenRepository, times(1)).existsById(any());
         verify(invalidatedTokenRepository, times(1)).save(any());
     }
 
     @Test
-    void logout_accessDenied_return1022(){
-        doReturn(false).when(spyService).checkJidAndSignerKey(any(), any());
-        var exception = assertThrows(AppException.class
-                , () -> spyService.logout(logoutRequest, jwt));
+    void logout_unAuthenticated() throws Exception {
+        String logoutToken = createValidAccessToken("123456789");
+        LogoutRequest request = new LogoutRequest(logoutToken);
+        Authentication authentication = mock(Authentication.class);
+        SecurityContext securityContext = mock(SecurityContext.class);
 
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+        when(authentication.isAuthenticated()).thenReturn(false);
+        when(authentication.getPrincipal()).thenReturn(null);
+
+        var exception = assertThrows(AppException.class, () -> authenticationService.logout(request));
+
+        verify(invalidatedTokenRepository, never()).existsById(any());
         verify(invalidatedTokenRepository, never()).save(any());
 
-        assertEquals(exception.getErrorCode().getCode(), 1022);
-        assertEquals(exception.getErrorCode().getMessage(), "Token not owned by user!");
+        assertEquals(ErrorCode.UNAUTHENTICATED, exception.getErrorCode());
     }
 
     @Test
-    void introspect_returnTrue() throws Exception {
-        doReturn(signedJWT).when(spyService).verifyToken(anyString(), anyBoolean());
-        IntrospectResponse result = spyService.introspectResponse(introspectRequest);
+    void logoutToken_accessDenied() throws Exception {
+        mockAuthenticatedUser();
+        String logoutToken = createValidAccessToken("12345678910");
+        LogoutRequest request = new LogoutRequest(logoutToken);
 
-        assertTrue(result.isValid());
-    }
+        var exception = assertThrows(AppException.class, () -> authenticationService.logout(request));
 
-    @Test
-    void introspect_JOSEException_returnFalse() throws Exception {
-        doReturn(signedJWT).when(spyService).verifyToken(anyString(), anyBoolean());
-        doThrow(new JOSEException("JOSEException!")).when(spyService).verifyToken(anyString(), anyBoolean());
-
-        IntrospectResponse result = spyService.introspectResponse(introspectRequest);
-
-        assertFalse(result.isValid());
-    }
-
-    @Test
-    void introspect_ParseException_returnFalse() throws Exception {
-        doReturn(signedJWT).when(spyService).verifyToken(anyString(), anyBoolean());
-        doThrow(new ParseException("ParseException!", 0)).when(spyService).verifyToken(anyString(), anyBoolean());
-
-        IntrospectResponse result = spyService.introspectResponse(introspectRequest);
-
-        assertFalse(result.isValid());
-    }
-
-    @Test
-    void refreshToken_shouldHaveTransactionalAnnotation() throws Exception{
-        Assertions.assertThat(AuthenticationService.class.getMethod("refreshToken", RefreshRequest.class, Jwt.class)
-                .isAnnotationPresent(Transactional.class));
-    }
-
-    @Test
-    void refreshToken_success() throws Exception{
-        doReturn(true).when(spyService).checkJidAndSignerKey(anyString(), anyString());
-        doReturn(signedJWT).when(spyService).verifyToken(anyString(), anyBoolean());
-        when(signedJWT.getJWTClaimsSet()).thenReturn(jwtClaimsSet);
-        when(jwtClaimsSet.getJWTID()).thenReturn("123456789");
-        when(jwtClaimsSet.getExpirationTime())
-                .thenReturn(Date.from(Instant.now()));
-        when(jwtClaimsSet.getSubject())
-                .thenReturn("NguyenTuanMinh");
-        when(userRepository.findByUsername("NguyenTuanMinh")).thenReturn(Optional.of(user));
-        doReturn("123456789").when(spyService).generateToken(user);
-
-        var result = spyService.refreshToken(refreshRequest, jwt);
-
-        verify(invalidatedTokenRepository, times(1)).save(any());
-        verify(userRepository, times(1)).findByUsername(any());
-
-        assertEquals(result.getToken(), response.getToken());
-    }
-
-    @Test
-    void refreshToken_accessDenied_return1022(){
-        doReturn(false).when(spyService).checkJidAndSignerKey(any(), any());
-        var exception = assertThrows(AppException.class
-                , () -> spyService.refreshToken(refreshRequest, jwt));
-
+        verify(invalidatedTokenRepository, never()).existsById(any());
         verify(invalidatedTokenRepository, never()).save(any());
 
-        assertEquals(exception.getErrorCode().getCode(), 1022);
-        assertEquals(exception.getErrorCode().getMessage(), "Token not owned by user!");
+        assertEquals(ErrorCode.ACCESS_DENIED, exception.getErrorCode());
     }
 
     @Test
-    void refreshToken_userNotExisted_return1002() throws Exception {
-        doReturn(true).when(spyService).checkJidAndSignerKey(anyString(), anyString());
-        doReturn(signedJWT).when(spyService).verifyToken(anyString(), anyBoolean());
-        when(signedJWT.getJWTClaimsSet()).thenReturn(jwtClaimsSet);
-        when(jwtClaimsSet.getJWTID()).thenReturn("123456789");
-        when(jwtClaimsSet.getExpirationTime())
-                .thenReturn(Date.from(Instant.now()));
-        when(jwtClaimsSet.getSubject())
-                .thenReturn("NguyenTuanMinh");
-        when(userRepository.findByUsername("NguyenTuanMinh")).thenReturn(Optional.empty());
+    void logout_tokenInvalid() throws Exception {
+        mockAuthenticatedUser();
+        ReflectionTestUtils.setField(authenticationService, "signerKey", "");
+        String logoutToken = createValidAccessToken("123456789");
+        LogoutRequest request = new LogoutRequest(logoutToken);
 
-        var exception = assertThrows(AppException.class
-                , () -> spyService.refreshToken(refreshRequest, jwt));
+        var exception = assertThrows(AppException.class, () -> authenticationService.logout(request));
+
+        assertEquals(ErrorCode.TOKEN_INVALID, exception.getErrorCode());
+
+        verify(invalidatedTokenRepository, never()).existsById(any());
+        verify(invalidatedTokenRepository, never()).save(any());
+    }
+
+    @Test
+    void introspect_success() throws Exception {
+        String token = createValidAccessToken("123456789");
+        IntrospectRequest request = new IntrospectRequest(token);
+
+        when(invalidatedTokenRepository.existsById(anyString())).thenReturn(false);
+
+        IntrospectResponse response = authenticationService.introspectResponse(request);
+
+        assertTrue(response.isValid());
+        assertEquals("123456789", response.getUserId());
+    }
+
+    @Test
+    void introspect_expiredToken_tokenInvalid() throws Exception {
+        mockAuthenticatedUser();
+        String expiredToken = createExpiredRefreshToken();
+        IntrospectRequest introspectRequest = IntrospectRequest.builder()
+                .token(expiredToken)
+                .build();
+
+        var exception = assertThrows(AppException.class, () -> authenticationService.introspectResponse(introspectRequest));
+
+        verify(invalidatedTokenRepository, never()).existsById(any());
+
+        assertEquals(ErrorCode.TOKEN_INVALID, exception.getErrorCode());
+    }
+
+    @Test
+    void introspect_alreadyInvalidatedToken() throws Exception {
+        mockAuthenticatedUser();
+        String refreshToken = createValidRefreshToken("123456789");
+        IntrospectRequest introspectRequest = IntrospectRequest.builder()
+                .token(refreshToken)
+                .build();
+
+        when(invalidatedTokenRepository.existsById(anyString())).thenReturn(true);
+
+        var exception = assertThrows(AppException.class, () -> authenticationService.introspectResponse(introspectRequest));
+
+        assertEquals(ErrorCode.TOKEN_ALREADY_INVALIDATED, exception.getErrorCode());
+
+        verify(invalidatedTokenRepository, times(1)).existsById(any());
+    }
+
+    @Test
+    void introspect_verifyTokenFailed() throws Exception {
+        mockAuthenticatedUser();
+        ReflectionTestUtils.setField(authenticationService, "signerKey", "");
+        String token = createValidRefreshToken("123456789");
+        IntrospectRequest introspectRequest = IntrospectRequest.builder()
+                .token(token)
+                .build();
+
+        var exception = assertThrows(AppException.class, () -> authenticationService.introspectResponse(introspectRequest));
+
+        assertEquals(ErrorCode.VERIFY_TOKEN_FAILED, exception.getErrorCode());
+
+        verify(invalidatedTokenRepository, never()).existsById(any());
+    }
+
+    @Test
+    void refreshToken_success() throws Exception {
+        mockAuthenticatedUser();
+        String refreshToken = createValidRefreshToken("123456789");
+        RefreshRequest request = new RefreshRequest(refreshToken);
+
+        when(invalidatedTokenRepository.existsById(anyString())).thenReturn(false);
+        when(userRepository.findByUsername(anyString())).thenReturn(Optional.of(user));
+
+        AuthenticationResponse response = authenticationService.refreshToken(request);
+
+        assertNotNull(response);
+        assertNotNull(response.getToken());
 
         verify(invalidatedTokenRepository, times(1)).save(any());
+        verify(invalidatedTokenRepository, times(1)).existsById(any());
         verify(userRepository, times(1)).findByUsername(any());
+    }
 
-        assertEquals(exception.getErrorCode().getCode(), 1002);
-        assertEquals(exception.getErrorCode().getMessage(), "User not existed!");
+    @Test
+    void refreshToken_unAuthenticated() throws Exception {
+        String refreshToken = createValidRefreshToken("123456789");
+        RefreshRequest request = new RefreshRequest(refreshToken);
+        Authentication authentication = mock(Authentication.class);
+        SecurityContext securityContext = mock(SecurityContext.class);
+
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+        when(authentication.isAuthenticated()).thenReturn(false);
+        when(authentication.getPrincipal()).thenReturn(null);
+
+        var exception = assertThrows(AppException.class, () -> authenticationService.refreshToken(request));
+
+        verify(invalidatedTokenRepository, never()).save(any());
+        verify(invalidatedTokenRepository, never()).existsById(any());
+        verify(userRepository, never()).findByUsername(any());
+
+        assertEquals(ErrorCode.UNAUTHENTICATED, exception.getErrorCode());
+    }
+
+    @Test
+    void refreshToken_accessDenied() throws Exception {
+        String token = createValidRefreshToken("12345678910");
+        mockAuthenticatedUser();
+        RefreshRequest request = new RefreshRequest(token);
+
+        var exception = assertThrows(AppException.class, () -> authenticationService.refreshToken(request));
+
+        verify(invalidatedTokenRepository, never()).save(any());
+        verify(invalidatedTokenRepository, never()).existsById(any());
+        verify(userRepository, never()).findByUsername(any());
+
+        assertEquals(ErrorCode.ACCESS_DENIED, exception.getErrorCode());
+    }
+
+    @Test
+    void refreshToken_tokenInvalid() throws Exception {
+        mockAuthenticatedUser();
+        ReflectionTestUtils.setField(authenticationService, "signerKey", "");
+        String token = createValidRefreshToken("123456789");
+        RefreshRequest request = new RefreshRequest(token);
+
+        var exception = assertThrows(AppException.class, () -> authenticationService.refreshToken(request));
+
+        verify(invalidatedTokenRepository, never()).save(any());
+        verify(invalidatedTokenRepository, never()).existsById(any());
+        verify(userRepository, never()).findByUsername(any());
+
+        assertEquals(ErrorCode.TOKEN_INVALID, exception.getErrorCode());
+    }
+
+    @Test
+    void refreshToken_expiredToken_tokenInvalid() throws Exception {
+        mockAuthenticatedUser();
+        String expiredToken = createExpiredRefreshToken();
+        RefreshRequest request = new RefreshRequest(expiredToken);
+
+        var exception = assertThrows(AppException.class, () -> authenticationService.refreshToken(request));
+
+        verify(invalidatedTokenRepository, never()).save(any());
+        verify(invalidatedTokenRepository, never()).existsById(any());
+        verify(userRepository, never()).findByUsername(any());
+
+        assertEquals(ErrorCode.TOKEN_INVALID, exception.getErrorCode());
+    }
+
+    @Test
+    void refreshToken_alreadyInvalidatedToken() throws Exception {
+        mockAuthenticatedUser();
+        String refreshToken = createValidRefreshToken("123456789");
+        RefreshRequest request = new RefreshRequest(refreshToken);
+
+        when(invalidatedTokenRepository.existsById(anyString())).thenReturn(true);
+
+        var exception = assertThrows(AppException.class, () -> authenticationService.refreshToken(request));
+
+        assertEquals(ErrorCode.TOKEN_ALREADY_INVALIDATED, exception.getErrorCode());
+
+        verify(invalidatedTokenRepository, times(1)).existsById(any());
+        verify(invalidatedTokenRepository, never()).save(any());
+        verify(userRepository, never()).findByUsername(any());
+    }
+
+    @Test
+    void refreshToken_userNotExisted() throws Exception {
+        mockAuthenticatedUser();
+        String refreshToken = createValidRefreshToken("123456789");
+        RefreshRequest request = new RefreshRequest(refreshToken);
+
+        when(userRepository.findByUsername(anyString())).thenReturn(Optional.empty());
+        when(invalidatedTokenRepository.existsById(anyString())).thenReturn(false);
+
+        var exception = assertThrows(AppException.class, () -> authenticationService.refreshToken(request));
+
+        assertEquals(ErrorCode.USER_NOT_EXISTED, exception.getErrorCode());
+
+        verify(invalidatedTokenRepository, times(1)).existsById(any());
+        verify(invalidatedTokenRepository, times(1)).save(any());
+        verify(userRepository, times(1)).findByUsername(any());
+    }
+
+    @Test
+    void outboundAuthenticate_success() throws Exception {
+        ExchangeTokenResponse exchangeTokenResponse = ExchangeTokenResponse
+                .builder()
+                .accessToken("access_token")
+                .build();
+
+        OutboundUserResponse outboundUserResponse = OutboundUserResponse
+                .builder()
+                .id("123456789")
+                .email("aireak@gmail.com")
+                .build();
+
+        when(outboundIdentityClient.exchangeToken(any(ExchangeTokenRequest.class))).thenReturn(exchangeTokenResponse);
+        when(outboundUserClient.getInfo("json", exchangeTokenResponse.getAccessToken())).thenReturn(outboundUserResponse);
+        when(userRepository.findByEmail(outboundUserResponse.getEmail())).thenReturn(Optional.ofNullable(user));
+
+        var response = authenticationService.outboundAuthenticate("123");
+
+        String token = response.getToken();
+
+        JWSObject jwsObject = JWSObject.parse(token);
+        JWTClaimsSet claims = JWTClaimsSet.parse(jwsObject.getPayload().toJSONObject());
+
+        assertThat(claims.getSubject()).isEqualTo("aireak");
+        assertThat(claims.getIssuer()).isEqualTo("aireak.com");
+        Date expirationTime = claims.getExpirationTime();
+        Date issueTime = claims.getIssueTime();
+        assertThat(expirationTime).isAfter(issueTime);
+        long duration = (expirationTime.getTime() - issueTime.getTime()) / 1000;
+        assertThat(duration).isCloseTo(duration, within(5L));
+        assertThat(claims.getJWTID()).isNotNull();
+        assertThat(claims.getClaim("scope")).isEqualTo("ROLE_USER ADD_FRIEND");
+        assertThat(claims.getClaim("userId")).isEqualTo("123456789");
+
+        verify(outboundIdentityClient, times(1)).exchangeToken(any());
+        verify(outboundUserClient, times(1)).getInfo(any(), any());
+        verify(userRepository, times(1)).findByEmail(any());
+        verify(roleRepository, never()).findById(any());
+        verify(client, never()).createProfile(any());
+        verify(passwordEncoder, never()).encode(any());
+        verify(userRepository, never()).save(any());
+        verify(kafkaTemplate, never()).send(any(), any());
+    }
+
+    @Test
+    void outboundAuthenticate_userEmpty() throws Exception {
+        ExchangeTokenResponse exchangeTokenResponse = ExchangeTokenResponse
+                .builder()
+                .accessToken("access_token")
+                .build();
+
+        OutboundUserResponse outboundUserResponse = OutboundUserResponse
+                .builder()
+                .id("123456789")
+                .email("aireak@gmail.com")
+                .verifiedEmail(true)
+                .givenName("aireak")
+                .familyName("Nguyen")
+                .build();
+
+        when(outboundIdentityClient.exchangeToken(any(ExchangeTokenRequest.class))).thenReturn(exchangeTokenResponse);
+        when(outboundUserClient.getInfo("json", exchangeTokenResponse.getAccessToken())).thenReturn(outboundUserResponse);
+        when(userRepository.findByEmail(outboundUserResponse.getEmail())).thenReturn(Optional.empty());
+        when(roleRepository.findById("USER")).thenReturn(Optional.of(role));
+
+        var response = authenticationService.outboundAuthenticate("123");
+
+        String token = response.getToken();
+
+        JWSObject jwsObject = JWSObject.parse(token);
+        JWTClaimsSet claims = JWTClaimsSet.parse(jwsObject.getPayload().toJSONObject());
+
+        assertThat(claims.getSubject()).isEqualTo("aireak@gmail.com");
+        assertThat(claims.getIssuer()).isEqualTo("aireak.com");
+        Date expirationTime = claims.getExpirationTime();
+        Date issueTime = claims.getIssueTime();
+        assertThat(expirationTime).isAfter(issueTime);
+        long duration = (expirationTime.getTime() - issueTime.getTime()) / 1000;
+        assertThat(duration).isCloseTo(duration, within(5L));
+        assertThat(claims.getJWTID()).isNotNull();
+        assertThat(claims.getClaim("scope")).isEqualTo("ROLE_USER ADD_FRIEND");
+        assertThat(claims.getClaim("userId")).isEqualTo("EM_123456789");
+
+        verify(outboundIdentityClient, times(1)).exchangeToken(any());
+        verify(outboundUserClient, times(1)).getInfo(any(), any());
+        verify(userRepository, times(1)).findByEmail(any());
+        verify(roleRepository, times(1)).findById(any());
+        verify(client, times(1)).createProfile(any());
+        verify(passwordEncoder, times(1)).encode(any());
+        verify(userRepository, times(1)).save(any());
+        verify(kafkaTemplate, times(1)).send(any(), any());
+    }
+
+    @Test
+    void outboundAuthenticate_roleNotExisted() {
+        ExchangeTokenResponse exchangeTokenResponse = ExchangeTokenResponse
+                .builder()
+                .accessToken("access_token")
+                .build();
+
+        OutboundUserResponse outboundUserResponse = OutboundUserResponse
+                .builder()
+                .id("123456789")
+                .email("aireak@gmail.com")
+                .verifiedEmail(true)
+                .givenName("aireak")
+                .familyName("Nguyen")
+                .build();
+
+        when(outboundIdentityClient.exchangeToken(any(ExchangeTokenRequest.class))).thenReturn(exchangeTokenResponse);
+        when(outboundUserClient.getInfo("json", exchangeTokenResponse.getAccessToken())).thenReturn(outboundUserResponse);
+        when(userRepository.findByEmail(outboundUserResponse.getEmail())).thenReturn(Optional.empty());
+        when(roleRepository.findById("USER")).thenReturn(Optional.empty());
+
+        var exception = assertThrows(AppException.class, () -> authenticationService.outboundAuthenticate("123"));
+
+        assertEquals(ErrorCode.ROLE_NOT_EXISTED, exception.getErrorCode());
+
+        verify(outboundIdentityClient, times(1)).exchangeToken(any());
+        verify(outboundUserClient, times(1)).getInfo(any(), any());
+        verify(userRepository, times(1)).findByEmail(any());
+        verify(roleRepository, times(1)).findById(any());
+        verify(client, never()).createProfile(any());
+        verify(passwordEncoder, never()).encode(any());
+        verify(userRepository, never()).save(any());
+        verify(kafkaTemplate, never()).send(any(), any());
+    }
+
+    @Test
+    void outboundAuthenticate_signerKeyInvalid() {
+        ReflectionTestUtils.setField(authenticationService, "signerKey", "");
+        ExchangeTokenResponse exchangeTokenResponse = ExchangeTokenResponse
+                .builder()
+                .accessToken("access_token")
+                .build();
+
+        OutboundUserResponse outboundUserResponse = OutboundUserResponse
+                .builder()
+                .id("123456789")
+                .email("aireak@gmail.com")
+                .verifiedEmail(true)
+                .givenName("aireak")
+                .familyName("Nguyen")
+                .build();
+
+        when(outboundIdentityClient.exchangeToken(any(ExchangeTokenRequest.class))).thenReturn(exchangeTokenResponse);
+        when(outboundUserClient.getInfo("json", exchangeTokenResponse.getAccessToken())).thenReturn(outboundUserResponse);
+        when(userRepository.findByEmail(outboundUserResponse.getEmail())).thenReturn(Optional.empty());
+        when(roleRepository.findById("USER")).thenReturn(Optional.of(role));
+
+        var exception = assertThrows(AppException.class, () -> authenticationService.outboundAuthenticate("123"));
+
+        assertEquals(ErrorCode.SIGNER_EXCEPTION, exception.getErrorCode());
+
+        verify(outboundIdentityClient, times(1)).exchangeToken(any());
+        verify(outboundUserClient, times(1)).getInfo(any(), any());
+        verify(userRepository, times(1)).findByEmail(any());
+        verify(roleRepository, times(1)).findById(any());
+        verify(client, times(1)).createProfile(any());
+        verify(passwordEncoder, times(1)).encode(any());
+        verify(userRepository, times(1)).save(any());
+        verify(kafkaTemplate, times(1)).send(any(), any());
     }
 }
+

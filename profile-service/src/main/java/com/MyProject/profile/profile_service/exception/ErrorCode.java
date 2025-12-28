@@ -20,7 +20,6 @@ public enum ErrorCode {
     PROFILE_NOT_FOUND(8107, "Profile not existed!", HttpStatus.NOT_FOUND),
     DISPLAY_NAME_NOT_BLANK(8108, "Display name cannot be blank!", HttpStatus.BAD_REQUEST),
     INVALID_PHONE_NUMBER(8109, "Phone number invalid!", HttpStatus.BAD_REQUEST );
-    ;
 
     int code;
     String message;

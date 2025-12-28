@@ -1,8 +1,8 @@
 package com.MyProject.post.post_service.repository.httpclient;
 
+import com.MyProject.common_dto.event.dto.UserProfileResponse;
 import com.MyProject.post.post_service.configuration.AuthenticationRequestInterceptor;
 import com.MyProject.post.post_service.dto.response.ApiResponse;
-import com.MyProject.post.post_service.dto.response.UserProfileResponse;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;

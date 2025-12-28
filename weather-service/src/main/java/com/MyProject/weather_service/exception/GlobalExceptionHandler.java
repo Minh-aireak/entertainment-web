@@ -16,25 +16,24 @@ public class GlobalExceptionHandler {
     private static final String MIN_VALUE = "min";
 
     @ExceptionHandler(value = AppException.class)
-    public ResponseEntity<ApiResponse<?>> handlingAppException(AppException exception) {
+    public ResponseEntity<ApiResponse<Object>> handlingAppException(AppException exception) {
         return ApiResponse.toResponseEntity(exception.getErrorCode());
     }
 
     @ExceptionHandler(value = MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiResponse<?>> handlingMethodArgumentNotValidException(
+    public ResponseEntity<ApiResponse<Object>> handlingMethodArgumentNotValidException(
             MethodArgumentNotValidException exception) {
-        String enumKey = exception.getFieldError().getDefaultMessage();
-
-        Map<String, Object> attributes = null;
+        String enumKey = Objects.requireNonNull(exception.getFieldError()).getDefaultMessage();
+        Map<String, Object> attributes;
 
         ErrorCode errorCode = ErrorCode.valueOf(enumKey);
 
-        var constrainViolation =
+        ConstraintViolation<?> constrainViolation =
                 exception.getBindingResult().getAllErrors().getFirst().unwrap(ConstraintViolation.class);
 
         attributes = constrainViolation.getConstraintDescriptor().getAttributes();
 
-        ApiResponse<?> apiResponse = new ApiResponse<>();
+        ApiResponse<Object> apiResponse = new ApiResponse<>();
         apiResponse.setCode(errorCode.getCode());
         apiResponse.setMessage(
                 Objects.nonNull(attributes)
@@ -50,7 +49,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(value = AccessDeniedException.class)
-    public ResponseEntity<ApiResponse<?>> handlingAccessDeniedException(AccessDeniedException exception) {
+    public ResponseEntity<ApiResponse<Object>> handlingAccessDeniedException() {
         return ApiResponse.toResponseEntity(ErrorCode.ACCESS_DENIED);
     }
 }

@@ -22,7 +22,7 @@ import lombok.experimental.FieldDefaults;
 public class PermissionController {
     PermissionService permissionService;
 
-    @PostMapping("/create")
+    @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     ApiResponse<PermissionResponse> createPermission(@RequestBody PermissionCreationRequest request) {
         return ApiResponse.<PermissionResponse>builder()
@@ -30,12 +30,11 @@ public class PermissionController {
                 .build();
     }
 
-    @PutMapping("/{name}")
+    @PutMapping
     @PreAuthorize("hasRole('ADMIN')")
-    ApiResponse<PermissionResponse> updateRole(
-            @PathVariable String name, @RequestBody PermissionUpdateRequest request) {
+    ApiResponse<PermissionResponse> updatePermission(@RequestBody PermissionUpdateRequest request) {
         return ApiResponse.<PermissionResponse>builder()
-                .result(permissionService.updatePermission(name, request))
+                .result(permissionService.updatePermission(request))
                 .build();
     }
 
@@ -48,7 +47,7 @@ public class PermissionController {
                 .build();
     }
 
-    @GetMapping("/read")
+    @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
     ApiResponse<List<PermissionResponse>> getAllRoles() {
         return ApiResponse.<List<PermissionResponse>>builder()

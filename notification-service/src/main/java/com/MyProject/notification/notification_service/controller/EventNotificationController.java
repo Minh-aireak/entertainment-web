@@ -24,10 +24,9 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class EventNotificationController {
     EmailService emailService;
-    EventRouterService eventRouterService;
     NotificationService notificationService;
 
-    @KafkaListener(topics = "onboard-email")
+    @KafkaListener(topics = "send-email")
     public void listenNotificationDelivery(NotificationEvent message){
         emailService.sendEmail(SendEmailRequest.builder()
                         .to(List.of(Recipient.builder()
@@ -43,9 +42,9 @@ public class EventNotificationController {
         notificationService.createFriendRequest(event);
     }
 
-    @KafkaListener(topics = "updated-request-events")
-    public void handleUpdateFriendRequest(FriendRequestEvent event) {
-    }
+//    @KafkaListener(topics = "updated-request-events")
+//    public void handleUpdateFriendRequest(FriendRequestEvent event) {
+//    }
 
 //    @KafkaListener(topics = "post-created")
 //    public void handlePostCreated(Object event) {

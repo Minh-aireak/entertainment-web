@@ -16,21 +16,21 @@ public class GlobalExceptionHandler {
     private static final String ATTRIBUTE = "attribute";
 
     @ExceptionHandler(value = AppException.class)
-    public ResponseEntity<ApiResponse<?>> handlingAppException(AppException exception) {
+    public ResponseEntity<ApiResponse<Object>> handlingAppException(AppException exception) {
         return ApiResponse.toResponseEntity(exception.getErrorCode());
     }
 
     @ExceptionHandler(value = MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiResponse<?>> handlingMethodArgumentNotValidException(
+    public ResponseEntity<ApiResponse<Object>> handlingMethodArgumentNotValidException(
             MethodArgumentNotValidException exception) {
-        Map<String, String> attributes = null;
+        Map<String, Object> attributes;
         String enumKey = Objects.requireNonNull(exception.getFieldError()).getDefaultMessage();
         ErrorCode errorCode = ErrorCode.valueOf(enumKey);
 
-        var constraintViolation = exception.getBindingResult().getAllErrors().getFirst().unwrap(ConstraintViolation.class);
+        ConstraintViolation<?> constraintViolation = exception.getBindingResult().getAllErrors().getFirst().unwrap(ConstraintViolation.class);
         attributes = constraintViolation.getConstraintDescriptor().getAttributes();
 
-        ApiResponse<?> apiResponse = new ApiResponse<>();
+        ApiResponse<Object> apiResponse = new ApiResponse<>();
         apiResponse.setCode(errorCode.getCode());
         apiResponse.setMessage(
                 Objects.nonNull(attributes)
@@ -40,13 +40,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(errorCode.getStatusCode()).body(apiResponse);
     }
 
-    private String mapAttributes(String message, Map<String, String> attributes) {
+    private String mapAttributes(String message, Map<String, Object> attributes) {
         String attribute = String.valueOf(attributes.get(ATTRIBUTE));
         return message.replace("{" + ATTRIBUTE + "}", attribute);
     }
 
     @ExceptionHandler(value = AccessDeniedException.class)
-    public ResponseEntity<ApiResponse<?>> handlingAccessDeniedException(AccessDeniedException exception) {
+    public ResponseEntity<ApiResponse<Object>> handlingAccessDeniedException() {
         return ApiResponse.toResponseEntity(ErrorCode.UNAUTHORIZED);
     }
 }

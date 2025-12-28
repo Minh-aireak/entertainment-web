@@ -31,9 +31,9 @@ public class PostController {
 
     @GetMapping("/get-my-posts")
     ApiResponse<PageResponse<ScheduleResponse>> getMyPosts(
-            @RequestParam(value = "page", required = true) Integer page,
-            @RequestParam(value = "size", required = true) Integer size,
-            @RequestParam(value = "type", required = true) String type){
+            @RequestParam(value = "page") Integer page,
+            @RequestParam(value = "size") Integer size,
+            @RequestParam(value = "type") String type){
         return ApiResponse.<PageResponse<ScheduleResponse>>builder()
                 .result(postService.getMyPosts(page, size, type))
                 .build();
@@ -41,7 +41,7 @@ public class PostController {
 
     @GetMapping("/get-post/{id}")
     ApiResponse<ScheduleResponse> getMyPost(@PathVariable String id,
-                                            @RequestParam(value = "type", required = true) String type){
+                                            @RequestParam(value = "type") String type){
         return ApiResponse.<ScheduleResponse>builder()
                 .result(postService.getMyPost(id, type))
                 .build();
@@ -49,7 +49,7 @@ public class PostController {
 
     @PutMapping("/update-post/{id}")
     ApiResponse<ScheduleResponse> updatePost(@PathVariable String id,
-                                             @RequestParam(value = "type", required = true) String type,
+                                             @RequestParam(value = "type") String type,
                                              @RequestBody @Valid ScheduleUpdateRequest request){
         return ApiResponse.<ScheduleResponse>builder()
                 .result(postService.updatePost(id, type, request))
@@ -58,7 +58,7 @@ public class PostController {
     }
 
     @DeleteMapping("/delete/{id}")
-    ApiResponse<Void> deletePost(@PathVariable String id, @RequestParam(value = "type", required = true) String type){
+    ApiResponse<Void> deletePost(@PathVariable String id, @RequestParam(value = "type") String type){
         postService.deletePost(id, type);
         return ApiResponse.<Void>builder()
                 .message("Deleted success!")

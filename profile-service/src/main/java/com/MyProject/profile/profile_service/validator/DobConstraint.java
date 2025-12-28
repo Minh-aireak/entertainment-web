@@ -6,7 +6,6 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 import jakarta.validation.Constraint;
-import jakarta.validation.Payload;
 
 @Target({ElementType.FIELD})
 @Retention(RetentionPolicy.RUNTIME)
@@ -14,11 +13,5 @@ import jakarta.validation.Payload;
 public @interface DobConstraint {
     String message() default "{Invalid off birth}";
 
-    Class<?>[] groups() default {};
-
-    Class<? extends Payload>[] payload() default {};
-
     int min();
-
-    int max() default Integer.MAX_VALUE;
 }

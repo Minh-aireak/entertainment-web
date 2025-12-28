@@ -6,34 +6,28 @@ import com.MyProject.post.post_service.exception.AppException;
 import com.MyProject.post.post_service.exception.ErrorCode;
 import com.MyProject.post.post_service.repository.PostRepository;
 import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.quartz.Job;
 import org.quartz.JobDataMap;
 import org.quartz.JobExecutionContext;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
 /**
  * Job để cập nhật trạng thái Post
- *
  * Job này sẽ được trigger 2 lần:
  * 1. Lần 1: Tại startTime → Chuyển status: UPCOMING → ONGOING
  * 2. Lần 2: Tại endTime → Chuyển status: ONGOING → COMPLETED
  */
 @Slf4j
 @Component
-@FieldDefaults(level = AccessLevel.PRIVATE)
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+@RequiredArgsConstructor
 public class UpdatePostStatusJob implements Job {
-
-    @Autowired
     PostRepository postRepository;
-
-    @Autowired
     KafkaTemplate<String, Object> kafkaTemplate;
-
-    public UpdatePostStatusJob() {}
 
     @Override
     public void execute(JobExecutionContext context) {
@@ -48,7 +42,6 @@ public class UpdatePostStatusJob implements Job {
             var post = postRepository.findById(postId)
                     .orElseThrow(() -> new AppException(ErrorCode.POST_NOT_FOUND));
 
-            // Xử lý theo action
             switch (action) {
                 case "START":
                     handleStart(post);
@@ -56,6 +49,8 @@ public class UpdatePostStatusJob implements Job {
                 case "END":
                     handleEnd(post);
                     break;
+                default:
+                    throw new AppException(ErrorCode.ACTION_NOT_FOUND);
             }
 
         } catch (Exception e) {

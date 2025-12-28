@@ -25,11 +25,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(value = MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<java.lang.Object>> handlingMethodArgumentNotValidException(
             MethodArgumentNotValidException exception) {
-        Map<String, Object> attributes = null;
-        String enumKey = exception.getFieldError().getDefaultMessage();
+        Map<String, Object> attributes;
+        String enumKey = Objects.requireNonNull(exception.getFieldError()).getDefaultMessage();
         ErrorCode errorCode = ErrorCode.valueOf(enumKey);
 
-        var constraintViolation = exception.getBindingResult().getAllErrors().getFirst().unwrap(ConstraintViolation.class);
+        ConstraintViolation<?> constraintViolation = exception.getBindingResult().getAllErrors().getFirst().unwrap(ConstraintViolation.class);
         attributes = constraintViolation.getConstraintDescriptor().getAttributes();
 
         ApiResponse<java.lang.Object> apiResponse = new ApiResponse<>();
@@ -48,17 +48,17 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(value = AccessDeniedException.class)
-    public ResponseEntity<ApiResponse<java.lang.Object>> handlingAccessDeniedException(AccessDeniedException exception) {
+    public ResponseEntity<ApiResponse<java.lang.Object>> handlingAccessDeniedException() {
         return ApiResponse.toResponseEntity(ErrorCode.UNAUTHORIZED);
     }
 
     @ExceptionHandler(value = JobExecutionException.class)
-    public ResponseEntity<ApiResponse<java.lang.Object>> handlingJobExecutionException(JobExecutionException exception) {
+    public ResponseEntity<ApiResponse<java.lang.Object>> handlingJobExecutionException() {
         return ApiResponse.toResponseEntity(ErrorCode.JOB_EXECUTION_FAILED);
     }
 
     @ExceptionHandler(value = SchedulerException.class)
-    public ResponseEntity<ApiResponse<java.lang.Object>> handlingSchedulerException(SchedulerException exception) {
+    public ResponseEntity<ApiResponse<java.lang.Object>> handlingSchedulerException() {
         return ApiResponse.toResponseEntity(ErrorCode.SCHEDULER_FAILED);
     }
 }

@@ -24,7 +24,7 @@
 		<spotless.version>3.1.0</spotless.version>
 		<spring-cloud.version>2025.1.0</spring-cloud.version>
 		<maven-compiler-plugin.version>3.14.1</maven-compiler-plugin.version>
-		<jacoco.version>0.8.13</jacoco.version>
+		<jacoco.version>0.8.14</jacoco.version>
 		<nimbus.jose.jwt.version>10.1</nimbus.jose.jwt.version>
 		<jjwt.version>0.13.0</jjwt.version>
 		<testcontainers.bom.version>1.19.3</testcontainers.bom.version>
@@ -152,10 +152,6 @@
 						</path>
 					</annotationProcessorPaths>
 
-					<compilerArgs>
-						<arg>-Amapstruct.suppressGeneratorTimestamp=true</arg>
-						<arg>-Amapstruct.defaultComponentModel=spring</arg>
-					</compilerArgs>
 				</configuration>
 			</plugin>
 
@@ -177,6 +173,15 @@
 						</goals>
 					</execution>
 				</executions>
+				<configuration>
+					<excludes>
+						<exclude>**/dto/**</exclude>
+						<exclude>**/entity/**</exclude>
+						<exclude>**/mapper/**</exclude>
+						<exclude>**/configuration/**</exclude>\
+						<exclude>**/IdentityApplication.class</exclude>
+					</excludes>
+				</configuration>
 			</plugin>
 
 			<plugin>

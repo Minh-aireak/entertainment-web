@@ -8,6 +8,6 @@ public class PhoneNumberValidator implements ConstraintValidator<PhoneNumberCons
     public boolean isValid(String s, ConstraintValidatorContext constraintValidatorContext) {
         return s != null
                 && s.length() == 10
-                && s.matches("^0[0-9]+$");
+                && s.matches("^0\\d+$");
     }
 }

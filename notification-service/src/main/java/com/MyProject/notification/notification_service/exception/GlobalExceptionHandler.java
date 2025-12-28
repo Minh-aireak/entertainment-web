@@ -31,7 +31,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(value = AccessDeniedException.class)
-    public ResponseEntity<ApiResponse<Object>> handlingAccessDeniedException(AccessDeniedException exception) {
+    public ResponseEntity<ApiResponse<Object>> handlingAccessDeniedException() {
         return ApiResponse.toResponseEntity(ErrorCode.UNAUTHORIZED);
     }
 }

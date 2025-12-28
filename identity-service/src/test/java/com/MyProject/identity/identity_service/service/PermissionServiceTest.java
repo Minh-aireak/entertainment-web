@@ -6,10 +6,11 @@ import com.MyProject.identity.identity_service.dto.response.PermissionResponse;
 import com.MyProject.identity.identity_service.entity.Permission;
 import com.MyProject.identity.identity_service.entity.Role;
 import com.MyProject.identity.identity_service.exception.AppException;
+import com.MyProject.identity.identity_service.exception.ErrorCode;
 import com.MyProject.identity.identity_service.mapper.PermissionMapper;
 import com.MyProject.identity.identity_service.repository.PermissionRepository;
 import com.MyProject.identity.identity_service.repository.RoleRepository;
-import jakarta.transaction.Transactional;
+
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
@@ -17,16 +18,17 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.*;
 
@@ -35,18 +37,17 @@ import static org.mockito.Mockito.*;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@TestPropertySource("/test.properties")
 class PermissionServiceTest {
     @Autowired
     PermissionService permissionService;
 
-    @MockBean
+    @MockitoBean
     PermissionMapper permissionMapper;
 
-    @MockBean
+    @MockitoBean
     PermissionRepository permissionRepository;
 
-    @MockBean
+    @MockitoBean
     RoleRepository roleRepository;
 
     Permission permission;
@@ -54,45 +55,34 @@ class PermissionServiceTest {
     PermissionCreationRequest creationRequest;
     PermissionUpdateRequest updateRequest;
     Role role;
-    Role role2;
 
     @BeforeEach
     void initData(){
         permission = Permission.builder()
-                .name("READ")
-                .description("Read data")
+                .name("ADD_FRIEND")
+                .description("Add new friend")
                 .build();
 
         permissionResponse = PermissionResponse.builder()
-                .name("READ")
-                .description("Read data")
+                .name("ADD_FRIEND")
+                .description("Add new friend")
                 .build();
 
         creationRequest = PermissionCreationRequest.builder()
-                .name("READ")
-                .description("Read data")
+                .name("ADD_FRIEND")
+                .description("Add new friend")
                 .build();
 
         updateRequest = PermissionUpdateRequest.builder()
-                .description("Read data and trip information")
+                .name("ADD_FRIEND")
+                .description("Add new friend and chat with other users")
                 .build();
 
         role = Role.builder()
-                .name("ADMIN")
-                .description("Admin role")
+                .name("USER")
+                .description("User role")
                 .permissions(Set.of(permission))
                 .build();
-
-        role2 = Role.builder()
-                .name("ADMIN")
-                .description("Admin role")
-                .build();
-    }
-
-    @Test
-    void createPermission_shouldHaveTransactionalAnnotation() throws Exception{
-        Assertions.assertThat(PermissionService.class.getMethod("createPermission", PermissionCreationRequest.class)
-                .isAnnotationPresent(Transactional.class));
     }
 
     @Test
@@ -104,116 +94,98 @@ class PermissionServiceTest {
 
         var actual = permissionService.createPermission(creationRequest);
 
-        verify(permissionRepository).existsById(creationRequest.getName());
+        assertThat(actual).usingRecursiveComparison().isEqualTo(permissionResponse);
+
+        verify(permissionRepository, times(1)).existsById(creationRequest.getName());
         verify(permissionMapper, times(1)).toPermission(creationRequest);
         verify(permissionRepository, times(1)).save(permission);
         verify(permissionMapper, times(1)).toPermissionResponse(permission);
-
-        Assertions.assertThat(actual).usingRecursiveComparison().isEqualTo(permissionResponse);
     }
 
     @Test
-    void createPermission_permissionExisted_return1008(){
+    void createPermission_permissionExisted(){
         when(permissionRepository.existsById(creationRequest.getName())).thenReturn(true);
 
         var exception = assertThrows(AppException.class,
                 () -> permissionService.createPermission(creationRequest));
 
+        assertEquals(ErrorCode.PERMISSION_EXISTED, exception.getErrorCode());
+
         verify(permissionRepository).existsById(creationRequest.getName());
-
-        Assertions.assertThat(exception.getErrorCode().getCode()).isEqualTo(1008);
-        Assertions.assertThat(exception.getErrorCode().getMessage()).isEqualTo("Permission existed!");
-    }
-
-    @Test
-    void updatePermission_shouldHaveTransactionalAnnotation() throws Exception{
-        Assertions.assertThat(PermissionService.class
-                .getMethod("updatePermission", String.class, PermissionUpdateRequest.class)
-                .isAnnotationPresent(Transactional.class));
     }
 
     @Test
     void updatePermission_success(){
-        permissionResponse.setDescription("Read data and trip information");
+        permission.setDescription("Add new friend and chat with other users");
+        permissionResponse.setDescription("Add new friend and chat with other users");
 
-        when(permissionRepository.findById("READ")).thenReturn(Optional.of(permission));
-        doNothing().when(permissionMapper).update(permission, updateRequest);
+        when(permissionRepository.findById(updateRequest.getName())).thenReturn(Optional.of(permission));
         when(permissionRepository.save(permission)).thenReturn(permission);
         when(permissionMapper.toPermissionResponse(permission)).thenReturn(permissionResponse);
 
-        var actual = permissionService.updatePermission("READ", updateRequest);
+        var actual = permissionService.updatePermission(updateRequest);
 
-        verify(permissionRepository).findById("READ");
-        verify(permissionMapper).update(permission, updateRequest);
-        verify(permissionRepository).save(permission);
-        verify(permissionMapper).toPermissionResponse(permission);
-
-        Assertions.assertThat(actual.getDescription()).isEqualTo("Read data and trip information");
         Assertions.assertThat(actual).usingRecursiveComparison().isEqualTo(permissionResponse);
+
+        verify(permissionRepository, times(1)).findById(any());
+        verify(permissionMapper, times(1)).update(any(), any());
+        verify(permissionRepository, times(1)).save(any());
+        verify(permissionMapper, times(1)).toPermissionResponse(any());
     }
 
     @Test
-    void updatePermission_permissionNotExisted_return1009(){
-        when(permissionRepository.findById("READ")).thenReturn(Optional.empty());
+    void updatePermission_permissionNotExisted(){
+        when(permissionRepository.findById(updateRequest.getName())).thenReturn(Optional.empty());
 
         var exception = assertThrows(AppException.class,
-                () -> permissionService.updatePermission("READ", updateRequest));
+                () -> permissionService.updatePermission(updateRequest));
 
-        verify(permissionRepository).findById("READ");
+        assertEquals(ErrorCode.PERMISSION_NOT_EXISTED, exception.getErrorCode());
 
-        Assertions.assertThat(exception.getErrorCode().getCode()).isEqualTo(1009);
-        Assertions.assertThat(exception.getErrorCode().getMessage()).isEqualTo("Permission not found!");
-    }
-
-    @Test
-    void deletePermission_shouldHaveTransactionalAnnotation() throws NoSuchMethodException {
-        Assertions.assertThat(PermissionService.class.getMethod("deletePermission", String.class)
-                .isAnnotationPresent(Transactional.class));
+        verify(permissionRepository, times(1)).findById(any());
+        verify(permissionMapper, never()).update(any(), any());
+        verify(permissionRepository, never()).save(any());
+        verify(permissionMapper, never()).toPermissionResponse(any());
     }
 
     @Test
     void deletePermission_success(){
-        when(permissionRepository.findById("READ")).thenReturn(Optional.of(permission));
-        when(roleRepository.findAllByPermissionsContaining(permission))
-                .thenReturn(List.of(role));
-        doNothing().when(roleRepository).removePermissionFromRoles(any(), any());
+        when(permissionRepository.findById("ADD_FRIEND")).thenReturn(Optional.of(permission));
+        when(roleRepository.findAllByPermissionsContaining(permission)).thenReturn(List.of(role));
 
-        permissionService.deletePermission("READ");
+        permissionService.deletePermission("ADD_FRIEND");
 
-        verify(permissionRepository).findById("READ");
-        verify(roleRepository).findAllByPermissionsContaining(permission);
-        verify(roleRepository).removePermissionFromRoles(any(), any());
+        verify(permissionRepository, times(1)).findById(any());
+        verify(roleRepository, times(1)).findAllByPermissionsContaining(any());
+        verify(roleRepository, times(1)).removePermissionFromRoles(any(), any());
+        verify(permissionRepository, times(1)).deleteById(any());
     }
 
     @Test
-    void deletePermission_permissionNotExisted_return1009(){
-        when(permissionRepository.findById("READ")).thenReturn(Optional.empty());
+    void deletePermission_permissionNotExisted(){
+        when(permissionRepository.findById("ADD_FRIEND")).thenReturn(Optional.empty());
 
         var exception = assertThrows(AppException.class,
                 () -> permissionService.deletePermission("READ"));
 
-        Assertions.assertThat(exception.getErrorCode().getCode()).isEqualTo(1009);
-        Assertions.assertThat(exception.getErrorCode().getMessage()).isEqualTo("Permission not found!");
-    }
+        assertEquals(ErrorCode.PERMISSION_NOT_EXISTED, exception.getErrorCode());
 
-    @Test
-    void getAllPermission_shouldHaveTransactionalAnnotation() throws Exception{
-        Assertions.assertThat(PermissionService.class.getMethod("getAllPermissions")
-                .isAnnotationPresent(Transactional.class));
+        verify(permissionRepository, times(1)).findById(any());
+        verify(roleRepository, never()).findAllByPermissionsContaining(any());
+        verify(roleRepository, never()).removePermissionFromRoles(any(), any());
+        verify(permissionRepository, never()).deleteById(any());
     }
 
     @Test
     void getAllPermission_success(){
         when(permissionRepository.findAll()).thenReturn(List.of(permission));
-        when(permissionMapper.toListPermissionResponse(List.of(permission)))
-                .thenReturn(List.of(permissionResponse));
+        when(permissionMapper.toListPermissionResponse(List.of(permission))).thenReturn(List.of(permissionResponse));
 
         var response = permissionService.getAllPermissions();
 
-        verify(permissionRepository).findAll();
-        verify(permissionMapper).toListPermissionResponse(List.of(permission));
+        assertThat(response).usingRecursiveComparison().isEqualTo(List.of(permissionResponse));
 
-        Assertions.assertThat(response).usingRecursiveComparison()
-                .isEqualTo(List.of(permissionResponse));
+        verify(permissionRepository, times(1)).findAll();
+        verify(permissionMapper, times(1)).toListPermissionResponse(List.of(permission));
     }
 }

@@ -15,4 +15,5 @@ public class UserResponse {
     String username;
     String email;
     Set<RoleResponse> roles;
+    boolean active;
 }

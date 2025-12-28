@@ -1,21 +1,17 @@
 package com.MyProject.identity.identity_service.controller;
 
-import java.text.ParseException;
-
+import com.MyProject.common_dto.event.dto.IntrospectRequest;
+import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
-import com.nimbusds.jose.JOSEException;
 import com.MyProject.identity.identity_service.dto.request.AuthenticationRequest;
-import com.MyProject.identity.identity_service.dto.request.IntrospectRequest;
 import com.MyProject.identity.identity_service.dto.request.LogoutRequest;
 import com.MyProject.identity.identity_service.dto.request.RefreshRequest;
 import com.MyProject.identity.identity_service.dto.response.ApiResponse;
 import com.MyProject.identity.identity_service.dto.response.AuthenticationResponse;
-import com.MyProject.identity.identity_service.dto.response.IntrospectResponse;
 import com.MyProject.identity.identity_service.service.AuthenticationService;
+import com.MyProject.common_dto.event.dto.IntrospectResponse;
 
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -29,35 +25,33 @@ public class AuthenticationController {
     AuthenticationService authenticationService;
 
     @PostMapping("/login")
-    ApiResponse<AuthenticationResponse> authenticate(@RequestBody AuthenticationRequest request) throws JOSEException {
+    ApiResponse<AuthenticationResponse> authenticate(@RequestBody @Valid AuthenticationRequest request) {
         var result = authenticationService.authentication(request);
         return ApiResponse.<AuthenticationResponse>builder().result(result).build();
     }
 
     @PostMapping("/introspect")
-    ApiResponse<IntrospectResponse> introspect(@RequestBody IntrospectRequest request) throws ParseException {
+    ApiResponse<IntrospectResponse> introspect(@RequestBody IntrospectRequest request) {
         var result = authenticationService.introspectResponse(request);
         return ApiResponse.<IntrospectResponse>builder().result(result).build();
     }
 
-    @PostMapping("/logout")
+    @PostMapping("/me")
     @PreAuthorize("isAuthenticated()")
-    ApiResponse<Void> logout(@RequestBody LogoutRequest request, @AuthenticationPrincipal Jwt jwt)
-            throws ParseException, JOSEException {
-        authenticationService.logout(request, jwt);
+    ApiResponse<Void> logout(@RequestBody LogoutRequest request) {
+        authenticationService.logout(request);
         return ApiResponse.<Void>builder().build();
     }
 
-    @PostMapping("/refresh")
+    @PostMapping("/refresh-token")
     @PreAuthorize("isAuthenticated()")
-    ApiResponse<AuthenticationResponse> refresh(@RequestBody RefreshRequest request, @AuthenticationPrincipal Jwt jwt)
-            throws JOSEException, ParseException {
-        var result = authenticationService.refreshToken(request, jwt);
+    ApiResponse<AuthenticationResponse> refresh(@RequestBody RefreshRequest request) {
+        var result = authenticationService.refreshToken(request);
         return ApiResponse.<AuthenticationResponse>builder().result(result).build();
     }
 
-    @PostMapping("/outbound/authentication")
-    ApiResponse<AuthenticationResponse> outboundAuthenticate(@RequestParam("code") String code) throws JOSEException {
+    @PostMapping("/outbound/google")
+    ApiResponse<AuthenticationResponse> outboundAuthenticate(@RequestParam("code") String code) {
         var result = authenticationService.outboundAuthenticate(code);
         return ApiResponse.<AuthenticationResponse>builder().result(result).build();
     }

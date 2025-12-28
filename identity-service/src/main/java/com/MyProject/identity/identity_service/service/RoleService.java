@@ -46,8 +46,8 @@ public class RoleService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public RoleResponse updateRole(String name, RoleUpdateRequest request) {
-        Role role = roleRepository.findByName(name).orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
+    public RoleResponse updateRole(RoleUpdateRequest request) {
+        Role role = roleRepository.findByName(request.getName()).orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
 
         if (request.getPermissions() != null) {
             var permissions = new HashSet<>(permissionRepository.findAllById(request.getPermissions()));

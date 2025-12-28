@@ -31,12 +31,15 @@ public class FileService {
     FileMgmtMapper fileMgmtMapper;
 
     @Transactional
-    public FileResponse uploadFile(MultipartFile multipartFile) throws IOException {
+    public FileResponse uploadFile(MultipartFile multipartFile) {
         try {
             var fileInfo = fileRepository.store(multipartFile);
 
             var fileMgmt = fileMgmtMapper.toFileMgmt(fileInfo);
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (!(authentication instanceof JwtAuthenticationToken)) {
+                throw new AppException(ErrorCode.UNAUTHORIZED);
+            }
             Jwt jwt = ((JwtAuthenticationToken) authentication).getToken();
             fileMgmt.setOwnerId(jwt.getClaim("userId"));
 

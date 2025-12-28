@@ -7,54 +7,49 @@ import com.MyProject.identity.identity_service.dto.response.RoleResponse;
 import com.MyProject.identity.identity_service.entity.Permission;
 import com.MyProject.identity.identity_service.entity.Role;
 import com.MyProject.identity.identity_service.exception.AppException;
+import com.MyProject.identity.identity_service.exception.ErrorCode;
 import com.MyProject.identity.identity_service.mapper.RoleMapper;
 import com.MyProject.identity.identity_service.repository.PermissionRepository;
 import com.MyProject.identity.identity_service.repository.RoleRepository;
-import jakarta.transaction.Transactional;
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @SpringBootTest
 @Slf4j
 @FieldDefaults(level = AccessLevel.PRIVATE)
-@AutoConfigureMockMvc
 @ActiveProfiles("test")
-@TestPropertySource("/test.properties")
 class RoleServiceTest {
     @Autowired
     RoleService roleService;
 
-    @MockBean
+    @MockitoBean
     RoleMapper roleMapper;
 
-    @MockBean
+    @MockitoBean
     PermissionRepository permissionRepository;
 
-    @MockBean
+    @MockitoBean
     RoleRepository roleRepository;
 
     Permission permission;
     Permission permission2;
     PermissionResponse permissionResponse;
-    PermissionResponse permissionResponse2;
     Role role;
     Role role2;
     RoleResponse roleResponse;
@@ -79,7 +74,7 @@ class RoleServiceTest {
                 .description("Create the trip")
                 .build();
 
-        permissionResponse2 = PermissionResponse.builder()
+        PermissionResponse permissionResponse2 = PermissionResponse.builder()
                 .name("ADD_FRIENDS")
                 .description("Can add friends")
                 .build();
@@ -115,15 +110,10 @@ class RoleServiceTest {
                 .build();
 
         updateRequest = RoleUpdateRequest.builder()
+                .name("USER")
                 .description("User role updated")
                 .permissions(Set.of("ADD_FRIENDS"))
                 .build();
-    }
-
-    @Test
-    void createRole_shouldHaveTransactionalAnnotation() throws Exception{
-        Assertions.assertThat(RoleService.class.getMethod("createRole", RoleCreationRequest.class)
-                .isAnnotationPresent(Transactional.class));
     }
 
     @Test
@@ -136,30 +126,34 @@ class RoleServiceTest {
 
         var actual = roleService.createRole(creationRequest);
 
-        verify(roleRepository).existsById(creationRequest.getName());
-        verify(roleMapper, times(1)).toRole(creationRequest);
-        verify(permissionRepository, times(1)).findAllById(creationRequest.getPermissions());
-        verify(roleRepository, times(1)).save(role);
-        verify(roleMapper).toRoleResponse(role);
+        assertThat(actual).isSameAs(roleResponse);
+        assertThat(actual).usingRecursiveComparison().isEqualTo(roleResponse);
 
-        Assertions.assertThat(actual).usingRecursiveComparison().isEqualTo(roleResponse);
+        verify(roleRepository).existsById(any());
+        verify(roleMapper, times(1)).toRole(any());
+        verify(permissionRepository, times(1)).findAllById(any());
+        verify(roleRepository, times(1)).save(any());
+        verify(roleMapper).toRoleResponse(any());
     }
 
     @Test
-    void createRole_roleExisted_return1006(){
+    void createRole_roleExisted(){
         when(roleRepository.existsById(creationRequest.getName())).thenReturn(true);
 
         var exception = assertThrows(AppException.class,
                 () -> roleService.createRole(creationRequest));
 
-        verify(roleRepository).existsById(creationRequest.getName());
+        assertEquals(ErrorCode.ROLE_EXISTED, exception.getErrorCode());
 
-        Assertions.assertThat(exception.getErrorCode().getCode()).isEqualTo(1006);
-        Assertions.assertThat(exception.getErrorCode().getMessage()).isEqualTo("Role existed!");
+        verify(roleRepository, times(1)).existsById(any());
+        verify(roleMapper, never()).toRole(any());
+        verify(permissionRepository, never()).findAllById(any());
+        verify(roleRepository, never()).save(any());
+        verify(roleMapper, never()).toRoleResponse(any());
     }
 
     @Test
-    void createRole_permissionNotExisted_return1009(){
+    void createRole_permissionNotExisted() {
         creationRequest.setPermissions(Set.of("CREATE_TRIP", "ADD_FRIENDS"));
         when(roleRepository.existsById(creationRequest.getName())).thenReturn(false);
         when(roleMapper.toRole(creationRequest)).thenReturn(role);
@@ -168,106 +162,88 @@ class RoleServiceTest {
         var exception = assertThrows(AppException.class,
                 () -> roleService.createRole(creationRequest));
 
-        verify(roleRepository).existsById(creationRequest.getName());
-        verify(roleMapper, times(1)).toRole(creationRequest);
-        verify(permissionRepository, times(1)).findAllById(creationRequest.getPermissions());
+        assertEquals(ErrorCode.PERMISSION_NOT_EXISTED, exception.getErrorCode());
 
-        Assertions.assertThat(exception.getErrorCode().getCode()).isEqualTo(1009);
-        Assertions.assertThat(exception.getErrorCode().getMessage())
-                .isEqualTo("Permission not found!");
-    }
-
-    @Test
-    void updateRole_shouldHaveTransactionalAnnotation() throws Exception{
-        Assertions.assertThat(RoleService.class.getMethod("updateRole", String.class, RoleUpdateRequest.class)
-                .isAnnotationPresent(Transactional.class));
+        verify(roleRepository).existsById(any());
+        verify(roleMapper, times(1)).toRole(any());
+        verify(permissionRepository, times(1)).findAllById(any());
+        verify(roleRepository, never()).save(any());
+        verify(roleMapper, never()).toRoleResponse(any());
     }
 
     @Test
     void updateRole_success(){
-        when(roleRepository.findByName("USER")).thenReturn(Optional.of(role));
+        when(roleRepository.findByName(updateRequest.getName())).thenReturn(Optional.of(role));
         when(permissionRepository.findAllById(updateRequest.getPermissions())).thenReturn(List.of(permission2));
-        doNothing().when(roleMapper).update(role, updateRequest);
         when(roleRepository.save(role)).thenReturn(role2);
         when(roleMapper.toRoleResponse(role2)).thenReturn(roleResponse2);
 
-        var actual = roleService.updateRole("USER", updateRequest);
+        var actual = roleService.updateRole(updateRequest);
 
-        verify(roleRepository).findByName("USER");
-        verify(permissionRepository, times(1)).findAllById(updateRequest.getPermissions());
-        verify(roleMapper).update(role, updateRequest);
-        verify(roleRepository).save(role);
-        verify(roleMapper).toRoleResponse(role2);
+        assertThat(actual).isSameAs(roleResponse2);
+        assertThat(actual).usingRecursiveComparison().isEqualTo(roleResponse2);
 
-        Assertions.assertThat(actual).usingRecursiveComparison().isEqualTo(roleResponse2);
+        verify(roleRepository, times(1)).findByName(any());
+        verify(permissionRepository, times(1)).findAllById(any());
+        verify(roleMapper, times(1)).update(any(), any());
+        verify(roleRepository, times(1)).save(any());
+        verify(roleMapper, times(1)).toRoleResponse(any());
     }
 
     @Test
-    void updateRole_roleNotExisted_return1007(){
-        when(roleRepository.findByName("USER")).thenReturn(Optional.empty());
+    void updateRole_roleNotExisted(){
+        when(roleRepository.findByName(updateRequest.getName())).thenReturn(Optional.empty());
 
         var exception = assertThrows(AppException.class,
-                () -> roleService.updateRole("USER", updateRequest));
+                () -> roleService.updateRole(updateRequest));
 
-        verify(roleRepository).findByName("USER");
+        assertEquals(ErrorCode.ROLE_NOT_EXISTED, exception.getErrorCode());
 
-        Assertions.assertThat(exception.getErrorCode().getCode()).isEqualTo(1007);
-        Assertions.assertThat(exception.getErrorCode().getMessage()).isEqualTo("Role not existed!");
+        verify(roleRepository, times(1)).findByName(any());
     }
 
     @Test
-    void updateRole_permissionsNull_notCallPermissionRepository(){
+    void updateRole_permissionsNull(){
         updateRequest.setPermissions(null);
         roleResponse2.setPermissions(Set.of(permissionResponse));
         role2.setPermissions(Set.of(permission));
 
         when(roleRepository.findByName("USER")).thenReturn(Optional.of(role));
-        doNothing().when(roleMapper).update(role, updateRequest);
         when(roleRepository.save(role)).thenReturn(role2);
         when(roleMapper.toRoleResponse(role2)).thenReturn(roleResponse2);
 
-        var actual = roleService.updateRole("USER", updateRequest);
+        var actual = roleService.updateRole(updateRequest);
 
-        verify(roleRepository).findByName("USER");
-        verify(roleMapper, times(1)).update(role, updateRequest);
+        assertThat(actual).isSameAs(roleResponse2);
+        assertThat(actual).usingRecursiveComparison().isEqualTo(roleResponse2);
+
+        verify(roleRepository, times(1)).findByName(any());
+        verify(roleMapper, times(1)).update(any(), any());
         verify(permissionRepository, never()).findAllById(any());
-        verify(roleRepository).save(role);
-        verify(roleMapper).toRoleResponse(role2);
-
-        Assertions.assertThat(actual).usingRecursiveComparison().isEqualTo(roleResponse2);
-    }
-
-    @Test
-    void deleteRole_shouldHaveTransactionalAnnotation() throws NoSuchMethodException {
-        Assertions.assertThat(RoleService.class.getMethod("deleteRole", String.class)
-                .isAnnotationPresent(Transactional.class));
+        verify(roleRepository, times(1)).save(any());
+        verify(roleMapper, times(1)).toRoleResponse(any());
     }
 
     @Test
     void deleteRole_success(){
         when(roleRepository.existsById("USER")).thenReturn(true);
-        doNothing().when(roleRepository).deleteById("USER");
 
         roleService.deleteRole("USER");
 
-        verify(roleRepository).existsById("USER");
-        verify(roleRepository, times(1)).deleteById("USER");
+        verify(roleRepository, times(1)).existsById(any());
+        verify(roleRepository, times(1)).deleteById(any());
     }
 
     @Test
-    void deleteRole_roleNotExisted_return(){
+    void deleteRole_roleNotExisted(){
         when(roleRepository.existsById("USER")).thenReturn(false);
 
         var exception = assertThrows(AppException.class, () -> roleService.deleteRole("USER"));
 
-        Assertions.assertThat(exception.getErrorCode().getCode()).isEqualTo(1007);
-        Assertions.assertThat(exception.getErrorCode().getMessage()).isEqualTo("Role not existed!");
-    }
+        assertEquals(ErrorCode.ROLE_NOT_EXISTED, exception.getErrorCode());
 
-    @Test
-    void getAllRoles_shouldHaveTransactionalAnnotation() throws Exception{
-        Assertions.assertThat(RoleService.class.getMethod("getAllRoles")
-                .isAnnotationPresent(Transactional.class));
+        verify(roleRepository, times(1)).existsById(any());
+        verify(roleRepository, never()).deleteById(any());
     }
 
     @Test
@@ -277,10 +253,10 @@ class RoleServiceTest {
 
         var response = roleService.getAllRoles();
 
-        verify(roleRepository).findAll();
-        verify(roleMapper).toListRoleResponse(List.of(role));
+        assertThat(response).usingRecursiveComparison().isEqualTo(List.of(roleResponse));
 
-        Assertions.assertThat(response).usingRecursiveComparison()
-                .isEqualTo(List.of(roleResponse));
+        verify(roleRepository, times(1)).findAll();
+        verify(roleMapper, times(1)).toListRoleResponse(any());
     }
 }
+

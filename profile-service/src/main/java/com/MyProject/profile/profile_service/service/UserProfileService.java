@@ -40,6 +40,14 @@ public class UserProfileService {
     FileClient client;
     KafkaTemplate<String, Object> kafkaTemplate;
 
+    private String getUserName(){
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
+        return authentication.getName();
+    }
+
     @Transactional(rollbackFor = Exception.class)
     public UserProfileResponse createProfile(UserProfileCreationRequest request){
         UserProfile userProfile = userProfileMapper.toUserProfile(request);
@@ -48,8 +56,8 @@ public class UserProfileService {
 
     @Transactional(rollbackFor = Exception.class)
     public UserProfileResponse updateProfile(UserProfileUpdateRequest request){
-        var authentication = SecurityContextHolder.getContext().getAuthentication();
-        UserProfile profile = userProfileRepository.findByUsername(authentication.getName());
+        String userName = getUserName();
+        UserProfile profile = userProfileRepository.findByUsername(userName);
         String oldDisplayName = profile.getDisplayName();
 
         userProfileMapper.update(profile, request);
@@ -72,8 +80,8 @@ public class UserProfileService {
 
     @Transactional
     public UserProfileResponse getMyInfo(){
-        var authentication = SecurityContextHolder.getContext().getAuthentication();
-        UserProfile profile = userProfileRepository.findByUsername(authentication.getName());
+        String userName = getUserName();
+        UserProfile profile = userProfileRepository.findByUsername(userName);
 
         return userProfileMapper.toUserProfileResponse(profile);
     }
@@ -104,8 +112,8 @@ public class UserProfileService {
 
     @Transactional
     public UserProfileResponse updateAvatar(MultipartFile multipartFile){
-        var authentication = SecurityContextHolder.getContext().getAuthentication();
-        UserProfile profile = userProfileRepository.findByUsername(authentication.getName());
+        String userName = getUserName();
+        UserProfile profile = userProfileRepository.findByUsername(userName);
 
         var response = client.uploadAvatar(multipartFile);
         String newAvatar = response.getResult().getUrl();

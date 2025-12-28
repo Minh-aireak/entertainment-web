@@ -39,6 +39,9 @@ public class ConversationService {
 
     private String getUserId(){
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (!(authentication instanceof JwtAuthenticationToken)) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
         Jwt jwt = ((JwtAuthenticationToken) authentication).getToken();
         return jwt.getClaim("userId");
     }
@@ -54,19 +57,19 @@ public class ConversationService {
 
     private ConversationResponse toConversationResponse(Conversation conversation) {
         ConversationResponse conversationResponse;
-        if (conversation instanceof ConversationDirect conversationDirect) {
-            conversationResponse = conversationMapper.toConversationDirectResponse(conversationDirect);
+        switch (conversation) {
+            case ConversationDirect conversationDirect -> {
+                conversationResponse = conversationMapper.toConversationDirectResponse(conversationDirect);
 
-            conversationResponse.getParticipantInfos().stream()
-                    .filter(participantInfo -> !participantInfo.getUserId().equals(getUserId()))
-                    .findFirst().ifPresent(participantInfo -> {
-                        conversationResponse.setDirectName(participantInfo.getDisplayName());
-                        conversationResponse.setDirectAvatar(participantInfo.getAvatar());
-                    });
-        } else if (conversation instanceof ConversationGroup conversationGroup) {
-            conversationResponse = conversationMapper.toConversationGroupResponse(conversationGroup);
-        } else {
-            throw new AppException(ErrorCode.TYPE_CONVERSATION_ERROR);
+                conversationResponse.getParticipantInfos().stream()
+                        .filter(participantInfo -> !participantInfo.getUserId().equals(getUserId()))
+                        .findFirst().ifPresent(participantInfo -> {
+                            conversationResponse.setDirectName(participantInfo.getDisplayName());
+                            conversationResponse.setDirectAvatar(participantInfo.getAvatar());
+                        });
+            }
+            case ConversationGroup conversationGroup -> conversationResponse = conversationMapper.toConversationGroupResponse(conversationGroup);
+            default -> throw new AppException(ErrorCode.TYPE_CONVERSATION_ERROR);
         }
 
         return conversationResponse;
@@ -155,9 +158,7 @@ public class ConversationService {
 
     @Transactional
     public List<ConversationResponse> getMyConversations() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        Jwt jwt = ((JwtAuthenticationToken) authentication).getToken();
-        String userId = jwt.getClaim("userId");
+        String userId = getUserId();
 
         return conversationRepository.findAllByUserId(userId)
                 .stream()

@@ -15,7 +15,7 @@ spring:
       properties:
         spring.json.add.type.headers: true
   neo4j:
-    uri: bolt://${NEO4J_HOST}:${NEO4J_PORT}
+    uri: bolt://${NEO4J_HOST}:7687
     authentication:
       username: ${NEO4J_USERNAME}
       password: ${NEO4J_PASSWORD}

@@ -1,8 +1,0 @@
-server:
-  port: 8089
-  servlet:
-    context-path: /common-dto
-
-spring:
-  application:
-    name: common-dto

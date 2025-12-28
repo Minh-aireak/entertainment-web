@@ -38,7 +38,7 @@ public class FileController {
         headers.setContentDisposition(contentDisposition);
         headers.setContentType(MediaType.parseMediaType(fileDownload.contentType()));
 
-        return ResponseEntity.<Resource>ok()
+        return ResponseEntity.ok()
                 .headers(headers)
                 .body(fileDownload.resource());
     }

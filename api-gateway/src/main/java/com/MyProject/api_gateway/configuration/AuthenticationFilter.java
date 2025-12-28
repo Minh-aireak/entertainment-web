@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.annotation.Order;
@@ -36,11 +37,13 @@ public class AuthenticationFilter implements GlobalFilter, Order {
 
     @NonFinal
     private String[] publicEndpoint = {
-            "/identity/auth/login",
-            "/identity/users/registration",
-            "/identity/auth/outbound/authentication",
-            "/identity/auth/refresh",
-            "/file/media/download/.*"};
+            "/api/v1/identity/auth/login",
+            "/api/v1/identity/auth/introspect",
+            "/api/v1/identity/auth/outbound/google",
+            "/api/v1/identity/users/forgot-password",
+            "/api/v1/identity/users/reset-password",
+            "/api/v1/identity/users/registration",
+            "/api/v1/file/media/download/.*"};
 
     @Override
     public Class<? extends Annotation> annotationType() {
@@ -52,7 +55,7 @@ public class AuthenticationFilter implements GlobalFilter, Order {
     }
 
     @Override
-    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+    public Mono<Void> filter(ServerWebExchange exchange, @NonNull GatewayFilterChain chain) {
         if(isPublicEndpoint(exchange.getRequest()))
             return chain.filter(exchange);
 
@@ -67,9 +70,7 @@ public class AuthenticationFilter implements GlobalFilter, Order {
                 return chain.filter(exchange);
             }else
                 return unauthenticated(exchange.getResponse());
-        }) .onErrorResume(e -> {
-            return unauthenticated(exchange.getResponse());
-        });
+        }) .onErrorResume(e -> unauthenticated(exchange.getResponse()));
     }
 
     @Override

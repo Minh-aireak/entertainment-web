@@ -12,7 +12,6 @@ import lombok.experimental.FieldDefaults;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public enum ErrorCode {
-    ERROR_UNDETERMINED(9999, "Undetermined!", HttpStatus.INTERNAL_SERVER_ERROR),
     USERNAME_EXISTED(8001, "User existed!", HttpStatus.BAD_REQUEST),
     USER_NOT_EXISTED(8002, "User not existed!", HttpStatus.NOT_FOUND),
     USERNAME_INVALID(8003, "Username must be at least {min} characters!", HttpStatus.BAD_REQUEST),
@@ -25,16 +24,21 @@ public enum ErrorCode {
     PASSWORD_INCORRECT(8010, "Password incorrect!", HttpStatus.BAD_REQUEST),
     UNAUTHENTICATED(8011, "Unauthenticated!", HttpStatus.UNAUTHORIZED),
     UNAUTHORIZED(8012, "You don't have permission!", HttpStatus.FORBIDDEN),
-    NAME_INVALID(8013, "Name cannot be blank!", HttpStatus.BAD_REQUEST),
+    ERROR_UNDETERMINED(8013, "Undetermined!", HttpStatus.INTERNAL_SERVER_ERROR),
     TOKEN_INVALID(8014, "Token invalid!", HttpStatus.UNAUTHORIZED),
     TOKEN_ALREADY_INVALIDATED(8015, "Token already invalidated!", HttpStatus.BAD_REQUEST),
     USERNAME_NOTNULL(8016, "Username cannot be null!", HttpStatus.BAD_REQUEST),
     PASSWORD_NOTNULL(8017, "Password cannot be null!", HttpStatus.BAD_REQUEST),
-    DOB_NOTNULL(8018, "Day of birth cannot be null!", HttpStatus.BAD_REQUEST),
-    INVALID_DOB(8019, "You must be at least {min} years old!", HttpStatus.BAD_REQUEST),
-    WEAK_KEY(8020, "Key length is weak!", HttpStatus.BAD_REQUEST),
-    ACCESS_DENIED(8021, "Token not owned by user!", HttpStatus.FORBIDDEN),
-    INVALID_PHONE_NUMBER(8022, "Phone number invalid!", HttpStatus.BAD_REQUEST);
+    WEAK_KEY(8018, "Key length is weak!", HttpStatus.BAD_REQUEST),
+    ACCESS_DENIED(8019, "Token not owned by user!", HttpStatus.FORBIDDEN),
+    VERIFY_TOKEN_FAILED(8020, "Verify token failed!", HttpStatus.BAD_REQUEST),
+    PARSE_EXCEPTION(8021, "Parse exception!", HttpStatus.BAD_REQUEST),
+    SIGNER_EXCEPTION(8022, "Signer key invalid!", HttpStatus.INTERNAL_SERVER_ERROR),
+    USER_NOT_ACTIVE(8023, "User not existed!", HttpStatus.BAD_REQUEST),
+    EMAIL_NOT_EXISTED(8024, "Email not existed!", HttpStatus.BAD_REQUEST),
+    INVALID_TOKEN_RESET(8025, "Invalid token reset!", HttpStatus.BAD_REQUEST),
+    TOKEN_EXPIRED(8026, "Token expired!", HttpStatus.BAD_REQUEST),
+    EMAIL_INVALID(8027, "Email invalid!", HttpStatus.BAD_REQUEST);
 
     int code;
     String message;

@@ -3,7 +3,6 @@ package com.MyProject.chat_service.service;
 import com.MyProject.chat_service.dto.request.ChatMessageCreateRequest;
 import com.MyProject.chat_service.dto.request.ChatMessageDeleteRequest;
 import com.MyProject.chat_service.dto.request.ChatMessageUpdateRequest;
-import com.MyProject.chat_service.dto.response.ChatMessageResponse;
 import com.MyProject.chat_service.dto.response.PageResponse;
 import com.MyProject.chat_service.entity.*;
 import com.MyProject.chat_service.exception.AppException;
@@ -12,6 +11,7 @@ import com.MyProject.chat_service.mapper.ChatMessageMapper;
 import com.MyProject.chat_service.repository.ChatMessageRepository;
 import com.MyProject.chat_service.repository.ConversationRepository;
 import com.MyProject.chat_service.repository.httpclient.ProfileClient;
+import com.MyProject.common_dto.event.dto.ChatMessageResponse;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -44,6 +44,9 @@ public class ChatMessageService {
 
     private String getUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (!(authentication instanceof JwtAuthenticationToken)) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
         Jwt jwt = ((JwtAuthenticationToken) authentication).getToken();
         return jwt.getClaim("userId");
     }

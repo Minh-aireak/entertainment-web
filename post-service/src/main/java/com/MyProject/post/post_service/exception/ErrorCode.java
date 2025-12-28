@@ -22,7 +22,8 @@ public enum ErrorCode {
     SCHEDULER_FAILED(8309, "Scheduler failed!", HttpStatus.INTERNAL_SERVER_ERROR),
     SCHEDULER_EXCEPTION(8310, "Scheduler exception!", HttpStatus.INTERNAL_SERVER_ERROR),
     DELETE_POST(8311, "Cannot cancel completed post!", HttpStatus.INTERNAL_SERVER_ERROR),
-    DELETE_JOB(8312, "Delete job throw exception!", HttpStatus.INTERNAL_SERVER_ERROR);
+    DELETE_JOB(8312, "Delete job throw exception!", HttpStatus.INTERNAL_SERVER_ERROR),
+    ACTION_NOT_FOUND(8313, "Action not found!", HttpStatus.BAD_REQUEST);
 
     int code;
     String message;

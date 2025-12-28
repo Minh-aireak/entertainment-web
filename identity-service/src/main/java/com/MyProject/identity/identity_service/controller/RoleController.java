@@ -22,7 +22,7 @@ import lombok.experimental.FieldDefaults;
 public class RoleController {
     RoleService roleService;
 
-    @PostMapping("/create")
+    @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     ApiResponse<RoleResponse> createRole(@RequestBody RoleCreationRequest request) {
         return ApiResponse.<RoleResponse>builder()
@@ -30,11 +30,11 @@ public class RoleController {
                 .build();
     }
 
-    @PutMapping("/{name}")
+    @PutMapping
     @PreAuthorize("hasRole('ADMIN')")
-    ApiResponse<RoleResponse> updateRole(@PathVariable String name, @RequestBody RoleUpdateRequest request) {
+    ApiResponse<RoleResponse> updateRole(@RequestBody RoleUpdateRequest request) {
         return ApiResponse.<RoleResponse>builder()
-                .result(roleService.updateRole(name, request))
+                .result(roleService.updateRole(request))
                 .build();
     }
 
@@ -45,7 +45,7 @@ public class RoleController {
         return ApiResponse.<Void>builder().message("Deleted role success!").build();
     }
 
-    @GetMapping("/read")
+    @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
     ApiResponse<List<RoleResponse>> getAllRoles() {
         return ApiResponse.<List<RoleResponse>>builder()

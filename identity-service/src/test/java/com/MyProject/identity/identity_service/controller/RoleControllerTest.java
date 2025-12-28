@@ -8,11 +8,11 @@ import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
-import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
@@ -33,7 +33,7 @@ import lombok.experimental.FieldDefaults;
 @SpringBootTest
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @AutoConfigureMockMvc
-@TestPropertySource("/test.properties")
+@ActiveProfiles("test")
 class RoleControllerTest {
     @Autowired
     MockMvc mockMvc;
@@ -45,11 +45,16 @@ class RoleControllerTest {
     RoleUpdateRequest updateRequest;
     RoleResponse roleResponse;
     ObjectMapper objectMapper;
+    PermissionResponse permission1;
+    PermissionResponse permission2;
+    String nameRoleForDelete;
 
     @BeforeEach
     void initData() {
         objectMapper = new ObjectMapper();
-        PermissionResponse permission1 = new PermissionResponse("TEST_PERMISSION1", "Permission1 for test");
+
+        permission1 = new PermissionResponse("TEST_PERMISSION1", "Permission1 for test");
+        permission2 = new PermissionResponse("TEST_PERMISSION2", "Permission2 for test");
 
         creationRequest = RoleCreationRequest.builder()
                 .name("TEST_ROLE")
@@ -58,6 +63,7 @@ class RoleControllerTest {
                 .build();
 
         updateRequest = RoleUpdateRequest.builder()
+                .name("TEST_ROLE")
                 .description("Role for test updated")
                 .permissions(Set.of("TEST_PERMISSION2"))
                 .build();
@@ -67,6 +73,8 @@ class RoleControllerTest {
                 .description("Role for test")
                 .permissions(Set.of(permission1))
                 .build();
+
+        nameRoleForDelete = "TEST_ROLE";
     }
 
     @Test
@@ -76,7 +84,7 @@ class RoleControllerTest {
 
         when(roleService.createRole(creationRequest)).thenReturn(roleResponse);
 
-        mockMvc.perform(MockMvcRequestBuilders.post("/roles/create")
+        mockMvc.perform(MockMvcRequestBuilders.post("/roles")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isOk())
@@ -93,28 +101,28 @@ class RoleControllerTest {
 
     @Test
     @WithMockUser(roles = "OtherRoles")
-    void createRole_unAuthority_return403() throws Exception {
+    void createRole_unAuthority() throws Exception {
         String content = objectMapper.writeValueAsString(creationRequest);
 
-        mockMvc.perform(MockMvcRequestBuilders.post("/roles/create")
+        mockMvc.perform(MockMvcRequestBuilders.post("/roles")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isForbidden())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1013))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8012))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("You don't have permission!"));
 
         verify(roleService, never()).createRole(any());
     }
 
     @Test
-    void createRole_unAuthentication_return401() throws Exception {
+    void createRole_unAuthentication() throws Exception {
         String content = objectMapper.writeValueAsString(creationRequest);
 
-        mockMvc.perform(MockMvcRequestBuilders.post("/roles/create")
+        mockMvc.perform(MockMvcRequestBuilders.post("/roles")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isUnauthorized())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1012))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8011))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Unauthenticated!"));
 
         verify(roleService, never()).createRole(any());
@@ -122,49 +130,49 @@ class RoleControllerTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void createRole_roleExisted_returnAppException() throws Exception {
+    void createRole_roleExisted() throws Exception {
         String content = objectMapper.writeValueAsString(creationRequest);
 
-        when(roleService.createRole(any())).thenThrow(new AppException(ErrorCode.ROLE_EXISTED));
+        when(roleService.createRole(creationRequest)).thenThrow(new AppException(ErrorCode.ROLE_EXISTED));
 
-        mockMvc.perform(MockMvcRequestBuilders.post("/roles/create")
+        mockMvc.perform(MockMvcRequestBuilders.post("/roles")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isBadRequest())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1006))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8006))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Role existed!"));
 
-        verify(roleService, times(1)).createRole(any());
+        verify(roleService, times(1)).createRole(creationRequest);
     }
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void createRole_permissionNotExisted_returnAppException() throws Exception {
+    void createRole_permissionNotExisted() throws Exception {
         String content = objectMapper.writeValueAsString(creationRequest);
 
-        when(roleService.createRole(any())).thenThrow(new AppException(ErrorCode.PERMISSION_NOT_EXISTED));
+        when(roleService.createRole(creationRequest)).thenThrow(new AppException(ErrorCode.PERMISSION_NOT_EXISTED));
 
-        mockMvc.perform(MockMvcRequestBuilders.post("/roles/create")
+        mockMvc.perform(MockMvcRequestBuilders.post("/roles")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isNotFound())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1009))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8009))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Permission not found!"));
 
-        verify(roleService, times(1)).createRole(any());
+        verify(roleService, times(1)).createRole(creationRequest);
     }
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void updateRole_validRequest_success() throws Exception {
+    void updateRole_success() throws Exception {
         String content = objectMapper.writeValueAsString(updateRequest);
 
         roleResponse.setDescription("Role for test updated");
-        roleResponse.setPermissions(Set.of(new PermissionResponse("TEST_PERMISSION2", "Permission2 for test")));
+        roleResponse.setPermissions(Set.of(permission2));
 
-        when(roleService.updateRole("TEST_ROLE", updateRequest)).thenReturn(roleResponse);
+        when(roleService.updateRole(updateRequest)).thenReturn(roleResponse);
 
-        mockMvc.perform(MockMvcRequestBuilders.put("/roles/TEST_ROLE")
+        mockMvc.perform(MockMvcRequestBuilders.put("/roles")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isOk())
@@ -176,84 +184,84 @@ class RoleControllerTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("result.permissions[0].description")
                         .value("Permission2 for test"));
 
-        verify(roleService, times(1)).updateRole("TEST_ROLE", updateRequest);
+        verify(roleService, times(1)).updateRole(updateRequest);
     }
 
     @Test
     @WithMockUser(roles = "OtherRoles")
-    void updateRole_unAuthority_return403() throws Exception {
+    void updateRole_unAuthority() throws Exception {
         String content = objectMapper.writeValueAsString(updateRequest);
 
-        mockMvc.perform(MockMvcRequestBuilders.put("/roles/TEST_ROLE")
+        mockMvc.perform(MockMvcRequestBuilders.put("/roles")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isForbidden())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1013))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8012))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("You don't have permission!"));
 
-        verify(roleService, never()).updateRole(any(), any());
+        verify(roleService, never()).updateRole(updateRequest);
     }
 
     @Test
-    void updateRole_unAuthentication_return401() throws Exception {
+    void updateRole_unAuthentication() throws Exception {
         String content = objectMapper.writeValueAsString(updateRequest);
 
-        mockMvc.perform(MockMvcRequestBuilders.put("/roles/TEST_ROLE")
+        mockMvc.perform(MockMvcRequestBuilders.put("/roles")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isUnauthorized())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1012))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8011))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Unauthenticated!"));
 
-        verify(roleService, never()).updateRole(any(), any());
+        verify(roleService, never()).updateRole(any());
     }
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void updateRole_roleNotExisted_returnAppException() throws Exception {
+    void updateRole_roleNotExisted() throws Exception {
         String content = objectMapper.writeValueAsString(updateRequest);
 
-        when(roleService.updateRole(any(), any())).thenThrow(new AppException(ErrorCode.ROLE_NOT_EXISTED));
+        when(roleService.updateRole(updateRequest)).thenThrow(new AppException(ErrorCode.ROLE_NOT_EXISTED));
 
-        mockMvc.perform(MockMvcRequestBuilders.put("/roles/TEST_ROLE")
+        mockMvc.perform(MockMvcRequestBuilders.put("/roles")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isNotFound())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1007))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8007))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Role not existed!"));
 
-        verify(roleService, times(1)).updateRole(any(), any());
+        verify(roleService, times(1)).updateRole(updateRequest);
     }
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void deleteRole_authority_success() throws Exception {
-        doNothing().when(roleService).deleteRole("TEST_ROLE");
+    void deleteRole_success() throws Exception {
+        doNothing().when(roleService).deleteRole(nameRoleForDelete);
 
         mockMvc.perform(MockMvcRequestBuilders.delete("/roles/TEST_ROLE"))
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(1000))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Deleted role success!"));
 
-        verify(roleService, times(1)).deleteRole("TEST_ROLE");
+        verify(roleService, times(1)).deleteRole(nameRoleForDelete);
     }
 
     @Test
     @WithMockUser(roles = "OtherRoles")
-    void deleteRole_unAuthority_return403() throws Exception {
+    void deleteRole_unAuthority() throws Exception {
         mockMvc.perform(MockMvcRequestBuilders.delete("/roles/TEST_ROLE"))
                 .andExpect(MockMvcResultMatchers.status().isForbidden())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1013))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8012))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("You don't have permission!"));
 
         verify(roleService, never()).deleteRole(any());
     }
 
     @Test
-    void deleteRole_unAuthentication_return401() throws Exception {
+    void deleteRole_unAuthentication() throws Exception {
         mockMvc.perform(MockMvcRequestBuilders.delete("/roles/TEST_ROLE"))
                 .andExpect(MockMvcResultMatchers.status().isUnauthorized())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1012))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8011))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Unauthenticated!"));
 
         verify(roleService, never()).deleteRole(any());
@@ -261,23 +269,23 @@ class RoleControllerTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void deleteRole_roleNotExisted_returnAppException() throws Exception {
-        doThrow(new AppException(ErrorCode.ROLE_NOT_EXISTED)).when(roleService).deleteRole(any());
+    void deleteRole_roleNotExisted() throws Exception {
+        doThrow(new AppException(ErrorCode.ROLE_NOT_EXISTED)).when(roleService).deleteRole(nameRoleForDelete);
 
         mockMvc.perform(MockMvcRequestBuilders.delete("/roles/TEST_ROLE"))
                 .andExpect(MockMvcResultMatchers.status().isNotFound())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1007))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8007))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Role not existed!"));
 
-        verify(roleService, times(1)).deleteRole(any());
+        verify(roleService, times(1)).deleteRole(nameRoleForDelete);
     }
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void getAllRoles_validAuthority_success() throws Exception {
+    void getAllRoles_success() throws Exception {
         when(roleService.getAllRoles()).thenReturn(List.of(roleResponse));
 
-        mockMvc.perform(MockMvcRequestBuilders.get("/roles/read"))
+        mockMvc.perform(MockMvcRequestBuilders.get("/roles"))
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(1000))
                 .andExpect(MockMvcResultMatchers.jsonPath("result[0].name").value("TEST_ROLE"))
@@ -293,22 +301,21 @@ class RoleControllerTest {
 
     @Test
     @WithMockUser(authorities = "OtherRoles")
-    void getAllRoles_unAuthority_return403() throws Exception {
+    void getAllRoles_unAuthority() throws Exception {
 
-        mockMvc.perform(MockMvcRequestBuilders.get("/roles/read"))
+        mockMvc.perform(MockMvcRequestBuilders.get("/roles"))
                 .andExpect(MockMvcResultMatchers.status().isForbidden())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1013))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8012))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("You don't have permission!"));
 
         verify(roleService, never()).getAllRoles();
     }
 
     @Test
-    void getAllRoles_unAuthentication_return401() throws Exception {
-
-        mockMvc.perform(MockMvcRequestBuilders.get("/roles/read"))
+    void getAllRoles_unAuthentication() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.get("/roles"))
                 .andExpect(MockMvcResultMatchers.status().isUnauthorized())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1012))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8011))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Unauthenticated!"));
 
         verify(roleService, never()).getAllRoles();

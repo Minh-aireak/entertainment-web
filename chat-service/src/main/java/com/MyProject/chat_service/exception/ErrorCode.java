@@ -21,7 +21,7 @@ public enum ErrorCode {
     ATTRIBUTE_NOT_BLANK(8608, "{attribute} must not be blank!", HttpStatus.BAD_REQUEST),
     ATTRIBUTE_NOT_NULL(8609, "{attribute} must not be null!", HttpStatus.BAD_REQUEST),
     UNAUTHENTICATED_SOCKET(8610, "Unauthenticated socket!", HttpStatus.BAD_REQUEST),
-    JSON_PROCESSING(8611, "Json processing had problem!", HttpStatus.PROCESSING);
+    JSON_PROCESSING(8611, "Json processing had problem!", HttpStatus.INTERNAL_SERVER_ERROR);
 
     int code;
     String message;

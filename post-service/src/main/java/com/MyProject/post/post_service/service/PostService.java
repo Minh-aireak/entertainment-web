@@ -1,6 +1,7 @@
 package com.MyProject.post.post_service.service;
 
 import com.MyProject.common_dto.event.dto.ProfileUpdatedEvent;
+import com.MyProject.common_dto.event.dto.UserProfileResponse;
 import com.MyProject.post.post_service.configuration.DateTimeFormatter;
 import com.MyProject.post.post_service.dto.response.StatusResponse;
 import com.MyProject.post.post_service.job.UpdatePostStatusJob;
@@ -54,6 +55,15 @@ public class PostService {
     WeatherClient weatherClient;
     Scheduler scheduler;
 
+    private String getUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getPrincipal() == null) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
+        Jwt jwt = ((JwtAuthenticationToken) authentication).getToken();
+        return jwt.getClaim("userId");
+    }
+
     private String calculateStatus(LocalDateTime start, LocalDateTime end, LocalDateTime now){
         String status = "On going";
         if (start.isAfter(now)){
@@ -65,13 +75,12 @@ public class PostService {
     }
 
     private Post buildBasePost(ScheduleRequest request) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        Jwt jwt = ((JwtAuthenticationToken) authentication).getToken();
-        var info = client.getProfile(jwt.getClaim("userId")).getResult();
+        String userId = getUserId();
+        UserProfileResponse info = client.getProfile(userId).getResult();
 
         return Post.builder()
                 .id(UUID.randomUUID().toString())
-                .userId(jwt.getClaim("userId"))
+                .userId(userId)
                 .displayName(info.getDisplayName())
                 .avatar(info.getAvatar())
                 .title(request.getTitle())
@@ -82,7 +91,7 @@ public class PostService {
                 .status(calculateStatus(request.getStartTime(), request.getEndTime(), LocalDateTime.now()))
                 .startJobKey(null)
                 .endJobKey(null)
-                .listUserJoin(List.of(jwt.getClaim("userId").toString()))
+                .listUserJoin(List.of(userId))
                 .build();
     }
 
@@ -177,15 +186,14 @@ public class PostService {
 
     @Transactional
     public ScheduleResponse createPost(ScheduleRequest request){
+        var basePost = buildBasePost(request);
         if (request.getPostType().equals("BUSINESS_SCHEDULE")) {
-            var basePost = buildBasePost(request);
             basePost.setPostType(PostType.BUSINESS_SCHEDULE);
             var savedPost = postRepository.save(basePost);
             scheduleStatusJobs(savedPost);
 
             return postMapper.toScheduleResponse(savedPost);
         } else {
-            var basePost = buildBasePost(request);
             var weatherStartResponse = weatherClient.getDataWeather(DataWeatherRequest.builder()
                             .lat(request.getLatStart())
                             .lon(request.getLonStart())
@@ -208,17 +216,16 @@ public class PostService {
 
     @Transactional
     public PageResponse<ScheduleResponse> getMyPosts(int page, int size, String type){
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        Jwt jwt = ((JwtAuthenticationToken) authentication).getToken();
+        String userId = getUserId();
 
         Sort sort = Sort.by("createdDate").descending();
         Pageable pageable = PageRequest.of(page - 1, size, sort);
 
         Page<? extends Post> pageData;
         if (type.equals(PostType.BUSINESS_SCHEDULE.name())) {
-            pageData = postRepository.findAllByUserId(jwt.getClaim("userId"), pageable);
+            pageData = postRepository.findAllByUserId(userId, pageable);
         } else {
-            pageData = travelItineraryRepository.findAllByUserId(jwt.getClaim("userId"), pageable);
+            pageData = travelItineraryRepository.findAllByUserId(userId, pageable);
         }
 
         List<ScheduleResponse> postList = pageData.getContent().stream().map(post -> {

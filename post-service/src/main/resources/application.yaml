@@ -4,6 +4,9 @@ server:
     context-path: /post
 
 spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
   application:
     name: post-service
   data:
@@ -33,7 +36,7 @@ spring:
   quartz:
     job-store-type: jdbc
     jdbc:
-      initialize-schema: never
+      initialize-schema: always # always for dev never for production
     properties:
       org:
         quartz:
@@ -51,7 +54,6 @@ spring:
             class: org.quartz.simpl.SimpleThreadPool
             threadCount: 10
             threadPriority: 5
-
 
 jwt:
   signerKey: ${JWT_SIGNER_KEY}

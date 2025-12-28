@@ -4,10 +4,12 @@ import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 import com.MyProject.common_dto.event.dto.NotificationEvent;
-import com.MyProject.identity.identity_service.dto.request.UserProfileCreationRequest;
-import com.MyProject.identity.identity_service.mapper.UserProfileMapper;
+import com.MyProject.identity.identity_service.dto.request.*;
+import com.MyProject.identity.identity_service.entity.ResetPassword;
+import com.MyProject.identity.identity_service.repository.ResetPasswordRepository;
 import com.MyProject.identity.identity_service.repository.httpclient.UserProfileClient;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -17,8 +19,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.MyProject.identity.identity_service.dto.request.UserCreationRequest;
-import com.MyProject.identity.identity_service.dto.request.UserUpdateRequest;
 import com.MyProject.identity.identity_service.dto.response.UserResponse;
 import com.MyProject.identity.identity_service.entity.Role;
 import com.MyProject.identity.identity_service.entity.User;
@@ -38,21 +38,19 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class UserService {
     UserRepository userRepository;
+    ResetPasswordRepository resetPasswordRepository;
     UserMapper userMapper;
     RoleRepository roleRepository;
     PasswordEncoder passwordEncoder;
     UserProfileClient client;
-    UserProfileMapper userProfileMapper;
     KafkaTemplate<String, Object> kafkaTemplate;
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public UserResponse createUser(UserCreationRequest request) {
         Role role = roleRepository.findById("USER").orElseThrow(()
                 -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
 
         User user = userMapper.toUser(request);
-
-        UserProfileCreationRequest userprofileRequest = userProfileMapper.toUserProfileCreationRequest(request);
 
         user.setPassword(passwordEncoder.encode(request.getPassword()));
 
@@ -66,9 +64,14 @@ public class UserService {
             throw new AppException(ErrorCode.USERNAME_EXISTED);
         }
 
-        userprofileRequest.setUserId(user.getId());
-        userprofileRequest.setDisplayName(user.getUsername());
-        userprofileRequest.setJoinDate(LocalDateTime.now());
+        UserProfileCreationRequest userprofileRequest = UserProfileCreationRequest.builder()
+                .userId(user.getId())
+                .username(request.getUsername())
+                .email(request.getEmail())
+                .displayName(request.getUsername())
+                .joinDate(LocalDateTime.now())
+                .build();
+
         client.createProfile(userprofileRequest);
 
         NotificationEvent notificationEvent = NotificationEvent.builder()
@@ -83,38 +86,82 @@ public class UserService {
         return userMapper.toUserResponse(user);
     }
 
-    @Transactional(rollbackFor = Exception.class)
-    public UserResponse changePassword(UserUpdateRequest request) {
+    private String getUserUsername() {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
-        User user = userRepository.findByUsername(authentication.getName()).orElseThrow(()
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+        return authentication.getName();
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void changePassword(ChangePasswordRequest request) {
+        User user = userRepository.findByUsername(getUserUsername()).orElseThrow(()
                 -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
-        userMapper.changePass(user, request);
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
 
-        if (request.getPassword() != null) {
-            user.setPassword(passwordEncoder.encode(request.getPassword()));
-        }
-
-        return userMapper.toUserResponse(userRepository.save(user));
+        userRepository.save(user);
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public void deleteUser(String userId) {
-        if (userRepository.existsById(userId)) {
-            userRepository.deleteById(userId);
-        } else {
-            throw new AppException(ErrorCode.USER_NOT_EXISTED);
-        }
-    }
-
-    @Transactional
     public List<UserResponse> getAllUsers() {
         return userMapper.toListUserResponse(userRepository.findAll());
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public UserResponse getUser(String userId) {
-        User user = userRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
-        return userMapper.toUserResponse(user);
+    public void disableUser(String userId) {
+        User user = userRepository.findByUsername(userId).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+        user.setActive(false);
+        userRepository.save(user);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public String forgotPassword(ForgotPasswordRequest request) {
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new AppException(ErrorCode.EMAIL_NOT_EXISTED));
+
+        ResetPassword resetPassword = ResetPassword.builder()
+                .token(UUID.randomUUID().toString())
+                .user(user)
+                .expiryDate(LocalDateTime.now().plusSeconds(3600))
+                .build();
+
+        String resetUrl = "http://localhost:5173/password-reset-token?token=" + resetPassword.getToken();
+
+        NotificationEvent notificationEvent = NotificationEvent.builder()
+                .channel("EMAIL")
+                .recipient(request.getEmail())
+                .subject("Reset Your Password")
+                .body(
+                    "Hi " + user.getUsername() + ",\n\n" +
+                    "We received a request to reset your password. " +
+                    "Click the link below to reset your password:\n\n" +
+                    resetUrl + "\n\n" +
+                    "If you didn’t request this, you can ignore this email.\n\n" +
+                    "Thanks!"
+                )
+                .build();
+
+        kafkaTemplate.send("send-email", notificationEvent);
+        resetPasswordRepository.save(resetPassword);
+
+        return "Check your email: " + request.getEmail();
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void resetPassword(ResetPasswordRequest request) {
+        ResetPassword resetToken = resetPasswordRepository.findByToken(request.getToken())
+                .orElseThrow(() -> new AppException(ErrorCode.INVALID_TOKEN_RESET));
+
+        if (resetToken.getExpiryDate().isBefore(LocalDateTime.now())) {
+            throw new AppException(ErrorCode.TOKEN_EXPIRED);
+        }
+
+        User user = resetToken.getUser();
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        userRepository.save(user);
+
+        resetPasswordRepository.delete(resetToken);
     }
 }

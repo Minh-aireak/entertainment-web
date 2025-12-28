@@ -23,11 +23,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(value = MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<java.lang.Object>> handlingMethodArgumentNotValidException(
             MethodArgumentNotValidException exception) {
-        Map<String, String> attributes = null;
-        String enumKey = exception.getFieldError().getDefaultMessage();
+        Map<String, Object> attributes;
+        String enumKey = Objects.requireNonNull(exception.getFieldError()).getDefaultMessage();
         ErrorCode errorCode = ErrorCode.valueOf(enumKey);
 
-        var constraintViolation = exception.getBindingResult().getAllErrors().getFirst().unwrap(ConstraintViolation.class);
+        ConstraintViolation<?> constraintViolation = exception.getBindingResult().getAllErrors().getFirst().unwrap(ConstraintViolation.class);
         attributes = constraintViolation.getConstraintDescriptor().getAttributes();
 
         ApiResponse<java.lang.Object> apiResponse = new ApiResponse<>();
@@ -40,7 +40,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(errorCode.getStatusCode()).body(apiResponse);
     }
 
-    private String mapAttributes(String message, Map<String, String> attributes) {
+    private String mapAttributes(String message, Map<String, Object> attributes) {
         String attribute = String.valueOf(attributes.get(ATTRIBUTE));
         return message.replace("{" + ATTRIBUTE + "}", attribute);
     }

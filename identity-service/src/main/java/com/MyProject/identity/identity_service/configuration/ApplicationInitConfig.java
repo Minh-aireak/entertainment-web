@@ -12,7 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.MyProject.identity.identity_service.entity.Role;
 import com.MyProject.identity.identity_service.entity.User;
-import com.MyProject.identity.identity_service.repository.PermissionRepository;
 import com.MyProject.identity.identity_service.repository.RoleRepository;
 import com.MyProject.identity.identity_service.repository.UserRepository;
 
@@ -26,13 +25,12 @@ import lombok.experimental.FieldDefaults;
 public class ApplicationInitConfig {
     PasswordEncoder passwordEncoder;
     RoleRepository roleRepository;
-    PermissionRepository permissionRepository;
 
     @Bean
     @Profile("!test")
     @Transactional
     ApplicationRunner applicationRunner(UserRepository userRepository) {
-        return args -> {
+        return _ -> {
             if (userRepository.findByUsername("admin").isEmpty()) {
 
                 Role role = roleRepository
