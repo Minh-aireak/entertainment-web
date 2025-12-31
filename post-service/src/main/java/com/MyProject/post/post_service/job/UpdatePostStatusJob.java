@@ -1,6 +1,8 @@
 package com.MyProject.post.post_service.job;
 
 import com.MyProject.common_dto.event.dto.StatusChangeData;
+import com.MyProject.common_dto.event.dto.request.NotificationRequest;
+import com.MyProject.common_dto.event.entity.TypeNotification;
 import com.MyProject.post.post_service.entity.Post;
 import com.MyProject.post.post_service.exception.AppException;
 import com.MyProject.post.post_service.exception.ErrorCode;
@@ -14,6 +16,9 @@ import org.quartz.JobDataMap;
 import org.quartz.JobExecutionContext;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Job để cập nhật trạng thái Post
@@ -75,9 +80,21 @@ public class UpdatePostStatusJob implements Job {
         postRepository.save(post);
 
         String message = "⏳ Post: " + post.getTitle() + " is Ongoing!";
-        StatusChangeData data = new StatusChangeData(post.getId(), post.getListUserJoin(), message);
+        StatusChangeData data = new StatusChangeData(
+                post.getId(), post.getListUserJoin(), message);
 
-        kafkaTemplate.send("status-change", data);
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("message", message);
+        metadata.put("postId", post.getId());
+
+        NotificationRequest request = NotificationRequest.builder()
+                .typeNotification(TypeNotification.STATUS_CHANGE)
+                .userIdSender()
+                .toUserIds(post.getListUserJoin())
+                .metadata(metadata)
+                .build();
+
+        kafkaTemplate.send("create-notification", request);
     }
 
     /**
@@ -96,8 +113,18 @@ public class UpdatePostStatusJob implements Job {
         postRepository.save(post);
 
         String message = "✅ Post: " + post.getTitle() + " is Completed!";
-        StatusChangeData data = new StatusChangeData(post.getId(), post.getListUserJoin(), message);
 
-        kafkaTemplate.send("status-change", data);
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("message", message);
+        metadata.put("postId", post.getId());
+
+        NotificationRequest request = NotificationRequest.builder()
+                .typeNotification(TypeNotification.STATUS_CHANGE)
+                .userIdSender()
+                .toUserIds(post.getListUserJoin())
+                .metadata(metadata)
+                .build();
+
+        kafkaTemplate.send("create-notification", request);
     }
 }

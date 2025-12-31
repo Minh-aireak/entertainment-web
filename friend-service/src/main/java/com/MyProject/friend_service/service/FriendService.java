@@ -1,12 +1,12 @@
 package com.MyProject.friend_service.service;
 
-import com.MyProject.common_dto.event.dto.FriendRequestEvent;
-import com.MyProject.common_dto.event.dto.UserProfileResponse;
-import com.MyProject.friend_service.dto.request.BulkUserProfileRequest;
+import com.MyProject.common_dto.event.dto.request.NotificationRequest;
+import com.MyProject.common_dto.event.dto.response.PageResponse;
+import com.MyProject.common_dto.event.dto.response.UserProfileResponse;
+import com.MyProject.common_dto.event.dto.request.BulkUserProfileRequest;
 import com.MyProject.friend_service.dto.request.UpdateFriendRequestStatus;
 import com.MyProject.friend_service.dto.request.UpdateRelationshipStatus;
 import com.MyProject.friend_service.dto.response.FriendResponse;
-import com.MyProject.friend_service.dto.response.PageResponse;
 import com.MyProject.friend_service.entity.FriendRequest;
 import com.MyProject.friend_service.entity.FriendRequestStatus;
 import com.MyProject.friend_service.entity.RelationshipStatus;
@@ -81,14 +81,17 @@ public class FriendService {
                 .createdAt(Instant.now())
                 .build());
 
-        FriendRequestEvent event = FriendRequestEvent.builder()
-                .fromUserId(fromUserId)
-                .toUserId(toUserId)
-                .hashFriendRequest(hashFriendRequest)
-                .createdAt(Instant.now())
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("message", "sent you friend request !");
+
+        NotificationRequest event = NotificationRequest.builder()
+                .typeNotification(com.MyProject.common_dto.event.entity.TypeNotification.FRIEND_REQUEST)
+                .userIdSender(fromUserId)
+                .toUserIds(List.of(toUserId))
+                .metadata(metadata)
                 .build();
 
-        kafkaTemplate.send("friend-request", event);
+        kafkaTemplate.send("create-notification", event);
     }
 
     @Transactional

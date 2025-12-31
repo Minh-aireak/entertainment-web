@@ -1,7 +1,7 @@
 package com.MyProject.identity.identity_service.service;
 
-import com.MyProject.common_dto.event.dto.IntrospectRequest;
-import com.MyProject.common_dto.event.dto.IntrospectResponse;
+import com.MyProject.common_dto.event.dto.request.IntrospectRequest;
+import com.MyProject.common_dto.event.dto.response.IntrospectResponse;
 import com.MyProject.identity.identity_service.dto.request.ExchangeTokenRequest;
 import com.MyProject.identity.identity_service.dto.response.ExchangeTokenResponse;
 import com.MyProject.identity.identity_service.dto.response.OutboundUserResponse;

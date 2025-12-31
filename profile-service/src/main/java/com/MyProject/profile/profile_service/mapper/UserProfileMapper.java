@@ -1,6 +1,6 @@
 package com.MyProject.profile.profile_service.mapper;
 
-import com.MyProject.common_dto.event.dto.UserProfileResponse;
+import com.MyProject.common_dto.event.dto.response.UserProfileResponse;
 import com.MyProject.profile.profile_service.dto.request.UserProfileCreationRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileUpdateRequest;
 import com.MyProject.profile.profile_service.entity.UserProfile;

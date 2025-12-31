@@ -1,8 +1,8 @@
 package com.MyProject.friend_service.repository.httpclient;
 
-import com.MyProject.common_dto.event.dto.UserProfileResponse;
+import com.MyProject.common_dto.event.dto.response.UserProfileResponse;
 import com.MyProject.friend_service.configuration.AuthenticationRequestInterceptor;
-import com.MyProject.friend_service.dto.request.BulkUserProfileRequest;
+import com.MyProject.common_dto.event.dto.request.BulkUserProfileRequest;
 import com.MyProject.friend_service.dto.response.ApiResponse;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;

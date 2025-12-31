@@ -19,8 +19,8 @@ import java.util.Map;
 public class Notification {
     @Id
     String id;
-    TypeNotification type;
-    String fromUserId;
+    com.MyProject.common_dto.event.entity.TypeNotification type;
+    String userIdSender;
 
     @Indexed
     List<String> toUserIds;

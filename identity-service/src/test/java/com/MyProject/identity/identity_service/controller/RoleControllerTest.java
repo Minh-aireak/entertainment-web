@@ -5,11 +5,15 @@ import static org.mockito.Mockito.*;
 import java.util.List;
 import java.util.Set;
 
+import com.MyProject.identity.identity_service.configuration.CustomJwtDecoder;
+import com.MyProject.identity.identity_service.configuration.JwtAuthenticationEntryPoint;
+import com.MyProject.identity.identity_service.configuration.SecurityConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
@@ -30,7 +34,12 @@ import com.MyProject.identity.identity_service.service.RoleService;
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 
-@SpringBootTest
+@WebMvcTest(RoleController.class)
+@Import(
+        {SecurityConfig.class,
+        JwtAuthenticationEntryPoint.class,
+        CustomJwtDecoder.class}
+)
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -45,7 +54,6 @@ class RoleControllerTest {
     RoleUpdateRequest updateRequest;
     RoleResponse roleResponse;
     ObjectMapper objectMapper;
-    PermissionResponse permission1;
     PermissionResponse permission2;
     String nameRoleForDelete;
 
@@ -53,7 +61,7 @@ class RoleControllerTest {
     void initData() {
         objectMapper = new ObjectMapper();
 
-        permission1 = new PermissionResponse("TEST_PERMISSION1", "Permission1 for test");
+        PermissionResponse permission1 = new PermissionResponse("TEST_PERMISSION1", "Permission1 for test");
         permission2 = new PermissionResponse("TEST_PERMISSION2", "Permission2 for test");
 
         creationRequest = RoleCreationRequest.builder()

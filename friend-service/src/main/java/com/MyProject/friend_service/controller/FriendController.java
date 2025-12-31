@@ -1,10 +1,10 @@
 package com.MyProject.friend_service.controller;
 
+import com.MyProject.common_dto.event.dto.response.PageResponse;
 import com.MyProject.friend_service.dto.request.UpdateFriendRequestStatus;
 import com.MyProject.friend_service.dto.request.UpdateRelationshipStatus;
 import com.MyProject.friend_service.dto.response.ApiResponse;
 import com.MyProject.friend_service.dto.response.FriendResponse;
-import com.MyProject.friend_service.dto.response.PageResponse;
 import com.MyProject.friend_service.service.FriendService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;

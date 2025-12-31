@@ -1,4 +1,4 @@
-package com.MyProject.common_dto.event.dto;
+package com.MyProject.common_dto.event.dto.request;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -10,7 +10,7 @@ import java.util.Map;
 @AllArgsConstructor
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class NotificationEvent {
+public class EmailRequest {
     String channel;
     String recipient;
     String templateCode;

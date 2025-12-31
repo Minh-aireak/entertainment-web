@@ -1,9 +1,9 @@
 package com.MyProject.post.post_service.controller;
 
+import com.MyProject.common_dto.event.dto.response.PageResponse;
 import com.MyProject.post.post_service.dto.request.ScheduleRequest;
 import com.MyProject.post.post_service.dto.request.ScheduleUpdateRequest;
 import com.MyProject.post.post_service.dto.response.ApiResponse;
-import com.MyProject.post.post_service.dto.response.PageResponse;
 import com.MyProject.post.post_service.dto.response.ScheduleResponse;
 import com.MyProject.post.post_service.dto.response.StatusResponse;
 import com.MyProject.post.post_service.service.PostService;

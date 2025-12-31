@@ -14,7 +14,7 @@ public enum ErrorCode {
     UNAUTHENTICATED(8201, "Unauthenticated!", HttpStatus.UNAUTHORIZED),
     UNAUTHORIZED(8202, "Forbidden!", HttpStatus.UNAUTHORIZED),
     CANNOT_SEND_EMAIL(8203, "Cannot send email!", HttpStatus.BAD_REQUEST),
-    MAP_STRATEGY_EXCEPTION(8204, "Strategy got some problem!", HttpStatus.BAD_REQUEST);
+    MAP_STRATEGY_EXCEPTION(8204, "Notification strategy got some problem!", HttpStatus.BAD_REQUEST);
 
     int code;
     String message;

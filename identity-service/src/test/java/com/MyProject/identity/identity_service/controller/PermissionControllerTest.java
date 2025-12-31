@@ -4,11 +4,15 @@ import static org.mockito.Mockito.*;
 
 import java.util.List;
 
+import com.MyProject.identity.identity_service.configuration.CustomJwtDecoder;
+import com.MyProject.identity.identity_service.configuration.JwtAuthenticationEntryPoint;
+import com.MyProject.identity.identity_service.configuration.SecurityConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
@@ -28,7 +32,12 @@ import com.MyProject.identity.identity_service.service.PermissionService;
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 
-@SpringBootTest
+@WebMvcTest(PermissionController.class)
+@Import(
+        {SecurityConfig.class,
+        JwtAuthenticationEntryPoint.class,
+        CustomJwtDecoder.class}
+)
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")

@@ -6,21 +6,23 @@ import static org.mockito.Mockito.*;
 import java.util.List;
 import java.util.Set;
 
+import com.MyProject.identity.identity_service.configuration.CustomJwtDecoder;
+import com.MyProject.identity.identity_service.configuration.JwtAuthenticationEntryPoint;
+import com.MyProject.identity.identity_service.configuration.SecurityConfig;
 import com.MyProject.identity.identity_service.dto.request.ForgotPasswordRequest;
 import com.MyProject.identity.identity_service.dto.request.ResetPasswordRequest;
 import com.MyProject.identity.identity_service.exception.AppException;
 import com.MyProject.identity.identity_service.exception.ErrorCode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
@@ -35,8 +37,12 @@ import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import tools.jackson.databind.ObjectMapper;
 
-@SpringBootTest
-@ExtendWith(SpringExtension.class)
+@WebMvcTest(UserController.class)
+@Import(
+        {SecurityConfig.class,
+        JwtAuthenticationEntryPoint.class,
+        CustomJwtDecoder.class}
+)
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")

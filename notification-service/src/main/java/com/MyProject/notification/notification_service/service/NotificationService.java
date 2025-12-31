@@ -1,12 +1,12 @@
 package com.MyProject.notification.notification_service.service;
 
-import com.MyProject.common_dto.event.dto.FriendRequestEvent;
-import com.MyProject.common_dto.event.dto.NotificationData;
-import com.MyProject.common_dto.event.dto.NotificationResponse;
-import com.MyProject.common_dto.event.dto.UserProfileResponse;
-import com.MyProject.notification.notification_service.dto.response.PageResponse;
+import com.MyProject.common_dto.event.dto.*;
+import com.MyProject.common_dto.event.dto.request.BulkUserProfileRequest;
+import com.MyProject.common_dto.event.dto.request.NotificationRequest;
+import com.MyProject.common_dto.event.dto.response.NotificationResponse;
+import com.MyProject.common_dto.event.dto.response.PageResponse;
+import com.MyProject.common_dto.event.dto.response.UserProfileResponse;
 import com.MyProject.notification.notification_service.entity.Notification;
-import com.MyProject.notification.notification_service.entity.TypeNotification;
 import com.MyProject.notification.notification_service.exception.AppException;
 import com.MyProject.notification.notification_service.exception.ErrorCode;
 import com.MyProject.notification.notification_service.mapper.NotificationMapper;
@@ -25,12 +25,14 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -51,75 +53,73 @@ public class NotificationService {
         return jwt.getClaim("userId");
     }
 
-    private NotificationResponse toNotificationResponse(Notification notification,
-                                                        Map<String, UserProfileResponse> profileMap,
+    private List<NotificationResponse> toNotificationResponses(List<Notification> notification,
+                                                        Map<String, UserProfileResponse> profileMaps,
                                                         String currentUserId) {
-        NotificationResponse response = notificationMapper.toNotificationResponse(notification);
-        UserProfileResponse sender = profileMap.get(notification.getFromUserId());
-        response.setType(notification.getType().name());
-        response.setUserIdSender(notification.getFromUserId());
-        response.setDisplayNameSender(sender != null ? sender.getDisplayName() : null);
-        response.setAvatarSender(sender != null ? sender.getAvatar() : null);
-        Boolean isRead = notification.getRecipientReadMap() != null
-                && notification.getRecipientReadMap().getOrDefault(currentUserId, null) != null;
-        response.setIsRead(isRead);
-
-        return response;
+        return notification.stream().map(noti -> {
+            NotificationResponse response = notificationMapper.toNotificationResponse(noti);
+            UserProfileResponse sender = profileMaps.get(noti.getUserIdSender());
+            response.setType(noti.getType().name());
+            response.setDisplayNameSender(sender.getDisplayName());
+            response.setAvatarSender(sender.getAvatar());
+            Boolean isRead = noti.getRecipientReadMap().getOrDefault(currentUserId, null) != null;
+            response.setIsRead(isRead);
+            return response;
+        }).toList();
     }
 
-    public NotificationResponse createNotification(TypeNotification typeNotification,
-                                                   String fromUserId,
-                                                   List<String> toUserIds,
-                                                   String message) {
+    public void createNotification(NotificationRequest request) {
         Map<String, LocalDateTime> recipientReadMap = new HashMap<>();
-        toUserIds.forEach(userId -> recipientReadMap.put(userId, null));
+        request.getToUserIds().forEach(userId -> recipientReadMap.put(userId, null));
 
         Notification notification = Notification.builder()
-                .type(typeNotification)
-                .fromUserId(fromUserId)
+                .id(UUID.randomUUID().toString())
+                .type(request.getTypeNotification())
+                .userIdSender(request.getUserIdSender())
                 .recipientReadMap(recipientReadMap)
-                .message(message)
+                .message(request.getMetadata().get("message").toString())
                 .createdAt(LocalDateTime.now())
                 .build();
 
-        Notification savedNotification = notificationRepository.save(notification);
+        notificationRepository.save(notification);
 
-        Map<String, UserProfileResponse> profileMap = java.util.Collections.singletonMap(
-                fromUserId,
-                profileClient.getProfile(fromUserId).getResult()
-        );
+        List<UserProfileResponse> profiles = profileClient.getBulkUserProfiles(BulkUserProfileRequest.builder()
+                .userIds(List.of(request.getUserIdSender()))
+                .build()).getResult();
 
-        NotificationResponse response = toNotificationResponse(savedNotification, profileMap, null);
-        NotificationData notificationData = new NotificationData(response, toUserIds);
-        kafkaTemplate.send("notifications", notificationData);
+        Map<String, UserProfileResponse> profilesMap = profiles.stream()
+                .collect(Collectors.toMap(
+                        UserProfileResponse::getUserId,
+                        Function.identity()
+                ));
 
-        return response;
+        List<NotificationResponse> responses = toNotificationResponses(List.of(notification), profilesMap, null);
+        NotificationSocketData notificationSocketData = new NotificationSocketData(responses.getFirst(), request.getToUserIds());
+        kafkaTemplate.send("notifications", notificationSocketData);
     }
 
     public PageResponse<NotificationResponse> getMyNotifications(int page, int size) {
         String userId = getUserId();
         Pageable pageable = PageRequest.of(page - 1, size);
 
-        Page<Notification> notificationsPage = notificationRepository
-                .findByToUserIdsInOrderByCreatedAtDesc(userId, pageable);
+        Page<Notification> notificationsPage =
+                notificationRepository.findByToUserIdsInOrderByCreatedAtDesc(userId, pageable);
 
         List<String> senderIds = notificationsPage.getContent().stream()
-                .map(Notification::getFromUserId)
+                .map(Notification::getUserIdSender)
                 .distinct()
                 .toList();
 
-        Map<String, UserProfileResponse> profileMap = profileClient
-                .getBulkUserProfiles(com.MyProject.notification.notification_service.dto.request.BulkUserProfileRequest
-                        .builder()
+        Map<String, UserProfileResponse> profilesMap =
+                profileClient.getBulkUserProfiles(BulkUserProfileRequest.builder()
                         .userIds(senderIds)
                         .build())
                 .getResult()
                 .stream()
-                .collect(java.util.stream.Collectors.toMap(UserProfileResponse::getUserId, p -> p));
+                .collect(java.util.stream.Collectors.toMap(UserProfileResponse::getUserId, Function.identity()));
 
-        List<NotificationResponse> notifications = notificationsPage.getContent().stream()
-                .map(n -> toNotificationResponse(n, profileMap, userId))
-                .toList();
+        List<NotificationResponse> notifications =
+                toNotificationResponses(notificationsPage.getContent(), profilesMap, userId);
 
         return PageResponse.<NotificationResponse>builder()
                 .currentPage(page)
@@ -130,74 +130,13 @@ public class NotificationService {
                 .build();
     }
 
-//    @Transactional
-//    public void seenAt(String conversationId) {
-//        var userId = getUserId();
-//        var check = conversationRepository.findById(conversationId)
-//                .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND))
-//                .getParticipantInfos().stream().anyMatch(participantInfo ->
-//                        participantInfo.getUserId().equals(userId)
-//                );
-//
-//        if (!check)
-//            throw new AppException(ErrorCode.USERID_NOT_FOUND);
-//
-//        List<ChatMessage> msg = chatMessageRepository
-//                .findAllByConversationIdAndSeenAtMapNotContainsKey(conversationId, userId);
-//        for (ChatMessage cm : msg) {
-//            cm.getSeenAtMap().put(userId, Instant.now());
-//        }
-//
-//        chatMessageRepository.saveAll(msg);
-//    }
-
-    @Transactional
-    public NotificationResponse createFriendRequest(FriendRequestEvent event) {
-        UserProfileResponse profile = profileClient.getProfile(event.getFromUserId()).getResult();
-        String message = profile.getDisplayName() + " send you a friend request";
-
-        return createNotification(
-                TypeNotification.FRIEND_REQUEST,
-                event.getFromUserId(),
-                List.of(event.getToUserId()),
-                message
-        );
+    public Long getUnreadCount() {
+        String userId = getUserId();
+        return notificationRepository.countUnreadByUserId(userId);
     }
 
-//    @Transactional
-//    public NotificationResponse createPostStatus(FriendRequestEvent event) {
-//        UserProfileResponse profile = profileClient.getProfile(event.getFromUserId()).getResult();
-//        String message = profile.getDisplayName() + " send you a friend request";
-//
-//        return createNotification(TypeNotification.POST_STATUS, event.getFromUserId(), List.of(event.getToUserId()), message);
-//    }
-
-//    public Long getUnreadCount() {
-//        String userId = getUserId();
-//        return notificationRepository.countUnreadByUserId(userId);
-//    }
-//
-//    public void markAsRead(String notificationId) {
-//        String userId = getUserId();
-//        Notification notification = notificationRepository.findById(notificationId)
-//                .orElseThrow(() -> new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION));
-//
-//        if (notification.getRecipientReadMap() != null && notification.getRecipientReadMap().containsKey(userId)) {
-//            notification.getRecipientReadMap().put(userId, Instant.now());
-//            notificationRepository.save(notification);
-//        }
-//    }
-//
-//    public void markAllAsRead() {
-//        String userId = getUserId();
-//        List<Notification> unreadNotifications = notificationRepository.findUnreadByUserId(userId);
-//
-//        Instant now = Instant.now();
-//        unreadNotifications.forEach(notification -> {
-//            if (notification.getRecipientReadMap() != null) {
-//                notification.getRecipientReadMap().put(userId, now);
-//            }
-//        });
-//        notificationRepository.saveAll(unreadNotifications);
-//    }
+    public void markAllAsRead() {
+        String userId = getUserId();
+        notificationRepository.markAllAsRead(userId, LocalDateTime.now());
+    }
 }

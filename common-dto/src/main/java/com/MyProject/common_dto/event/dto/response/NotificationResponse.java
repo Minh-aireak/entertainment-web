@@ -1,4 +1,4 @@
-package com.MyProject.common_dto.event.dto;
+package com.MyProject.common_dto.event.dto.response;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;

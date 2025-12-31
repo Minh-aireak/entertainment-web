@@ -1,4 +1,4 @@
-package com.MyProject.chat_service.dto.request;
+package com.MyProject.common_dto.event.dto.request;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;

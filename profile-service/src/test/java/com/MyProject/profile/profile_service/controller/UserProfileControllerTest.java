@@ -1,11 +1,14 @@
 package com.MyProject.profile.profile_service.controller;
 
-import com.MyProject.common_dto.event.dto.UserProfileResponse;
-import com.MyProject.profile.profile_service.dto.request.BulkUserProfileRequest;
+import com.MyProject.common_dto.event.dto.request.BulkUserProfileRequest;
+import com.MyProject.common_dto.event.dto.response.PageResponse;
+import com.MyProject.common_dto.event.dto.response.UserProfileResponse;
+import com.MyProject.profile.profile_service.configuration.CustomJwtDecoder;
+import com.MyProject.profile.profile_service.configuration.JwtAuthenticationEntryPoint;
+import com.MyProject.profile.profile_service.configuration.SecurityConfig;
 import com.MyProject.profile.profile_service.dto.request.SearchUserProfileRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileCreationRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileUpdateRequest;
-import com.MyProject.profile.profile_service.dto.response.PageResponse;
 import com.MyProject.profile.profile_service.exception.AppException;
 import com.MyProject.profile.profile_service.exception.ErrorCode;
 import com.MyProject.profile.profile_service.service.UserProfileService;
@@ -14,8 +17,9 @@ import lombok.experimental.FieldDefaults;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -35,7 +39,12 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@WebMvcTest(UserProfileController.class)
+@Import(
+        {SecurityConfig.class,
+        JwtAuthenticationEntryPoint.class,
+        CustomJwtDecoder.class}
+)
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")

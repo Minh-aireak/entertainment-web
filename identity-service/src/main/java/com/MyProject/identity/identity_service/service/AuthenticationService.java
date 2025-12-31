@@ -6,7 +6,7 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
-import com.MyProject.common_dto.event.dto.NotificationEvent;
+import com.MyProject.common_dto.event.dto.request.EmailRequest;
 import com.MyProject.identity.identity_service.dto.request.*;
 import com.MyProject.identity.identity_service.entity.Role;
 import com.MyProject.identity.identity_service.repository.RoleRepository;
@@ -37,8 +37,8 @@ import com.MyProject.identity.identity_service.exception.AppException;
 import com.MyProject.identity.identity_service.exception.ErrorCode;
 import com.MyProject.identity.identity_service.repository.InvalidatedTokenRepository;
 import com.MyProject.identity.identity_service.repository.UserRepository;
-import com.MyProject.common_dto.event.dto.IntrospectResponse;
-import com.MyProject.common_dto.event.dto.IntrospectRequest;
+import com.MyProject.common_dto.event.dto.response.IntrospectResponse;
+import com.MyProject.common_dto.event.dto.request.IntrospectRequest;
 
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -260,7 +260,7 @@ public class AuthenticationService {
 
             client.createProfile(creationRequest);
 
-            NotificationEvent notificationEvent = NotificationEvent.builder()
+            EmailRequest emailRequest = EmailRequest.builder()
                     .channel("EMAIL")
                     .recipient(userInfo.getEmail())
                     .subject("Welcome to travelplanner!")
@@ -273,7 +273,7 @@ public class AuthenticationService {
                     .build();
             newUser.setPassword(passwordEncoder.encode(newUser.getPassword()));
             userRepository.save(newUser);
-            kafkaTemplate.send("send-email", notificationEvent);
+            kafkaTemplate.send("send-email", emailRequest);
 
             return newUser;
         });

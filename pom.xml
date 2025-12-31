@@ -181,6 +181,7 @@
 						<exclude>**/configuration/**</exclude>
 						<exclude>**/IdentityApplication.class</exclude>
 						<exclude>**/ProfileServiceApplication.class</exclude>
+						<exclude>**/NotificationServiceApplication.class</exclude>
 					</excludes>
 				</configuration>
 			</plugin>

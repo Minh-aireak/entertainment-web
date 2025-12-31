@@ -1,6 +1,5 @@
 package com.MyProject.chat_service.service;
 
-import com.MyProject.chat_service.dto.request.BulkUserProfileRequest;
 import com.MyProject.chat_service.dto.response.ConversationResponse;
 import com.MyProject.chat_service.entity.*;
 import com.MyProject.chat_service.exception.AppException;
@@ -10,7 +9,8 @@ import com.MyProject.chat_service.repository.ConversationDirectRepository;
 import com.MyProject.chat_service.repository.ConversationGroupRepository;
 import com.MyProject.chat_service.repository.ConversationRepository;
 import com.MyProject.chat_service.repository.httpclient.ProfileClient;
-import com.MyProject.common_dto.event.dto.UserProfileResponse;
+import com.MyProject.common_dto.event.dto.request.BulkUserProfileRequest;
+import com.MyProject.common_dto.event.dto.response.UserProfileResponse;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;

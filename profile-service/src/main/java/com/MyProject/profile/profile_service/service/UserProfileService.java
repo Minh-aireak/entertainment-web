@@ -1,12 +1,12 @@
 package com.MyProject.profile.profile_service.service;
 
+import com.MyProject.common_dto.event.dto.request.BulkUserProfileRequest;
+import com.MyProject.common_dto.event.dto.response.PageResponse;
 import com.MyProject.common_dto.event.dto.ProfileUpdatedEvent;
-import com.MyProject.common_dto.event.dto.UserProfileResponse;
-import com.MyProject.profile.profile_service.dto.request.BulkUserProfileRequest;
+import com.MyProject.common_dto.event.dto.response.UserProfileResponse;
 import com.MyProject.profile.profile_service.dto.request.SearchUserProfileRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileCreationRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileUpdateRequest;
-import com.MyProject.profile.profile_service.dto.response.PageResponse;
 import com.MyProject.profile.profile_service.entity.UserProfile;
 import com.MyProject.profile.profile_service.exception.AppException;
 import com.MyProject.profile.profile_service.exception.ErrorCode;

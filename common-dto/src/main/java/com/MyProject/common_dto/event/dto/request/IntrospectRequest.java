@@ -1,15 +1,13 @@
-package com.MyProject.friend_service.dto.request;
+package com.MyProject.common_dto.event.dto.request;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
-import java.util.List;
-
 @Data
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class BulkUserProfileRequest {
-    List<String> userIds;
+public class IntrospectRequest {
+    String token;
 }

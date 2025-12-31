@@ -1,7 +1,6 @@
 package com.MyProject.socket_service.controller;
 
-import com.MyProject.common_dto.event.dto.NotificationData;
-import com.MyProject.common_dto.event.dto.NotificationResponse;
+import com.MyProject.common_dto.event.dto.NotificationSocketData;
 import com.MyProject.socket_service.service.WebSocketSessionService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -21,7 +20,7 @@ public class EventSocketController {
 //    }
 
     @KafkaListener(topics = "notification")
-    public void handleNotificationEventToUser(NotificationData notificationData) {
-        webSocketSessionService.publishToUsers(notificationData.userIds(), "notification", notificationData.notificationResponse());
+    public void handleNotificationEventToUser(NotificationSocketData notificationSocketData) {
+        webSocketSessionService.publishToUsers(notificationSocketData.userIds(), "notification", notificationSocketData.notificationResponse());
     }
 }

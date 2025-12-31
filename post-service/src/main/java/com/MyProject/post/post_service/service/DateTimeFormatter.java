@@ -1,7 +1,7 @@
-package com.MyProject.notification.notification_service.configuration;
+package com.MyProject.post.post_service.service;
 
-import com.MyProject.notification.notification_service.exception.AppException;
-import com.MyProject.notification.notification_service.exception.ErrorCode;
+import com.MyProject.post.post_service.exception.AppException;
+import com.MyProject.post.post_service.exception.ErrorCode;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -11,10 +11,10 @@ import java.util.Map;
 import java.util.function.Function;
 
 @Component
-public class NotificationStrategy {
+public class DateTimeFormatter {
     Map<Long, Function<LocalDateTime, String>> strategyMap = new LinkedHashMap<>();
 
-    public NotificationStrategy() {
+    public DateTimeFormatter() {
         strategyMap.put(60L, this::formatInSeconds);
         strategyMap.put(3600L, this::formatInMinutes);
         strategyMap.put(86400L, this::formatInHours);
@@ -59,5 +59,4 @@ public class NotificationStrategy {
     private String formatInYears(LocalDateTime localDateTime){
         return ChronoUnit.YEARS.between(localDateTime, LocalDateTime.now()) + " years ago";
     }
-
 }

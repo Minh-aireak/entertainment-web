@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
-import com.MyProject.common_dto.event.dto.NotificationEvent;
+import com.MyProject.common_dto.event.dto.request.EmailRequest;
 import com.MyProject.identity.identity_service.dto.request.*;
 import com.MyProject.identity.identity_service.entity.ResetPassword;
 import com.MyProject.identity.identity_service.repository.ResetPasswordRepository;
@@ -74,14 +74,14 @@ public class UserService {
 
         client.createProfile(userprofileRequest);
 
-        NotificationEvent notificationEvent = NotificationEvent.builder()
+        EmailRequest emailRequest = EmailRequest.builder()
                 .channel("EMAIL")
                 .recipient(request.getEmail())
                 .subject("Welcome to travelplanner!")
                 .body("Hello, " + request.getUsername())
                 .build();
 
-        kafkaTemplate.send("onboard-email", notificationEvent);
+        kafkaTemplate.send("onboard-email", emailRequest);
 
         return userMapper.toUserResponse(user);
     }
@@ -129,7 +129,7 @@ public class UserService {
 
         String resetUrl = "http://localhost:5173/password-reset-token?token=" + resetPassword.getToken();
 
-        NotificationEvent notificationEvent = NotificationEvent.builder()
+        EmailRequest emailRequest = EmailRequest.builder()
                 .channel("EMAIL")
                 .recipient(request.getEmail())
                 .subject("Reset Your Password")
@@ -143,7 +143,7 @@ public class UserService {
                 )
                 .build();
 
-        kafkaTemplate.send("send-email", notificationEvent);
+        kafkaTemplate.send("send-email", emailRequest);
         resetPasswordRepository.save(resetPassword);
 
         return "Check your email: " + request.getEmail();

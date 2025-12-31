@@ -1,14 +1,13 @@
 package com.MyProject.post.post_service.service;
 
+import com.MyProject.common_dto.event.dto.response.PageResponse;
 import com.MyProject.common_dto.event.dto.ProfileUpdatedEvent;
-import com.MyProject.common_dto.event.dto.UserProfileResponse;
-import com.MyProject.post.post_service.configuration.DateTimeFormatter;
+import com.MyProject.common_dto.event.dto.response.UserProfileResponse;
 import com.MyProject.post.post_service.dto.response.StatusResponse;
 import com.MyProject.post.post_service.job.UpdatePostStatusJob;
 import com.MyProject.post.post_service.dto.request.DataWeatherRequest;
 import com.MyProject.post.post_service.dto.request.ScheduleRequest;
 import com.MyProject.post.post_service.dto.request.ScheduleUpdateRequest;
-import com.MyProject.post.post_service.dto.response.PageResponse;
 import com.MyProject.post.post_service.dto.response.ScheduleResponse;
 import com.MyProject.post.post_service.entity.Post;
 import com.MyProject.post.post_service.entity.PostType;

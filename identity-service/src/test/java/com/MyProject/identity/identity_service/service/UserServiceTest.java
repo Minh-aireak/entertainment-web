@@ -1,6 +1,6 @@
 package com.MyProject.identity.identity_service.service;
 
-import com.MyProject.common_dto.event.dto.NotificationEvent;
+import com.MyProject.common_dto.event.dto.request.EmailRequest;
 import com.MyProject.identity.identity_service.dto.request.*;
 import com.MyProject.identity.identity_service.dto.response.RoleResponse;
 import com.MyProject.identity.identity_service.dto.response.UserResponse;
@@ -177,7 +177,7 @@ class UserServiceTest {
         verify(passwordEncoder, times(1)).encode("REDACTED_LEGACY_CREDENTIAL");
         verify(userRepository, times(1)).save(user);
         verify(client).createProfile(any(UserProfileCreationRequest.class));
-        verify(kafkaTemplate).send(eq("onboard-email"), any(NotificationEvent.class));
+        verify(kafkaTemplate).send(eq("onboard-email"), any(EmailRequest.class));
         verify(userMapper, times(1)).toUserResponse(any());
     }
 
@@ -309,7 +309,7 @@ class UserServiceTest {
 
         verify(userRepository, times(1)).findByEmail(forgotPasswordRequest.getEmail());
         verify(resetPasswordRepository, times(1)).save(any());
-        verify(kafkaTemplate, times(1)).send(eq("send-email"), any(NotificationEvent.class));
+        verify(kafkaTemplate, times(1)).send(eq("send-email"), any(EmailRequest.class));
     }
 
     @Test

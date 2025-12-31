@@ -2,7 +2,6 @@ package com.MyProject.socket_service.service;
 
 import com.MyProject.socket_service.entity.WebSocketSession;
 import com.MyProject.socket_service.repository.WebSocketSessionRepository;
-import com.corundumstudio.socketio.SocketIOClient;
 import com.corundumstudio.socketio.SocketIOServer;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
