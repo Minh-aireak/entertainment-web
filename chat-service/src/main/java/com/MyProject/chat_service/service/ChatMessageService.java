@@ -3,7 +3,8 @@ package com.MyProject.chat_service.service;
 import com.MyProject.chat_service.dto.request.ChatMessageCreateRequest;
 import com.MyProject.chat_service.dto.request.ChatMessageDeleteRequest;
 import com.MyProject.chat_service.dto.request.ChatMessageUpdateRequest;
-import com.MyProject.common_dto.event.dto.response.PageResponse;
+import com.MyProject.common.dto.request.BulkUserProfileRequest;
+import com.MyProject.common.dto.response.PageResponse;
 import com.MyProject.chat_service.entity.*;
 import com.MyProject.chat_service.exception.AppException;
 import com.MyProject.chat_service.exception.ErrorCode;
@@ -11,7 +12,9 @@ import com.MyProject.chat_service.mapper.ChatMessageMapper;
 import com.MyProject.chat_service.repository.ChatMessageRepository;
 import com.MyProject.chat_service.repository.ConversationRepository;
 import com.MyProject.chat_service.repository.httpclient.ProfileClient;
-import com.MyProject.common_dto.event.dto.response.ChatMessageResponse;
+import com.MyProject.common.dto.response.ChatMessageResponse;
+import com.MyProject.common.dto.response.UserProfileResponse;
+import com.MyProject.common.redis.RedisService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -30,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -41,6 +45,15 @@ public class ChatMessageService {
     ConversationRepository conversationRepository;
     ChatMessageRepository chatMessageRepository;
     KafkaTemplate<String, Object> kafkaTemplate;
+    RedisService redisService;
+
+    private String getMessageCacheKey(String conversationId) {
+        return "chat:messages:" + conversationId;
+    }
+
+    private String getUnreadSetKey(String conversationId, String userId) {
+        return "chat:unread:" + conversationId + ":" + userId;
+    }
 
     private String getUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -73,7 +86,14 @@ public class ChatMessageService {
                 .findAny()
                 .orElseThrow(() -> new AppException(ErrorCode.USERID_NOT_FOUND));
 
-        var user = profileClient.getUserProfile(userId).getResult();
+        String userCacheKey = "profile:user:" + userId;
+        UserProfileResponse user = (UserProfileResponse) redisService.get(userCacheKey);
+        if (user == null) {
+            user = profileClient.getBulkUserProfiles(
+                            BulkUserProfileRequest.builder().userIds(List.of(userId)).build())
+                    .getResult().getFirst();
+            redisService.setWithExpiration(userCacheKey, user, 24, TimeUnit.HOURS);
+        }
 
         var chatMessage = chatMessageMapper.toChatMessage(request);
         chatMessage.setId(UUID.randomUUID().toString());
@@ -88,15 +108,24 @@ public class ChatMessageService {
         chatMessage.setMessageStatus(MessageStatus.SENT);
         chatMessage.setSeenAtMap(new HashMap<>());
 
-        var response = toChatMessageOwnerResponse(chatMessageRepository.save(chatMessage));
+        var savedMessage = chatMessageRepository.save(chatMessage);
+        var response = toChatMessageOwnerResponse(savedMessage);
+
+        String msgKey = getMessageCacheKey(request.getConversationId());
+        redisService.listLeftPush(msgKey, response);
+        redisService.listTrim(msgKey, 0, 99);
+
+        participants.stream()
+                .filter(p -> !p.getUserId().equals(userId))
+                .forEach(p -> redisService.addSet(getUnreadSetKey(request.getConversationId(), p.getUserId()), savedMessage.getId()));
 
         kafkaTemplate.send("send-message", response);
-
         return response;
     }
 
     public PageResponse<ChatMessageResponse> getMyChatMessages(String conversationId, int page, int size) {
         String userId = getUserId();
+        String redisKey = getMessageCacheKey(conversationId);
         conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND))
                 .getParticipantInfos()
@@ -105,14 +134,32 @@ public class ChatMessageService {
                 .findAny()
                 .orElseThrow(() -> new AppException(ErrorCode.USERID_NOT_FOUND));
 
-        Sort sort = Sort.by("createdDate").ascending();
-        Pageable pageable = PageRequest.of(page - 1, size, sort);
+        if (page == 1) {
+            List<Object> cached = redisService.listRange(redisKey, 0, size - 1);
+            if (cached != null && !cached.isEmpty()) {
+                return PageResponse.<ChatMessageResponse>builder()
+                        .data(cached.stream().map(m -> (ChatMessageResponse) m).toList())
+                        .currentPage(1)
+                        .pageSize(size)
+                        .build();
+            }
+        }
 
+        Sort sort = Sort.by("createdDate").descending();
+        Pageable pageable = PageRequest.of(page - 1, size, sort);
         Page<ChatMessage> pageData = chatMessageRepository.findChatMessage(conversationId, pageable);
 
         List<ChatMessageResponse> chatMessageList = pageData.getContent().stream()
                 .map(this::toChatMessageOwnerResponse)
                 .toList();
+
+        if (page == 1 && !chatMessageList.isEmpty()) {
+            redisService.delete(redisKey);
+            List<ChatMessageResponse> reverseList = new ArrayList<>(chatMessageList);
+            Collections.reverse(reverseList);
+            reverseList.forEach(m -> redisService.listLeftPush(redisKey, m));
+            redisService.setWithExpiration(redisKey, 24, 5000, TimeUnit.HOURS);
+        }
 
         return PageResponse.<ChatMessageResponse>builder()
                 .currentPage(page)
@@ -129,7 +176,11 @@ public class ChatMessageService {
                 .orElseThrow(() -> new AppException(ErrorCode.MESSAGE_NOT_FOUND));
         chatMessage.setMessageType(MessageType.valueOf(request.getDeleteType()));
 
-        return toChatMessageOwnerResponse(chatMessageRepository.save(chatMessage));
+        var saved = chatMessageRepository.save(chatMessage);
+
+        redisService.delete(getMessageCacheKey(chatMessage.getConversationId()));
+
+        return toChatMessageOwnerResponse(saved);
     }
 
     @Transactional
@@ -139,7 +190,11 @@ public class ChatMessageService {
         chatMessage.setContent(request.getContent());
         chatMessage.setModifiedDate(Instant.now());
 
-        return toChatMessageOwnerResponse(chatMessageRepository.save(chatMessage));
+        var saved = chatMessageRepository.save(chatMessage);
+
+        redisService.delete(getMessageCacheKey(chatMessage.getConversationId()));
+
+        return toChatMessageOwnerResponse(saved);
     }
 
     @Transactional
@@ -161,5 +216,9 @@ public class ChatMessageService {
         }
 
         chatMessageRepository.saveAll(msg);
+
+        redisService.delete(getUnreadSetKey(conversationId, userId));
+
+        redisService.delete(getMessageCacheKey(conversationId));
     }
 }

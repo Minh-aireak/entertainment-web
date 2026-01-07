@@ -75,6 +75,16 @@ services:
       - mongodb
       - neo4j
 
+  # Redis
+  redis:
+    image: ${REDIS_IMAGE}
+    container_name: ${REDIS_CONTAINER_NAME}
+    restart: always
+    ports:
+      - '${REDIS_PORT}:6379'
+    volumes:
+      - redis_data:/data
+
   # Services
   identity:
     build:
@@ -99,6 +109,7 @@ services:
     depends_on:
       - neo4j
       - kafka
+      - redis
 
   notification:
     build:
@@ -111,6 +122,7 @@ services:
     depends_on:
       - mongodb
       - kafka
+      - redis
 
   post:
     build:
@@ -124,6 +136,7 @@ services:
       - mysql
       - mongodb
       - kafka
+      - redis
 
   file:
     build:
@@ -203,3 +216,4 @@ volumes:
   mongodb_data:
   neo4j_data:
   kafka_data:
+  redis_data:

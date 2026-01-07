@@ -1,8 +1,8 @@
 package com.MyProject.post.post_service.service;
 
-import com.MyProject.common_dto.event.dto.response.PageResponse;
-import com.MyProject.common_dto.event.dto.ProfileUpdatedEvent;
-import com.MyProject.common_dto.event.dto.response.UserProfileResponse;
+import com.MyProject.common.dto.response.PageResponse;
+import com.MyProject.common.dto.ProfileUpdatedEvent;
+import com.MyProject.common.dto.response.UserProfileResponse;
 import com.MyProject.post.post_service.dto.response.StatusResponse;
 import com.MyProject.post.post_service.job.UpdatePostStatusJob;
 import com.MyProject.post.post_service.dto.request.DataWeatherRequest;

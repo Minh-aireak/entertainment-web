@@ -91,7 +91,7 @@
 
 		<dependency>
 			<groupId>com.project</groupId>
-			<artifactId>common-dto</artifactId>
+			<artifactId>common</artifactId>
 		</dependency>
 
 	</dependencies>

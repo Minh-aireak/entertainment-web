@@ -6,7 +6,7 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
-import com.MyProject.common_dto.event.dto.request.EmailRequest;
+import com.MyProject.common.dto.request.EmailRequest;
 import com.MyProject.identity.identity_service.dto.request.*;
 import com.MyProject.identity.identity_service.entity.Role;
 import com.MyProject.identity.identity_service.repository.RoleRepository;
@@ -37,8 +37,8 @@ import com.MyProject.identity.identity_service.exception.AppException;
 import com.MyProject.identity.identity_service.exception.ErrorCode;
 import com.MyProject.identity.identity_service.repository.InvalidatedTokenRepository;
 import com.MyProject.identity.identity_service.repository.UserRepository;
-import com.MyProject.common_dto.event.dto.response.IntrospectResponse;
-import com.MyProject.common_dto.event.dto.request.IntrospectRequest;
+import com.MyProject.common.dto.response.IntrospectResponse;
+import com.MyProject.common.dto.request.IntrospectRequest;
 
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;

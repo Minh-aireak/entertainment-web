@@ -28,11 +28,12 @@
 		<nimbus.jose.jwt.version>10.1</nimbus.jose.jwt.version>
 		<jjwt.version>0.13.0</jjwt.version>
 		<testcontainers.bom.version>1.19.3</testcontainers.bom.version>
-		<common-dto.version>1.0.0</common-dto.version>
+		<common.file-upload>1.6.0</common.file-upload>
+		<common.version>1.0.0</common.version>
 	</properties>
 
 	<modules>
-		<module>common-dto</module>
+		<module>common</module>
 		<module>api-gateway</module>
 		<module>chat-service</module>
 		<module>file-service</module>
@@ -49,8 +50,8 @@
 		<dependencies>
 			<dependency>
 				<groupId>com.project</groupId>
-				<artifactId>common-dto</artifactId>
-				<version>${common-dto.version}</version>
+				<artifactId>common</artifactId>
+				<version>${common.version}</version>
 			</dependency>
 
 			<dependency>
@@ -99,6 +100,12 @@
 				<artifactId>jjwt-jackson</artifactId>
 				<version>${jjwt.version}</version>
 				<scope>runtime</scope>
+			</dependency>
+
+			<dependency>
+				<groupId>commons-fileupload</groupId>
+				<artifactId>commons-fileupload</artifactId>
+				<version>${common.file-upload}</version>
 			</dependency>
 
 			<dependency>
@@ -182,6 +189,7 @@
 						<exclude>**/IdentityApplication.class</exclude>
 						<exclude>**/ProfileServiceApplication.class</exclude>
 						<exclude>**/NotificationServiceApplication.class</exclude>
+						<exclude>**/PostServiceApplication.class</exclude>
 					</excludes>
 				</configuration>
 			</plugin>

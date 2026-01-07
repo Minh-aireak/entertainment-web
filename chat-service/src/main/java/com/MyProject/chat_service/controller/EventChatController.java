@@ -1,7 +1,7 @@
 package com.MyProject.chat_service.controller;
 
 import com.MyProject.chat_service.service.ConversationService;
-import com.MyProject.common_dto.event.dto.ProfileUpdatedEvent;
+import com.MyProject.common.dto.ProfileUpdatedEvent;
 import com.MyProject.chat_service.service.UserProfileService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;

@@ -1,6 +1,6 @@
 package com.MyProject.socket_service.controller;
 
-import com.MyProject.common_dto.event.dto.NotificationSocketData;
+import com.MyProject.common.dto.NotificationSocketData;
 import com.MyProject.socket_service.service.WebSocketSessionService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;

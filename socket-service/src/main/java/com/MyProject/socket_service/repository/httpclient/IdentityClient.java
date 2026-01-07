@@ -1,7 +1,7 @@
 package com.MyProject.socket_service.repository.httpclient;
 
-import com.MyProject.common_dto.event.dto.request.IntrospectRequest;
-import com.MyProject.common_dto.event.dto.response.IntrospectResponse;
+import com.MyProject.common.dto.request.IntrospectRequest;
+import com.MyProject.common.dto.response.IntrospectResponse;
 import com.MyProject.socket_service.dto.response.ApiResponse;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.PostMapping;

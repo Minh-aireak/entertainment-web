@@ -1,7 +1,7 @@
 package com.MyProject.notification.notification_service.controller;
 
-import com.MyProject.common_dto.event.dto.response.NotificationResponse;
-import com.MyProject.common_dto.event.dto.response.PageResponse;
+import com.MyProject.common.dto.response.NotificationResponse;
+import com.MyProject.common.dto.response.PageResponse;
 import com.MyProject.notification.notification_service.dto.response.ApiResponse;
 import com.MyProject.notification.notification_service.service.NotificationService;
 import lombok.AccessLevel;

@@ -1,8 +1,9 @@
 package com.MyProject.profile.profile_service.service;
 
-import com.MyProject.common_dto.event.dto.request.BulkUserProfileRequest;
-import com.MyProject.common_dto.event.dto.ProfileUpdatedEvent;
-import com.MyProject.common_dto.event.dto.response.UserProfileResponse;
+import com.MyProject.common.dto.request.BulkUserProfileRequest;
+import com.MyProject.common.dto.ProfileUpdatedEvent;
+import com.MyProject.common.dto.response.UserProfileResponse;
+import com.MyProject.common.redis.RedisService;
 import com.MyProject.profile.profile_service.dto.request.SearchUserProfileRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileCreationRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileUpdateRequest;
@@ -14,21 +15,18 @@ import com.MyProject.profile.profile_service.exception.ErrorCode;
 import com.MyProject.profile.profile_service.mapper.UserProfileMapper;
 import com.MyProject.profile.profile_service.repository.UserProfileRepository;
 import com.MyProject.profile.profile_service.repository.httpclient.FileClient;
-import lombok.AccessLevel;
-import lombok.experimental.FieldDefaults;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.*;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import java.time.LocalDate;
@@ -42,28 +40,28 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.never;
 
-@SpringBootTest
-@ActiveProfiles("test")
-@AutoConfigureMockMvc
-@FieldDefaults(level = AccessLevel.PRIVATE)
+@ExtendWith(MockitoExtension.class)
 class UserProfileServiceTest {
-    @Autowired
+    @InjectMocks
     UserProfileService userProfileService;
 
-    @MockitoBean
+    @Mock
     PlatformTransactionManager platformTransactionManager;
 
-    @MockitoBean
+    @Mock
     UserProfileMapper userProfileMapper;
 
-    @MockitoBean
+    @Mock
     FileClient client;
 
-    @MockitoBean
+    @Mock
     UserProfileRepository userProfileRepository;
 
-    @MockitoBean
+    @Mock
     KafkaTemplate<String, Object> kafkaTemplate;
+
+    @Mock
+    RedisService redisService;
 
     UserProfile profile;
     UserProfile profile2;
@@ -173,6 +171,7 @@ class UserProfileServiceTest {
         verify(userProfileRepository, times(1)).findByUsername(any());
         verify(userProfileMapper, times(1)).update(any(), any());
         verify(userProfileRepository, times(1)).save(any());
+        verify(redisService, times(1)).delete(anyString());
         verify(kafkaTemplate, times(1)).send(any(), any());
         verify(userProfileMapper, times(1)).toUserProfileResponse(any());
     }
@@ -193,6 +192,7 @@ class UserProfileServiceTest {
         verify(userProfileRepository, never()).findByUsername(any());
         verify(userProfileMapper, never()).update(any(), any());
         verify(userProfileRepository, never()).save(any());
+        verify(redisService, never()).delete(anyString());
         verify(kafkaTemplate, never()).send(any(), any());
         verify(userProfileMapper, never()).toUserProfileResponse(any());
     }
@@ -302,6 +302,7 @@ class UserProfileServiceTest {
         verify(userProfileRepository, times(1)).findByUsername(any());
         verify(client, times(1)).uploadAvatar(any());
         verify(userProfileRepository, times(1)).save(any());
+        verify(redisService, times(1)).delete(anyString());
         verify(kafkaTemplate, times(1)).send(any(), any(ProfileUpdatedEvent.class));
         verify(userProfileMapper, times(1)).toUserProfileResponse(any());
     }
@@ -323,6 +324,7 @@ class UserProfileServiceTest {
         verify(userProfileRepository, never()).findByUsername(any());
         verify(client, never()).uploadAvatar(any());
         verify(userProfileRepository, never()).save(any());
+        verify(redisService, never()).delete(anyString());
         verify(kafkaTemplate, never()).send(any(), any(ProfileUpdatedEvent.class));
         verify(userProfileMapper, never()).toUserProfileResponse(any());
     }

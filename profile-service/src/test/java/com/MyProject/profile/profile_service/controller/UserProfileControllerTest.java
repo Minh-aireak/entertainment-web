@@ -1,8 +1,8 @@
 package com.MyProject.profile.profile_service.controller;
 
-import com.MyProject.common_dto.event.dto.request.BulkUserProfileRequest;
-import com.MyProject.common_dto.event.dto.response.PageResponse;
-import com.MyProject.common_dto.event.dto.response.UserProfileResponse;
+import com.MyProject.common.dto.request.BulkUserProfileRequest;
+import com.MyProject.common.dto.response.PageResponse;
+import com.MyProject.common.dto.response.UserProfileResponse;
 import com.MyProject.profile.profile_service.configuration.CustomJwtDecoder;
 import com.MyProject.profile.profile_service.configuration.JwtAuthenticationEntryPoint;
 import com.MyProject.profile.profile_service.configuration.SecurityConfig;

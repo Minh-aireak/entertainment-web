@@ -1,6 +1,6 @@
 package com.MyProject.socket_service.controller;
 
-import com.MyProject.common_dto.event.dto.request.IntrospectRequest;
+import com.MyProject.common.dto.request.IntrospectRequest;
 import com.MyProject.socket_service.entity.WebSocketSession;
 import com.MyProject.socket_service.exception.AppException;
 import com.MyProject.socket_service.exception.ErrorCode;

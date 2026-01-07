@@ -1,9 +1,10 @@
 package com.MyProject.profile.profile_service.service;
 
-import com.MyProject.common_dto.event.dto.request.BulkUserProfileRequest;
-import com.MyProject.common_dto.event.dto.response.PageResponse;
-import com.MyProject.common_dto.event.dto.ProfileUpdatedEvent;
-import com.MyProject.common_dto.event.dto.response.UserProfileResponse;
+import com.MyProject.common.dto.request.BulkUserProfileRequest;
+import com.MyProject.common.dto.response.PageResponse;
+import com.MyProject.common.dto.ProfileUpdatedEvent;
+import com.MyProject.common.dto.response.UserProfileResponse;
+import com.MyProject.common.redis.RedisService;
 import com.MyProject.profile.profile_service.dto.request.SearchUserProfileRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileCreationRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileUpdateRequest;
@@ -28,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -38,6 +40,7 @@ public class UserProfileService {
     UserProfileMapper userProfileMapper;
     FileClient client;
     KafkaTemplate<String, Object> kafkaTemplate;
+    RedisService redisService;
 
     private String getUserName(){
         var authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -45,6 +48,10 @@ public class UserProfileService {
             throw new AppException(ErrorCode.UNAUTHENTICATED);
         }
         return authentication.getName();
+    }
+
+    private String getProfileKey(String userId) {
+        return "profile:user:" + userId;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -61,6 +68,8 @@ public class UserProfileService {
         userProfileMapper.update(profile, request);
 
         UserProfile savedProfile = userProfileRepository.save(profile);
+
+        redisService.delete(getProfileKey(savedProfile.getUserId()));
 
         ProfileUpdatedEvent event = ProfileUpdatedEvent.builder()
                 .userId(savedProfile.getUserId())
@@ -115,6 +124,8 @@ public class UserProfileService {
         profile.setAvatar(newAvatar);
         
         UserProfile savedProfile = userProfileRepository.save(profile);
+
+        redisService.delete(getProfileKey(savedProfile.getUserId()));
 
         ProfileUpdatedEvent event = ProfileUpdatedEvent.builder()
                 .userId(savedProfile.getUserId())

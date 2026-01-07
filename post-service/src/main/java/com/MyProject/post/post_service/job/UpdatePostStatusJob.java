@@ -1,8 +1,8 @@
 package com.MyProject.post.post_service.job;
 
-import com.MyProject.common_dto.event.dto.StatusChangeData;
-import com.MyProject.common_dto.event.dto.request.NotificationRequest;
-import com.MyProject.common_dto.event.entity.TypeNotification;
+import com.MyProject.common.dto.StatusChangeData;
+import com.MyProject.common.dto.request.NotificationRequest;
+import com.MyProject.common.entity.TypeNotification;
 import com.MyProject.post.post_service.entity.Post;
 import com.MyProject.post.post_service.exception.AppException;
 import com.MyProject.post.post_service.exception.ErrorCode;

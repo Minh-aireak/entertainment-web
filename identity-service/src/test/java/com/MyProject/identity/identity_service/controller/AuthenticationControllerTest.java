@@ -2,8 +2,8 @@ package com.MyProject.identity.identity_service.controller;
 
 import static org.mockito.Mockito.*;
 
-import com.MyProject.common_dto.event.dto.request.IntrospectRequest;
-import com.MyProject.common_dto.event.dto.response.IntrospectResponse;
+import com.MyProject.common.dto.request.IntrospectRequest;
+import com.MyProject.common.dto.response.IntrospectResponse;
 import com.MyProject.identity.identity_service.configuration.CustomJwtDecoder;
 import com.MyProject.identity.identity_service.configuration.JwtAuthenticationEntryPoint;
 import com.MyProject.identity.identity_service.configuration.SecurityConfig;

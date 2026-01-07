@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
-import com.MyProject.common_dto.event.dto.request.EmailRequest;
+import com.MyProject.common.dto.request.EmailRequest;
 import com.MyProject.identity.identity_service.dto.request.*;
 import com.MyProject.identity.identity_service.entity.ResetPassword;
 import com.MyProject.identity.identity_service.repository.ResetPasswordRepository;

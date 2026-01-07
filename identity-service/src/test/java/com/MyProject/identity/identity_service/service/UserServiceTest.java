@@ -1,6 +1,6 @@
 package com.MyProject.identity.identity_service.service;
 
-import com.MyProject.common_dto.event.dto.request.EmailRequest;
+import com.MyProject.common.dto.request.EmailRequest;
 import com.MyProject.identity.identity_service.dto.request.*;
 import com.MyProject.identity.identity_service.dto.response.RoleResponse;
 import com.MyProject.identity.identity_service.dto.response.UserResponse;

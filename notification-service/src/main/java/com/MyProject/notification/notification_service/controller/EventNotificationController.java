@@ -1,7 +1,7 @@
 package com.MyProject.notification.notification_service.controller;
 
-import com.MyProject.common_dto.event.dto.request.EmailRequest;
-import com.MyProject.common_dto.event.dto.request.NotificationRequest;
+import com.MyProject.common.dto.request.EmailRequest;
+import com.MyProject.common.dto.request.NotificationRequest;
 import com.MyProject.notification.notification_service.dto.request.Recipient;
 import com.MyProject.notification.notification_service.dto.request.SendEmailRequest;
 import com.MyProject.notification.notification_service.service.EmailService;

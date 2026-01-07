@@ -1,6 +1,6 @@
 package com.MyProject.identity.identity_service.controller;
 
-import com.MyProject.common_dto.event.dto.request.IntrospectRequest;
+import com.MyProject.common.dto.request.IntrospectRequest;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -11,7 +11,7 @@ import com.MyProject.identity.identity_service.dto.request.RefreshRequest;
 import com.MyProject.identity.identity_service.dto.response.ApiResponse;
 import com.MyProject.identity.identity_service.dto.response.AuthenticationResponse;
 import com.MyProject.identity.identity_service.service.AuthenticationService;
-import com.MyProject.common_dto.event.dto.response.IntrospectResponse;
+import com.MyProject.common.dto.response.IntrospectResponse;
 
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;

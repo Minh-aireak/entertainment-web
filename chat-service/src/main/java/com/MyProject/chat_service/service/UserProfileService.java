@@ -1,6 +1,6 @@
 package com.MyProject.chat_service.service;
 
-import com.MyProject.common_dto.event.dto.ProfileUpdatedEvent;
+import com.MyProject.common.dto.ProfileUpdatedEvent;
 import com.MyProject.chat_service.entity.ChatMessage;
 import com.MyProject.chat_service.entity.Conversation;
 import com.MyProject.chat_service.entity.ParticipantInfo;

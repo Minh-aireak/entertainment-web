@@ -2,7 +2,7 @@ package com.MyProject.chat_service.mapper;
 
 import com.MyProject.chat_service.dto.request.ChatMessageCreateRequest;
 import com.MyProject.chat_service.entity.ChatMessage;
-import com.MyProject.common_dto.event.dto.response.ChatMessageResponse;
+import com.MyProject.common.dto.response.ChatMessageResponse;
 import org.mapstruct.Mapper;
 import org.mapstruct.NullValuePropertyMappingStrategy;
 

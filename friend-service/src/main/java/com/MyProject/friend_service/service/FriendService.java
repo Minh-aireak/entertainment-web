@@ -1,9 +1,10 @@
 package com.MyProject.friend_service.service;
 
-import com.MyProject.common_dto.event.dto.request.NotificationRequest;
-import com.MyProject.common_dto.event.dto.response.PageResponse;
-import com.MyProject.common_dto.event.dto.response.UserProfileResponse;
-import com.MyProject.common_dto.event.dto.request.BulkUserProfileRequest;
+import com.MyProject.common.dto.request.NotificationRequest;
+import com.MyProject.common.dto.response.PageResponse;
+import com.MyProject.common.dto.response.UserProfileResponse;
+import com.MyProject.common.dto.request.BulkUserProfileRequest;
+import com.MyProject.common.entity.TypeNotification;
 import com.MyProject.friend_service.dto.request.UpdateFriendRequestStatus;
 import com.MyProject.friend_service.dto.request.UpdateRelationshipStatus;
 import com.MyProject.friend_service.dto.response.FriendResponse;
@@ -85,7 +86,7 @@ public class FriendService {
         metadata.put("message", "sent you friend request !");
 
         NotificationRequest event = NotificationRequest.builder()
-                .typeNotification(com.MyProject.common_dto.event.entity.TypeNotification.FRIEND_REQUEST)
+                .typeNotification(TypeNotification.FRIEND_REQUEST)
                 .userIdSender(fromUserId)
                 .toUserIds(List.of(toUserId))
                 .metadata(metadata)

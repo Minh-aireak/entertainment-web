@@ -1,11 +1,11 @@
 package com.MyProject.notification.notification_service.service;
 
-import com.MyProject.common_dto.event.dto.NotificationSocketData;
-import com.MyProject.common_dto.event.dto.request.BulkUserProfileRequest;
-import com.MyProject.common_dto.event.dto.request.NotificationRequest;
-import com.MyProject.common_dto.event.dto.response.NotificationResponse;
-import com.MyProject.common_dto.event.dto.response.UserProfileResponse;
-import com.MyProject.common_dto.event.entity.TypeNotification;
+import com.MyProject.common.dto.NotificationSocketData;
+import com.MyProject.common.dto.request.BulkUserProfileRequest;
+import com.MyProject.common.dto.request.NotificationRequest;
+import com.MyProject.common.dto.response.NotificationResponse;
+import com.MyProject.common.dto.response.UserProfileResponse;
+import com.MyProject.common.entity.TypeNotification;
 import com.MyProject.notification.notification_service.dto.response.ApiResponse;
 import com.MyProject.notification.notification_service.entity.Notification;
 import com.MyProject.notification.notification_service.exception.AppException;
@@ -41,6 +41,9 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class NotificationServiceTest {
 
+    @InjectMocks
+    NotificationService notificationService;
+
     @Mock
     NotificationRepository notificationRepository;
 
@@ -52,9 +55,6 @@ class NotificationServiceTest {
 
     @Mock
     KafkaTemplate<String, Object> kafkaTemplate;
-
-    @InjectMocks
-    NotificationService notificationService;
 
     String currentUserId = "user-123";
 

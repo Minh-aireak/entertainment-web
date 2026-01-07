@@ -1,5 +1,6 @@
 package com.MyProject.notification.notification_service.entity;
 
+import com.MyProject.common.entity.TypeNotification;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import org.springframework.data.annotation.Id;
@@ -19,7 +20,7 @@ import java.util.Map;
 public class Notification {
     @Id
     String id;
-    com.MyProject.common_dto.event.entity.TypeNotification type;
+    TypeNotification type;
     String userIdSender;
 
     @Indexed
