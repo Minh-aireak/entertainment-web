@@ -11,15 +11,12 @@ import com.MyProject.identity.identity_service.exception.ErrorCode;
 import com.MyProject.identity.identity_service.mapper.RoleMapper;
 import com.MyProject.identity.identity_service.repository.PermissionRepository;
 import com.MyProject.identity.identity_service.repository.RoleRepository;
-import lombok.AccessLevel;
-import lombok.experimental.FieldDefaults;
-import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
 import java.util.Optional;
@@ -30,21 +27,18 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-@SpringBootTest
-@Slf4j
-@FieldDefaults(level = AccessLevel.PRIVATE)
-@ActiveProfiles("test")
+@ExtendWith(MockitoExtension.class)
 class RoleServiceTest {
-    @Autowired
+    @InjectMocks
     RoleService roleService;
 
-    @MockitoBean
+    @Mock
     RoleMapper roleMapper;
 
-    @MockitoBean
+    @Mock
     PermissionRepository permissionRepository;
 
-    @MockitoBean
+    @Mock
     RoleRepository roleRepository;
 
     Permission permission;

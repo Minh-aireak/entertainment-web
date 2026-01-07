@@ -14,23 +14,19 @@ import com.MyProject.identity.identity_service.repository.ResetPasswordRepositor
 import com.MyProject.identity.identity_service.repository.RoleRepository;
 import com.MyProject.identity.identity_service.repository.UserRepository;
 import com.MyProject.identity.identity_service.repository.httpclient.UserProfileClient;
-import lombok.AccessLevel;
-import lombok.experimental.FieldDefaults;
-import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -45,34 +41,30 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-@SpringBootTest
-@Slf4j
-@FieldDefaults(level = AccessLevel.PRIVATE)
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
+@ExtendWith(MockitoExtension.class)
 class UserServiceTest {
-    @Autowired
+    @InjectMocks
     UserService userService;
 
-    @MockitoBean
+    @Mock
     UserMapper userMapper;
 
-    @MockitoBean
+    @Mock
     UserRepository userRepository;
 
-    @MockitoBean
+    @Mock
     RoleRepository roleRepository;
 
-    @MockitoBean
+    @Mock
     ResetPasswordRepository resetPasswordRepository;
 
-    @MockitoBean
+    @Mock
     PasswordEncoder passwordEncoder;
 
-    @MockitoBean
+    @Mock
     UserProfileClient client;
 
-    @MockitoBean
+    @Mock
     KafkaTemplate<String, Object> kafkaTemplate;
 
     User user;
@@ -288,7 +280,7 @@ class UserServiceTest {
 
     @Test
     void disableUser_userNotExisted() {
-        when(userRepository.findById("aireak")).thenReturn(Optional.empty());
+        when(userRepository.findByUsername("aireak")).thenReturn(Optional.empty());
 
         AppException exception = assertThrows(AppException.class,
                 () -> userService.disableUser("aireak"));

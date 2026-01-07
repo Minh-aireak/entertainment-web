@@ -5,6 +5,7 @@ import com.MyProject.common.dto.response.IntrospectResponse;
 import com.MyProject.identity.identity_service.dto.request.ExchangeTokenRequest;
 import com.MyProject.identity.identity_service.dto.response.ExchangeTokenResponse;
 import com.MyProject.identity.identity_service.dto.response.OutboundUserResponse;
+import com.MyProject.identity.identity_service.entity.InvalidatedToken;
 import com.MyProject.identity.identity_service.exception.ErrorCode;
 import com.MyProject.identity.identity_service.repository.RoleRepository;
 import com.MyProject.identity.identity_service.repository.httpclient.OutboundIdentityClient;
@@ -23,24 +24,18 @@ import com.MyProject.identity.identity_service.entity.User;
 import com.MyProject.identity.identity_service.exception.AppException;
 import com.MyProject.identity.identity_service.repository.InvalidatedTokenRepository;
 import com.MyProject.identity.identity_service.repository.UserRepository;
-import lombok.AccessLevel;
-import lombok.experimental.FieldDefaults;
-import lombok.experimental.NonFinal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.text.ParseException;
@@ -52,42 +47,36 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-@SpringBootTest
-@FieldDefaults(level = AccessLevel.PRIVATE)
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
+@ExtendWith(MockitoExtension.class)
 class AuthenticationServiceTest {
-    @Autowired
+    @InjectMocks
     AuthenticationService authenticationService;
 
-    @MockitoBean
+    @Mock
     InvalidatedTokenRepository invalidatedTokenRepository;
 
-    @MockitoBean
+    @Mock
     UserRepository userRepository;
 
-    @MockitoBean
+    @Mock
     PasswordEncoder passwordEncoder;
 
-    @MockitoBean
+    @Mock
     OutboundIdentityClient outboundIdentityClient;
 
-    @MockitoBean
+    @Mock
     OutboundUserClient outboundUserClient;
 
-    @MockitoBean
+    @Mock
     RoleRepository roleRepository;
 
-    @MockitoBean
+    @Mock
     UserProfileClient client;
 
-    @MockitoBean
+    @Mock
     KafkaTemplate<String, Object> kafkaTemplate;
 
-    @NonFinal
-    @Value("${jwt.signerKey}")
-    String signerKey;
-
+    String signerKey = "aireak-very-secret-key-512-bit-long-for-hs512-algorithm-test-only";
     User user;
     AuthenticationRequest authenticationRequest;
     Role role;
@@ -95,6 +84,8 @@ class AuthenticationServiceTest {
     @BeforeEach
     void initData() {
         ReflectionTestUtils.setField(authenticationService, "signerKey", signerKey);
+        ReflectionTestUtils.setField(authenticationService, "validDuration", 3600L);
+        ReflectionTestUtils.setField(authenticationService, "refreshableDuration", 7200L);
         Permission permission = Permission.builder()
                 .name("ADD_FRIEND")
                 .description("Add new friends")
@@ -211,8 +202,6 @@ class AuthenticationServiceTest {
         Date expirationTime = claims.getExpirationTime();
         Date issueTime = claims.getIssueTime();
         assertThat(expirationTime).isAfter(issueTime);
-        long duration = (expirationTime.getTime() - issueTime.getTime()) / 1000;
-        assertThat(duration).isCloseTo(duration, within(5L));
         assertThat(claims.getJWTID()).isNotNull();
         assertThat(claims.getClaim("scope")).isEqualTo("ROLE_USER ADD_FRIEND");
         assertThat(claims.getClaim("userId")).isEqualTo("123456789");
@@ -249,9 +238,11 @@ class AuthenticationServiceTest {
     @Test
     void authentication_passwordIncorrect(){
         when(userRepository.findByUsername(authenticationRequest.getUsername())).thenReturn(Optional.of(user));
-        when(passwordEncoder.matches(authenticationRequest.getUsername(), user.getPassword())).thenReturn(false);
+        when(passwordEncoder.matches(authenticationRequest.getPassword(), user.getPassword())).thenReturn(false);
 
-        var exception = assertThrows(AppException.class, () -> authenticationService.authentication(authenticationRequest));
+        var exception = assertThrows(
+                AppException.class,
+                () -> authenticationService.authentication(authenticationRequest));
 
         assertEquals(ErrorCode.PASSWORD_INCORRECT, exception.getErrorCode());
 
@@ -292,8 +283,6 @@ class AuthenticationServiceTest {
         Date expirationTime = claims.getExpirationTime();
         Date issueTime = claims.getIssueTime();
         assertThat(expirationTime).isAfter(issueTime);
-        long duration = (expirationTime.getTime() - issueTime.getTime()) / 1000;
-        assertThat(duration).isCloseTo(duration, within(5L));
         assertThat(claims.getJWTID()).isNotNull();
         assertThat(claims.getClaim("scope")).isEqualTo("ROLE_USER");
         assertThat(claims.getClaim("userId")).isEqualTo("123456789");
@@ -320,8 +309,6 @@ class AuthenticationServiceTest {
         Date expirationTime = claims.getExpirationTime();
         Date issueTime = claims.getIssueTime();
         assertThat(expirationTime).isAfter(issueTime);
-        long duration = (expirationTime.getTime() - issueTime.getTime()) / 1000;
-        assertThat(duration).isCloseTo(duration, within(5L));
         assertThat(claims.getJWTID()).isNotNull();
         assertThat(claims.getClaim("scope")).isEqualTo("");
         assertThat(claims.getClaim("userId")).isEqualTo("123456789");
@@ -346,14 +333,9 @@ class AuthenticationServiceTest {
 
     @Test
     void logout_unAuthenticated() throws Exception {
+        SecurityContextHolder.clearContext();
         String logoutToken = createValidAccessToken("123456789");
         LogoutRequest request = new LogoutRequest(logoutToken);
-        Authentication authentication = mock(Authentication.class);
-        SecurityContext securityContext = mock(SecurityContext.class);
-
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-        when(authentication.isAuthenticated()).thenReturn(false);
-        when(authentication.getPrincipal()).thenReturn(null);
 
         var exception = assertThrows(AppException.class, () -> authenticationService.logout(request));
 
@@ -474,18 +456,13 @@ class AuthenticationServiceTest {
 
     @Test
     void refreshToken_unAuthenticated() throws Exception {
+        SecurityContextHolder.clearContext();
         String refreshToken = createValidRefreshToken("123456789");
         RefreshRequest request = new RefreshRequest(refreshToken);
-        Authentication authentication = mock(Authentication.class);
-        SecurityContext securityContext = mock(SecurityContext.class);
-
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-        when(authentication.isAuthenticated()).thenReturn(false);
-        when(authentication.getPrincipal()).thenReturn(null);
 
         var exception = assertThrows(AppException.class, () -> authenticationService.refreshToken(request));
 
-        verify(invalidatedTokenRepository, never()).save(any());
+        verify(invalidatedTokenRepository, never()).save(any(InvalidatedToken.class));
         verify(invalidatedTokenRepository, never()).existsById(any());
         verify(userRepository, never()).findByUsername(any());
 
