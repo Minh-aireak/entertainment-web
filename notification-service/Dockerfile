@@ -1,18 +1,17 @@
 # ---- 1. Build stage ----
-FROM maven:4.0.0-rc-5-amazoncorretto-25-al2023 AS build
+FROM eclipse-temurin:24-jdk AS build
+
+RUN apt-get update && apt-get install -y maven
 
 WORKDIR /app
-#
-#COPY pom.xml ./
-#RUN mvn dependency:go-offline -B
 
 COPY . .
 
-# Build toàn bộ project
-RUN mvn -B clean package -DskipTests
+# Build chỉ module notification-service
+RUN mvn -B clean package -Dmaven.test.skip=true -pl notification-service -am
 
 # ---- 2. Runtime stage ----
-FROM amazoncorretto:24.0.1-alpine3.21
+FROM eclipse-temurin:24-jre-alpine
 
 WORKDIR /app
 

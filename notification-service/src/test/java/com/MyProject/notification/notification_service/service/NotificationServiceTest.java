@@ -1,12 +1,12 @@
 package com.MyProject.notification.notification_service.service;
 
-import com.MyProject.common.dto.NotificationSocketData;
 import com.MyProject.common.dto.request.BulkUserProfileRequest;
 import com.MyProject.common.dto.request.NotificationRequest;
-import com.MyProject.common.dto.response.NotificationResponse;
+import com.MyProject.common.dto.response.ApiResponse;
+import com.MyProject.notification.notification_service.dto.response.NotificationResponse;
+import com.MyProject.notification.notification_service.dto.response.NotificationSocketData;
 import com.MyProject.common.dto.response.UserProfileResponse;
 import com.MyProject.common.entity.TypeNotification;
-import com.MyProject.notification.notification_service.dto.response.ApiResponse;
 import com.MyProject.notification.notification_service.entity.Notification;
 import com.MyProject.notification.notification_service.exception.AppException;
 import com.MyProject.notification.notification_service.exception.ErrorCode;
@@ -83,7 +83,7 @@ class NotificationServiceTest {
                 .build();
 
         when(profileClient.getBulkUserProfiles(any())).thenReturn(
-                ApiResponse.<List<UserProfileResponse>>builder().result(List.of(senderProfile)).build()
+                ApiResponse.<Map<String, UserProfileResponse>>builder().result(Map.of("sender-123", senderProfile)).build()
         );
 
         NotificationResponse mockResponse = NotificationResponse.builder()
@@ -130,7 +130,7 @@ class NotificationServiceTest {
         UserProfileResponse senderProfile = UserProfileResponse.builder()
                 .userId("sender-123").displayName("Aireak").build();
         when(profileClient.getBulkUserProfiles(any())).thenReturn(
-                ApiResponse.<List<UserProfileResponse>>builder().result(List.of(senderProfile)).build()
+                ApiResponse.<Map<String, UserProfileResponse>>builder().result(Map.of("sender-123", senderProfile)).build()
         );
 
         when(notificationMapper.toNotificationResponse(any())).thenReturn(new NotificationResponse());

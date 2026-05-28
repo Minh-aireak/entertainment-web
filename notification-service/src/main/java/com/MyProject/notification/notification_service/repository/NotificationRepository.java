@@ -11,14 +11,8 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDateTime;
 
 @Repository
-public interface NotificationRepository extends MongoRepository<Notification, String> {
+public interface NotificationRepository extends MongoRepository<Notification, String>,
+        NotificationRepositoryCustom {
     @Query(value = "{ 'toUserIds': { $in: ?0 } }", sort = "{ 'createdAt': -1 }")
     Page<Notification> findByToUserIdsInOrderByCreatedAtDesc(String userId, Pageable pageable);
-
-    @Query(value = "{ 'recipientReadMap.?0': null }", count = true)
-    Long countUnreadByUserId(String userId);
-
-    @Query("{ 'recipientReadMap.?0': null }")
-    @Update("{ '$set': { 'recipientReadMap.?0': ?1 } }")
-    void markAllAsRead(String userId, LocalDateTime now);
 }

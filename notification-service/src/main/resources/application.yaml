@@ -1,42 +1,54 @@
 server:
   port: 8082
   servlet:
-    context-path: /notification
+    context-path: /notifications
 
 spring:
   application:
     name: notification-service
   data:
     mongodb:
-      uri: mongodb://${MONGODB_ROOT_USERNAME}:${MONGODB_ROOT_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/post-service?authSource=admin
+      uri: mongodb://${MONGODB_ROOT_USERNAME:root}:${MONGODB_ROOT_PASSWORD:REDACTED_LEGACY_CREDENTIAL}@${MONGODB_HOST:localhost}:${MONGODB_PORT:27017}/notification-service?authSource=admin
     redis:
-      host: ${REDIS_HOST}
-      port: ${REDIS_PORT}
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
       connect-timeout: 5000
       timeout: 5000
+      password: ${REDIS_PASSWORD:REDACTED_LEGACY_CREDENTIAL}
+      repositories:
+        enabled: false
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
       properties:
         spring.json.add.type.headers: true
+        delivery.timeout.ms: 120000
+        linger.ms: 1
+        request.timeout.ms: 30000
     consumer:
-      group-id: notification-group
+      group-id: notification-service-group
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       properties:
+        spring.deserializer.value.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
         spring.json.trusted.packages: "*"
 
 app:
   services:
-    profile: http://localhost:8081/profile
+    profile:
+      url: ${PROFILE_SERVICE_URL:http://localhost:8081}
 
 notification:
   email:
-    brevo-url: ${BREVO_URL}
-    brevo-apikey: ${BREVO_API_KEY}
+    brevo-url: ${BREVO_URL:https://api.brevo.com}
+    brevo-apikey: ${BREVO_API_KEY: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}
+    sender-name: "aireak.com"
+    sender-email: "tuanminh18122005@gmail.com"
 
 jwt:
-  signerKey: ${JWT_SIGNER_KEY}
+  signerKey: ${JWT_SIGNER_KEY:uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0}

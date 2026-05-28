@@ -1,6 +1,6 @@
 package com.MyProject.notification.notification_service.controller;
 
-import com.MyProject.common.dto.response.NotificationResponse;
+import com.MyProject.notification.notification_service.dto.response.NotificationResponse;
 import com.MyProject.common.dto.response.PageResponse;
 import com.MyProject.notification.notification_service.configuration.CustomJwtDecoder;
 import com.MyProject.notification.notification_service.configuration.JwtAuthenticationEntryPoint;

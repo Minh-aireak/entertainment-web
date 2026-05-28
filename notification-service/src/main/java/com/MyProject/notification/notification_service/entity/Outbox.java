@@ -3,31 +3,33 @@ package com.MyProject.notification.notification_service.entity;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.mapping.Field;
 import org.springframework.data.mongodb.core.mapping.MongoId;
 
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Map;
+import java.time.Instant;
 
-@Data
+@Document(collection = "outbox")
+@Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-@Document(collection = "notifications")
-public class Notification {
+public class Outbox {
     @MongoId
     String id;
-    TypeNotification type;
-    String userIdSender;
 
-    @Indexed
-    List<String> toUserIds;
+    @Field("aggregateId")
+    String aggregateId;
 
-    Map<String, LocalDateTime> recipientReadMap;
+    String topic;
+
+    Object payload;
 
     @CreatedDate
-    LocalDateTime createdAt;
+    Instant createdDate;
+
+    @Builder.Default
+    boolean processed = false;
 }
