@@ -1,0 +1,3 @@
+com\MyProject\common\security\CommonJwtAuthenticationEntryPoint.class
+com\MyProject\common\security\CommonJwtDecoder.class
+com\MyProject\common\security\CommonSecurityConfig.class
