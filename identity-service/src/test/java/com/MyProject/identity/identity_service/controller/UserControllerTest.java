@@ -21,7 +21,6 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
@@ -35,7 +34,7 @@ import com.MyProject.identity.identity_service.service.UserService;
 
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
-import tools.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @WebMvcTest(UserController.class)
 @Import(
@@ -45,7 +44,6 @@ import tools.jackson.databind.ObjectMapper;
 )
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @AutoConfigureMockMvc
-@ActiveProfiles("test")
 class UserControllerTest {
     @Autowired
     MockMvc mockMvc;
@@ -71,7 +69,8 @@ class UserControllerTest {
                 .build();
 
         changePasswordRequest = ChangePasswordRequest.builder()
-                .password("1801062010")
+                .oldPassword("REDACTED_LEGACY_CREDENTIAL")
+                .newPassword("1801062010")
                 .build();
 
         PermissionResponse addFriend = new PermissionResponse("ADD_FRIEND", "Add new friend");
@@ -210,8 +209,42 @@ class UserControllerTest {
 
     @Test
     @WithMockUser
-    void changePassword_passwordInvalidSize() throws Exception {
-        changePasswordRequest.setPassword("1111111");
+    void changePassword_oldPasswordIncorrect() throws Exception {
+        String content = objectMapper.writeValueAsString(changePasswordRequest);
+
+        doThrow(new AppException(ErrorCode.PASSWORD_INCORRECT)).when(userService).changePassword(changePasswordRequest);
+
+        mockMvc.perform(MockMvcRequestBuilders.put("/users/password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(content))
+                .andExpect(MockMvcResultMatchers.status().isBadRequest())
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8010))
+                .andExpect(MockMvcResultMatchers.jsonPath("message").value("Password incorrect!"));
+
+        verify(userService, times(1)).changePassword(changePasswordRequest);
+    }
+
+
+    @Test
+    @WithMockUser
+    void changePassword_oldPasswordInvalidSize() throws Exception {
+        changePasswordRequest.setOldPassword("1111111");
+        String content = objectMapper.writeValueAsString(changePasswordRequest);
+
+        mockMvc.perform(MockMvcRequestBuilders.put("/users/password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(content))
+                .andExpect(MockMvcResultMatchers.status().isBadRequest())
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8004))
+                .andExpect(MockMvcResultMatchers.jsonPath("message").value("Password must be at least 8 characters!"));
+
+        verify(userService, never()).changePassword(changePasswordRequest);
+    }
+
+    @Test
+    @WithMockUser
+    void changePassword_newPasswordInvalidSize() throws Exception {
+        changePasswordRequest.setNewPassword("1111111");
         String content = objectMapper.writeValueAsString(changePasswordRequest);
 
         mockMvc.perform(MockMvcRequestBuilders.put("/users/password")

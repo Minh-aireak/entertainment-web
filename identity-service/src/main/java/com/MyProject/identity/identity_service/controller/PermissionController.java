@@ -2,12 +2,12 @@ package com.MyProject.identity.identity_service.controller;
 
 import java.util.List;
 
+import com.MyProject.common.dto.response.ApiResponse;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import com.MyProject.identity.identity_service.dto.request.PermissionCreationRequest;
 import com.MyProject.identity.identity_service.dto.request.PermissionUpdateRequest;
-import com.MyProject.identity.identity_service.dto.response.ApiResponse;
 import com.MyProject.identity.identity_service.dto.response.PermissionResponse;
 import com.MyProject.identity.identity_service.service.PermissionService;
 
@@ -27,6 +27,15 @@ public class PermissionController {
     ApiResponse<PermissionResponse> createPermission(@RequestBody PermissionCreationRequest request) {
         return ApiResponse.<PermissionResponse>builder()
                 .result(permissionService.createPermission(request))
+                .message("Create permission success!")
+                .build();
+    }
+
+    @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    ApiResponse<List<PermissionResponse>> getAllRoles() {
+        return ApiResponse.<List<PermissionResponse>>builder()
+                .result(permissionService.getAllPermissions())
                 .build();
     }
 
@@ -35,6 +44,7 @@ public class PermissionController {
     ApiResponse<PermissionResponse> updatePermission(@RequestBody PermissionUpdateRequest request) {
         return ApiResponse.<PermissionResponse>builder()
                 .result(permissionService.updatePermission(request))
+                .message("Update permission success!")
                 .build();
     }
 
@@ -44,14 +54,6 @@ public class PermissionController {
         permissionService.deletePermission(name);
         return ApiResponse.<Void>builder()
                 .message("Deleted permission success!")
-                .build();
-    }
-
-    @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
-    ApiResponse<List<PermissionResponse>> getAllRoles() {
-        return ApiResponse.<List<PermissionResponse>>builder()
-                .result(permissionService.getAllPermissions())
                 .build();
     }
 }

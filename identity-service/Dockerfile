@@ -1,16 +1,19 @@
 # ---- 1. Build stage ----
-FROM maven:4.0.0-rc-5-amazoncorretto-25-al2023 AS build
+FROM eclipse-temurin:24-jdk AS build
+
+# Cài đặt Maven
+RUN apt-get update && apt-get install -y maven
 
 WORKDIR /app
 
-# Đây là quan trọng: copy **toàn bộ project**
+# Copy toàn bộ project
 COPY . .
 
-# Build toàn bộ project
-RUN mvn -B clean package -DskipTests
+# Build chỉ module identity-service
+RUN mvn -B clean package -Dmaven.test.skip=true -pl identity-service -am
 
 # ---- 2. Runtime stage ----
-FROM amazoncorretto:24.0.1-alpine3.21
+FROM eclipse-temurin:24-jre-alpine
 
 WORKDIR /app
 

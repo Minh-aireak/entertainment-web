@@ -3,6 +3,7 @@ package com.MyProject.identity.identity_service.exception;
 import java.util.Map;
 import java.util.Objects;
 
+import com.MyProject.common.dto.response.ApiResponse;
 import jakarta.validation.ConstraintViolation;
 
 import org.springframework.http.ResponseEntity;
@@ -11,15 +12,13 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
-import com.MyProject.identity.identity_service.dto.response.ApiResponse;
-
 @ControllerAdvice
 public class GlobalExceptionHandler {
     private static final String MIN_VALUE = "min";
 
     @ExceptionHandler(value = AppException.class)
     public ResponseEntity<ApiResponse<Object>> handlingAppException(AppException exception) {
-        return ApiResponse.toResponseEntity(exception.getErrorCode());
+        return ErrorCode.toResponseEntity(exception.getErrorCode());
     }
 
     @ExceptionHandler(value = MethodArgumentNotValidException.class)
@@ -49,6 +48,6 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(value = AccessDeniedException.class)
     public ResponseEntity<ApiResponse<Object>> handlingAccessDeniedException() {
-        return ApiResponse.toResponseEntity(ErrorCode.UNAUTHORIZED);
+        return ErrorCode.toResponseEntity(ErrorCode.UNAUTHORIZED);
     }
 }

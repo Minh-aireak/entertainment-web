@@ -2,8 +2,7 @@ package com.MyProject.identity.identity_service.controller;
 
 import static org.mockito.Mockito.*;
 
-import com.MyProject.common.dto.request.IntrospectRequest;
-import com.MyProject.common.dto.response.IntrospectResponse;
+import com.MyProject.identity.identity_service.dto.response.IntrospectResponse;
 import com.MyProject.identity.identity_service.configuration.CustomJwtDecoder;
 import com.MyProject.identity.identity_service.configuration.JwtAuthenticationEntryPoint;
 import com.MyProject.identity.identity_service.configuration.SecurityConfig;
@@ -15,7 +14,6 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
@@ -23,8 +21,6 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.MyProject.identity.identity_service.dto.request.AuthenticationRequest;
-import com.MyProject.identity.identity_service.dto.request.LogoutRequest;
-import com.MyProject.identity.identity_service.dto.request.RefreshRequest;
 import com.MyProject.identity.identity_service.dto.response.AuthenticationResponse;
 import com.MyProject.identity.identity_service.exception.AppException;
 import com.MyProject.identity.identity_service.exception.ErrorCode;
@@ -41,7 +37,6 @@ import lombok.experimental.FieldDefaults;
 )
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @AutoConfigureMockMvc
-@ActiveProfiles("test")
 class AuthenticationControllerTest {
     @Autowired
     MockMvc mockMvc;
@@ -51,10 +46,8 @@ class AuthenticationControllerTest {
 
     AuthenticationRequest authenticationRequest;
     AuthenticationResponse authenticationResponse;
-    IntrospectRequest introspectRequest;
     IntrospectResponse introspectResponse;
-    LogoutRequest logoutRequest;
-    RefreshRequest refreshRequest;
+    TokenRequest tokenRequest;
     ObjectMapper objectMapper;
     String code;
 
@@ -70,16 +63,16 @@ class AuthenticationControllerTest {
         authenticationResponse = AuthenticationResponse.builder()
                 .token("123456789").build();
 
-        introspectRequest = IntrospectRequest.builder().token("123456789").build();
+        tokenRequest = com.MyProject.common.dto.request.TokenRequest.builder().token("123456789").build();
 
         introspectResponse = IntrospectResponse.builder()
                 .valid(true)
                 .userId("AIREAK")
                 .build();
 
-        logoutRequest = LogoutRequest.builder().token("123456789").build();
+        tokenRequest = com.MyProject.common.dto.request.TokenRequest.builder().token("123456789").build();
 
-        refreshRequest = RefreshRequest.builder().token("123456789").build();
+        tokenRequest = TokenRequest.builder().token("123456789").build();
 
         code = "100";
     }
@@ -184,9 +177,9 @@ class AuthenticationControllerTest {
 
     @Test
     void introspect_token_success() throws Exception {
-        String content = objectMapper.writeValueAsString(introspectRequest);
+        String content = objectMapper.writeValueAsString(tokenRequest);
 
-        when(authenticationService.introspectResponse(introspectRequest)).thenReturn(introspectResponse);
+        when(authenticationService.introspectResponse(tokenRequest)).thenReturn(introspectResponse);
 
         mockMvc.perform(MockMvcRequestBuilders.post("/auth/introspect")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -196,14 +189,14 @@ class AuthenticationControllerTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("result.valid").value("true"))
                 .andExpect(MockMvcResultMatchers.jsonPath("result.userId").value("AIREAK"));
 
-        verify(authenticationService, times(1)).introspectResponse(introspectRequest);
+        verify(authenticationService, times(1)).introspectResponse(tokenRequest);
     }
 
     @Test
     void introspect_verifyTokenFailed() throws Exception {
-        String content = objectMapper.writeValueAsString(introspectRequest);
+        String content = objectMapper.writeValueAsString(tokenRequest);
 
-        when(authenticationService.introspectResponse(introspectRequest)).thenThrow(new AppException(ErrorCode.VERIFY_TOKEN_FAILED));
+        when(authenticationService.introspectResponse(tokenRequest)).thenThrow(new AppException(ErrorCode.VERIFY_TOKEN_FAILED));
 
         mockMvc.perform(MockMvcRequestBuilders.post("/auth/introspect")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -212,14 +205,14 @@ class AuthenticationControllerTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(8020))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Verify token failed!"));
 
-        verify(authenticationService, times(1)).introspectResponse(introspectRequest);
+        verify(authenticationService, times(1)).introspectResponse(tokenRequest);
     }
 
     @Test
     void introspect_parseException() throws Exception {
-        String content = objectMapper.writeValueAsString(introspectRequest);
+        String content = objectMapper.writeValueAsString(tokenRequest);
 
-        when(authenticationService.introspectResponse(introspectRequest)).thenThrow(new AppException(ErrorCode.PARSE_EXCEPTION));
+        when(authenticationService.introspectResponse(tokenRequest)).thenThrow(new AppException(ErrorCode.PARSE_EXCEPTION));
 
         mockMvc.perform(MockMvcRequestBuilders.post("/auth/introspect")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -228,14 +221,14 @@ class AuthenticationControllerTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(8021))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Parse exception!"));
 
-        verify(authenticationService, times(1)).introspectResponse(introspectRequest);
+        verify(authenticationService, times(1)).introspectResponse(tokenRequest);
     }
 
     @Test
     void introspect_tokenInvalid() throws Exception {
-        String content = objectMapper.writeValueAsString(introspectRequest);
+        String content = objectMapper.writeValueAsString(tokenRequest);
 
-        when(authenticationService.introspectResponse(introspectRequest)).thenThrow(new AppException(ErrorCode.TOKEN_INVALID));
+        when(authenticationService.introspectResponse(tokenRequest)).thenThrow(new AppException(ErrorCode.TOKEN_INVALID));
 
         mockMvc.perform(MockMvcRequestBuilders.post("/auth/introspect")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -249,9 +242,9 @@ class AuthenticationControllerTest {
 
     @Test
     void introspect_tokenAlreadyInvalidated() throws Exception {
-        String content = objectMapper.writeValueAsString(introspectRequest);
+        String content = objectMapper.writeValueAsString(tokenRequest);
 
-        when(authenticationService.introspectResponse(introspectRequest))
+        when(authenticationService.introspectResponse(tokenRequest))
                 .thenThrow(new AppException(ErrorCode.TOKEN_ALREADY_INVALIDATED));
 
         mockMvc.perform(MockMvcRequestBuilders.post("/auth/introspect")
@@ -267,40 +260,40 @@ class AuthenticationControllerTest {
     @Test
     @WithMockUser
     void logout_success() throws Exception {
-        String content = objectMapper.writeValueAsString(logoutRequest);
+        String content = objectMapper.writeValueAsString(tokenRequest);
 
-        doNothing().when(authenticationService).logout(logoutRequest);
+        doNothing().when(authenticationService).logout(tokenRequest);
 
-        mockMvc.perform(MockMvcRequestBuilders.post("/auth/me")
+        mockMvc.perform(MockMvcRequestBuilders.post("/auth/logout")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(1000));
 
-        verify(authenticationService, times(1)).logout(logoutRequest);
+        verify(authenticationService, times(1)).logout(tokenRequest);
     }
 
     @Test
     @WithMockUser
     void logout_accessDenied() throws Exception {
-        String content = objectMapper.writeValueAsString(logoutRequest);
+        String content = objectMapper.writeValueAsString(tokenRequest);
 
-        doThrow(new AppException(ErrorCode.ACCESS_DENIED)).when(authenticationService).logout(logoutRequest);
+        doThrow(new AppException(ErrorCode.ACCESS_DENIED)).when(authenticationService).logout(tokenRequest);
 
-        mockMvc.perform(MockMvcRequestBuilders.post("/auth/me")
+        mockMvc.perform(MockMvcRequestBuilders.post("/auth/logout")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isForbidden())
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(8019))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Token not owned by user!"));
 
-        verify(authenticationService, times(1)).logout(logoutRequest);
+        verify(authenticationService, times(1)).logout(tokenRequest);
     }
 
     @Test
     void logout_unAuthentication() throws Exception {
-        String content = objectMapper.writeValueAsString(logoutRequest);
-        mockMvc.perform(MockMvcRequestBuilders.post("/auth/me")
+        String content = objectMapper.writeValueAsString(tokenRequest);
+        mockMvc.perform(MockMvcRequestBuilders.post("/auth/logout")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isUnauthorized())
@@ -313,43 +306,43 @@ class AuthenticationControllerTest {
     @Test
     @WithMockUser
     void logout_weakKey() throws Exception {
-        String content = objectMapper.writeValueAsString(logoutRequest);
+        String content = objectMapper.writeValueAsString(tokenRequest);
 
-        doThrow(new AppException(ErrorCode.WEAK_KEY)).when(authenticationService).logout(logoutRequest);
+        doThrow(new AppException(ErrorCode.WEAK_KEY)).when(authenticationService).logout(tokenRequest);
 
-        mockMvc.perform(MockMvcRequestBuilders.post("/auth/me")
+        mockMvc.perform(MockMvcRequestBuilders.post("/auth/logout")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isBadRequest())
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(8018))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Key length is weak!"));
 
-        verify(authenticationService, times(1)).logout(logoutRequest);
+        verify(authenticationService, times(1)).logout(tokenRequest);
     }
 
     @Test
     @WithMockUser
     void logout_tokenInvalid() throws Exception {
-        String content = objectMapper.writeValueAsString(logoutRequest);
+        String content = objectMapper.writeValueAsString(tokenRequest);
 
-        doThrow(new AppException(ErrorCode.TOKEN_INVALID)).when(authenticationService).logout(logoutRequest);
+        doThrow(new AppException(ErrorCode.TOKEN_INVALID)).when(authenticationService).logout(tokenRequest);
 
-        mockMvc.perform(MockMvcRequestBuilders.post("/auth/me")
+        mockMvc.perform(MockMvcRequestBuilders.post("/auth/logout")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isUnauthorized())
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(8014))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Token invalid!"));
 
-        verify(authenticationService, times(1)).logout(logoutRequest);
+        verify(authenticationService, times(1)).logout(tokenRequest);
     }
 
     @Test
     @WithMockUser
     void refreshToken_success() throws Exception {
-        String content = objectMapper.writeValueAsString(refreshRequest);
+        String content = objectMapper.writeValueAsString(tokenRequest);
 
-        when(authenticationService.refreshToken(refreshRequest)).thenReturn(authenticationResponse);
+        when(authenticationService.refreshToken(tokenRequest)).thenReturn(authenticationResponse);
 
         mockMvc.perform(MockMvcRequestBuilders.post("/auth/refresh-token")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -358,12 +351,12 @@ class AuthenticationControllerTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(1000))
                 .andExpect(MockMvcResultMatchers.jsonPath("result.token").value("123456789"));
 
-        verify(authenticationService, times(1)).refreshToken(refreshRequest);
+        verify(authenticationService, times(1)).refreshToken(tokenRequest);
     }
 
     @Test
     void refreshToken_unAuthentication() throws Exception {
-        String content = objectMapper.writeValueAsString(refreshRequest);
+        String content = objectMapper.writeValueAsString(tokenRequest);
         mockMvc.perform(MockMvcRequestBuilders.post("/auth/refresh-token")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
@@ -377,9 +370,9 @@ class AuthenticationControllerTest {
     @Test
     @WithMockUser
     void refreshToken_weakKey() throws Exception {
-        String content = objectMapper.writeValueAsString(refreshRequest);
+        String content = objectMapper.writeValueAsString(tokenRequest);
 
-        doThrow(new AppException(ErrorCode.WEAK_KEY)).when(authenticationService).refreshToken(refreshRequest);
+        doThrow(new AppException(ErrorCode.WEAK_KEY)).when(authenticationService).refreshToken(tokenRequest);
 
         mockMvc.perform(MockMvcRequestBuilders.post("/auth/refresh-token")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -388,15 +381,15 @@ class AuthenticationControllerTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(8018))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Key length is weak!"));
 
-        verify(authenticationService, times(1)).refreshToken(refreshRequest);
+        verify(authenticationService, times(1)).refreshToken(tokenRequest);
     }
 
     @Test
     @WithMockUser
     void refreshToken_accessDenied() throws Exception {
-        String content = objectMapper.writeValueAsString(refreshRequest);
+        String content = objectMapper.writeValueAsString(tokenRequest);
 
-        doThrow(new AppException(ErrorCode.ACCESS_DENIED)).when(authenticationService).refreshToken(refreshRequest);
+        doThrow(new AppException(ErrorCode.ACCESS_DENIED)).when(authenticationService).refreshToken(tokenRequest);
 
         mockMvc.perform(MockMvcRequestBuilders.post("/auth/refresh-token")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -405,15 +398,15 @@ class AuthenticationControllerTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(8019))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Token not owned by user!"));
 
-        verify(authenticationService, times(1)).refreshToken(refreshRequest);
+        verify(authenticationService, times(1)).refreshToken(tokenRequest);
     }
 
     @Test
     @WithMockUser
     void refreshToken_tokenInvalid() throws Exception {
-        String content = objectMapper.writeValueAsString(refreshRequest);
+        String content = objectMapper.writeValueAsString(tokenRequest);
 
-        doThrow(new AppException(ErrorCode.TOKEN_INVALID)).when(authenticationService).refreshToken(refreshRequest);
+        doThrow(new AppException(ErrorCode.TOKEN_INVALID)).when(authenticationService).refreshToken(tokenRequest);
 
         mockMvc.perform(MockMvcRequestBuilders.post("/auth/refresh-token")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -422,15 +415,15 @@ class AuthenticationControllerTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(8014))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Token invalid!"));
 
-        verify(authenticationService, times(1)).refreshToken(refreshRequest);
+        verify(authenticationService, times(1)).refreshToken(tokenRequest);
     }
 
     @Test
     @WithMockUser
     void refreshToken_tokenAlreadyInvalidated() throws Exception {
-        String content = objectMapper.writeValueAsString(refreshRequest);
+        String content = objectMapper.writeValueAsString(tokenRequest);
 
-        when(authenticationService.refreshToken(refreshRequest))
+        when(authenticationService.refreshToken(tokenRequest))
                 .thenThrow(new AppException(ErrorCode.TOKEN_ALREADY_INVALIDATED));
 
         mockMvc.perform(MockMvcRequestBuilders.post("/auth/refresh-token")
@@ -440,15 +433,15 @@ class AuthenticationControllerTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(8015))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Token already invalidated!"));
 
-        verify(authenticationService, times(1)).refreshToken(refreshRequest);
+        verify(authenticationService, times(1)).refreshToken(tokenRequest);
     }
 
     @Test
     @WithMockUser
     void refreshToken_verifyTokenFailed() throws Exception {
-        String content = objectMapper.writeValueAsString(refreshRequest);
+        String content = objectMapper.writeValueAsString(tokenRequest);
 
-        when(authenticationService.refreshToken(refreshRequest)).thenThrow(new AppException(ErrorCode.VERIFY_TOKEN_FAILED));
+        when(authenticationService.refreshToken(tokenRequest)).thenThrow(new AppException(ErrorCode.VERIFY_TOKEN_FAILED));
 
         mockMvc.perform(MockMvcRequestBuilders.post("/auth/refresh-token")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -457,15 +450,15 @@ class AuthenticationControllerTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(8020))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Verify token failed!"));
 
-        verify(authenticationService, times(1)).refreshToken(refreshRequest);
+        verify(authenticationService, times(1)).refreshToken(tokenRequest);
     }
 
     @Test
     @WithMockUser
     void refreshToken_parseException() throws Exception {
-        String content = objectMapper.writeValueAsString(refreshRequest);
+        String content = objectMapper.writeValueAsString(tokenRequest);
 
-        when(authenticationService.refreshToken(refreshRequest)).thenThrow(new AppException(ErrorCode.PARSE_EXCEPTION));
+        when(authenticationService.refreshToken(tokenRequest)).thenThrow(new AppException(ErrorCode.PARSE_EXCEPTION));
 
         mockMvc.perform(MockMvcRequestBuilders.post("/auth/refresh-token")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -474,17 +467,17 @@ class AuthenticationControllerTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(8021))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Parse exception!"));
 
-        verify(authenticationService, times(1)).refreshToken(refreshRequest);
+        verify(authenticationService, times(1)).refreshToken(tokenRequest);
     }
 
     @Test
     @WithMockUser
     void refreshToken_signerToken() throws Exception {
-        String content = objectMapper.writeValueAsString(refreshRequest);
+        String content = objectMapper.writeValueAsString(tokenRequest);
 
         doThrow(new AppException(ErrorCode.SIGNER_EXCEPTION))
                 .when(authenticationService)
-                .refreshToken(refreshRequest);
+                .refreshToken(tokenRequest);
 
         mockMvc.perform(MockMvcRequestBuilders.post("/auth/refresh-token")
                         .contentType(MediaType.APPLICATION_JSON)

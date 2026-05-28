@@ -1,19 +1,20 @@
 package com.MyProject.identity.identity_service.service;
 
 import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
-import com.MyProject.common.dto.request.EmailRequest;
+import com.MyProject.identity.identity_service.dto.request.EmailRequest;
+import com.MyProject.identity.identity_service.dto.request.Recipient;
+import com.MyProject.common.dto.response.PageResponse;
+import com.MyProject.identity.identity_service.dto.event.UserCreatedEvent;
 import com.MyProject.identity.identity_service.dto.request.*;
 import com.MyProject.identity.identity_service.entity.ResetPassword;
 import com.MyProject.identity.identity_service.repository.ResetPasswordRepository;
-import com.MyProject.identity.identity_service.repository.httpclient.UserProfileClient;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -28,6 +29,10 @@ import com.MyProject.identity.identity_service.mapper.UserMapper;
 import com.MyProject.identity.identity_service.repository.RoleRepository;
 import com.MyProject.identity.identity_service.repository.UserRepository;
 
+import com.MyProject.identity.identity_service.repository.OutboxRepository;
+import com.MyProject.identity.identity_service.entity.Outbox;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -42,8 +47,8 @@ public class UserService {
     UserMapper userMapper;
     RoleRepository roleRepository;
     PasswordEncoder passwordEncoder;
-    UserProfileClient client;
-    KafkaTemplate<String, Object> kafkaTemplate;
+    OutboxRepository outboxRepository;
+    ObjectMapper objectMapper;
 
     @Transactional(rollbackFor = Exception.class)
     public UserResponse createUser(UserCreationRequest request) {
@@ -60,28 +65,44 @@ public class UserService {
 
         try {
             user = userRepository.save(user);
+
+            // Create events for Outbox (CDC MySQL)
+            // 1. User Created Event
+            UserCreatedEvent userCreatedEvent = UserCreatedEvent.builder()
+                    .userId(user.getId())
+                    .username(request.getUsername())
+                    .email(request.getEmail())
+                    .displayName(request.getUsername())
+                    .joinDate(LocalDateTime.now())
+                    .build();
+
+            outboxRepository.save(Outbox.builder()
+                    .topic("user.created")
+                    .payload(objectMapper.writeValueAsString(userCreatedEvent))
+                    .processed(false)
+                    .build());
+
+            // 2. Email Sent Event
+            EmailRequest emailRequest = EmailRequest.builder()
+                    .to(List.of(Recipient.builder()
+                            .email(request.getEmail())
+                            .build()))
+                    .subject("Welcome to travelplanner!")
+                    .htmlContent("Hello, " + request.getUsername())
+                    .build();
+
+            outboxRepository.save(Outbox.builder()
+                    .topic("email.sent")
+                    .payload(objectMapper.writeValueAsString(emailRequest))
+                    .processed(false)
+                    .build());
+
         } catch (DataIntegrityViolationException exception) {
             throw new AppException(ErrorCode.USERNAME_EXISTED);
+        } catch (JsonProcessingException e) {
+            log.error("Error serializing outbox event", e);
+            throw new RuntimeException("Failed to save outbox event", e);
         }
-
-        UserProfileCreationRequest userprofileRequest = UserProfileCreationRequest.builder()
-                .userId(user.getId())
-                .username(request.getUsername())
-                .email(request.getEmail())
-                .displayName(request.getUsername())
-                .joinDate(LocalDateTime.now())
-                .build();
-
-        client.createProfile(userprofileRequest);
-
-        EmailRequest emailRequest = EmailRequest.builder()
-                .channel("EMAIL")
-                .recipient(request.getEmail())
-                .subject("Welcome to travelplanner!")
-                .body("Hello, " + request.getUsername())
-                .build();
-
-        kafkaTemplate.send("onboard-email", emailRequest);
 
         return userMapper.toUserResponse(user);
     }
@@ -99,21 +120,34 @@ public class UserService {
         User user = userRepository.findByUsername(getUserUsername()).orElseThrow(()
                 -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
-        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword()))
+            throw new AppException(ErrorCode.PASSWORD_INCORRECT);
+        
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
 
         userRepository.save(user);
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public List<UserResponse> getAllUsers() {
-        return userMapper.toListUserResponse(userRepository.findAll());
+    public PageResponse<UserResponse> getUsers(int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<User> userPage = userRepository.findAll(pageable);
+        
+        return PageResponse.<UserResponse>builder()
+                .currentPage(userPage.getNumber())
+                .totalPages(userPage.getTotalPages())
+                .pageSize(userPage.getSize())
+                .totalElement((int) userPage.getTotalElements())
+                .data(userMapper.toListUserResponse(userPage.getContent()))
+                .build();
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public void disableUser(String userId) {
-        User user = userRepository.findByUsername(userId).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
-        user.setActive(false);
+    public String toggleAccount(String id) {
+        User user = userRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+        user.setActive(!user.isActive());
         userRepository.save(user);
+        return user.isActive() ? "Account activated successfully!" : "Account deactivated successfully!";
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -130,10 +164,11 @@ public class UserService {
         String resetUrl = "http://localhost:5173/password-reset-token?token=" + resetPassword.getToken();
 
         EmailRequest emailRequest = EmailRequest.builder()
-                .channel("EMAIL")
-                .recipient(request.getEmail())
+                .to(List.of(Recipient.builder()
+                        .email(request.getEmail())
+                        .build()))
                 .subject("Reset Your Password")
-                .body(
+                .htmlContent(
                     "Hi " + user.getUsername() + ",\n\n" +
                     "We received a request to reset your password. " +
                     "Click the link below to reset your password:\n\n" +
@@ -143,7 +178,17 @@ public class UserService {
                 )
                 .build();
 
-        kafkaTemplate.send("send-email", emailRequest);
+        try {
+            outboxRepository.save(Outbox.builder()
+                    .topic("email.sent")
+                    .payload(objectMapper.writeValueAsString(emailRequest))
+                    .processed(false)
+                    .build());
+        } catch (JsonProcessingException e) {
+            log.error("Error serializing outbox event", e);
+            throw new RuntimeException("Failed to save outbox event", e);
+        }
+
         resetPasswordRepository.save(resetPassword);
 
         return "Check your email: " + request.getEmail();

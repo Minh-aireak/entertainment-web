@@ -6,16 +6,20 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
-import com.MyProject.common.dto.request.EmailRequest;
+import com.MyProject.identity.identity_service.dto.request.EmailRequest;
+import com.MyProject.common.redis.RedisService;
+import com.MyProject.identity.identity_service.dto.event.UserCreatedEvent;
 import com.MyProject.identity.identity_service.dto.request.*;
 import com.MyProject.identity.identity_service.entity.Role;
 import com.MyProject.identity.identity_service.repository.RoleRepository;
 import com.MyProject.identity.identity_service.repository.httpclient.OutboundIdentityClient;
 import com.MyProject.identity.identity_service.repository.httpclient.OutboundUserClient;
-import com.MyProject.identity.identity_service.repository.httpclient.UserProfileClient;
+import com.MyProject.identity.identity_service.repository.OutboxRepository;
+import com.MyProject.identity.identity_service.entity.Outbox;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -31,14 +35,11 @@ import com.nimbusds.jose.crypto.MACVerifier;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import com.MyProject.identity.identity_service.dto.response.AuthenticationResponse;
-import com.MyProject.identity.identity_service.entity.InvalidatedToken;
 import com.MyProject.identity.identity_service.entity.User;
 import com.MyProject.identity.identity_service.exception.AppException;
 import com.MyProject.identity.identity_service.exception.ErrorCode;
-import com.MyProject.identity.identity_service.repository.InvalidatedTokenRepository;
 import com.MyProject.identity.identity_service.repository.UserRepository;
-import com.MyProject.common.dto.response.IntrospectResponse;
-import com.MyProject.common.dto.request.IntrospectRequest;
+import com.MyProject.identity.identity_service.dto.response.IntrospectResponse;
 
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -52,12 +53,16 @@ import lombok.experimental.NonFinal;
 public class AuthenticationService {
     UserRepository userRepository;
     PasswordEncoder passwordEncoder;
-    InvalidatedTokenRepository invalidatedTokenRepository;
     OutboundIdentityClient outboundIdentityClient;
     OutboundUserClient outboundUserClient;
-    UserProfileClient client;
     RoleRepository roleRepository;
-    KafkaTemplate<String, Object> kafkaTemplate;
+    RedisService redisService;
+    OutboxRepository outboxRepository;
+    ObjectMapper objectMapper;
+
+    private String getInvalidatedTokenKey(String jid) {
+        return "invalidated_token:" + jid;
+    }
 
     @NonFinal
     @Value("${jwt.signerKey}")
@@ -106,28 +111,25 @@ public class AuthenticationService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public void logout(LogoutRequest request) {
+    public void logout(String token) {
         String userId = getUserId();
-        if (checkJidAndSignerKey(request.getToken(), userId)) {
+        if (!isTokenOwnedByUser(token, userId)) {
             throw new AppException(ErrorCode.ACCESS_DENIED);
         }
 
-        SignedJWT signedToken = verifyToken(request.getToken(), true);
+        SignedJWT signedToken = verifyToken(token, true);
 
         try {
             String jid = signedToken.getJWTClaimsSet().getJWTID();
-            Date expiryTime = signedToken.getJWTClaimsSet().getExpirationTime();
-            InvalidatedToken invalidatedToken = InvalidatedToken.builder().id(jid).expiryTime(expiryTime).build();
-
-            invalidatedTokenRepository.save(invalidatedToken);
+            
+            // Skip Redis caching as requested
         } catch (ParseException e) {
             throw new AppException(ErrorCode.PARSE_EXCEPTION);
         }
     }
 
-    public IntrospectResponse introspectResponse(IntrospectRequest request) {
+    public IntrospectResponse introspectResponse(String token) {
         boolean checkValid = true;
-        var token = request.getToken();
         SignedJWT signedJWT = verifyToken(token, false);
 
         try {
@@ -148,18 +150,18 @@ public class AuthenticationService {
         return jwt.getClaim("userId");
     }
 
-    private boolean checkJidAndSignerKey(String token, String expectedUserId) {
+    private boolean isTokenOwnedByUser(String token, String expectedUserId) {
         try {
             SignedJWT signedJWT = SignedJWT.parse(token);
             JWSVerifier verifier = new MACVerifier(signerKey.getBytes());
 
-            if(!signedJWT.verify(verifier)){
-                return true;
+            if (!signedJWT.verify(verifier)) {
+                return false;
             }
 
-            String actualJid = signedJWT.getJWTClaimsSet().getClaim("userId").toString();
+            String actualUserId = signedJWT.getJWTClaimsSet().getClaim("userId").toString();
 
-            return !actualJid.equals(expectedUserId);
+            return actualUserId.equals(expectedUserId);
         } catch (ParseException | JOSEException e) {
             throw new AppException(ErrorCode.TOKEN_INVALID);
         }
@@ -182,9 +184,10 @@ public class AuthenticationService {
 
             if (!(verified && expiryTime.after(new Date()))) throw new AppException(ErrorCode.TOKEN_INVALID);
 
-            if (invalidatedTokenRepository.existsById(signedJWT.getJWTClaimsSet().getJWTID()))
-                throw new AppException((ErrorCode.TOKEN_ALREADY_INVALIDATED));
-
+            String jid = signedJWT.getJWTClaimsSet().getJWTID();
+            
+            // Skip Redis check as requested
+            
             return signedJWT;
         } catch (JOSEException | ParseException e) {
             throw new AppException(ErrorCode.VERIFY_TOKEN_FAILED);
@@ -192,32 +195,28 @@ public class AuthenticationService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public AuthenticationResponse refreshToken(RefreshRequest request) {
+    public AuthenticationResponse refreshToken(String token) {
         String userId = getUserId();
 
-        if (checkJidAndSignerKey(request.getToken(), userId)) {
+        if (!isTokenOwnedByUser(token, userId)) {
             throw new AppException(ErrorCode.ACCESS_DENIED);
         }
 
-        SignedJWT signJWT = verifyToken(request.getToken(), true);
+        SignedJWT signJWT = verifyToken(token, true);
 
         try {
             String jid = signJWT.getJWTClaimsSet().getJWTID();
-            var jet = signJWT.getJWTClaimsSet().getExpirationTime();
-
-            InvalidatedToken invalidatedToken =
-                    InvalidatedToken.builder().id(jid).expiryTime(jet).build();
-
-            invalidatedTokenRepository.save(invalidatedToken);
+            
+            // Skip Redis caching as requested
 
             String username = signJWT.getJWTClaimsSet().getSubject();
 
             User user = userRepository.findByUsername(username)
                     .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
-            var token = generateToken(user);
+            var newToken = generateToken(user);
 
-            return AuthenticationResponse.builder().token(token).build();
+            return AuthenticationResponse.builder().token(newToken).build();
         } catch (ParseException e) {
             throw new AppException(ErrorCode.PARSE_EXCEPTION);
         }
@@ -240,40 +239,61 @@ public class AuthenticationService {
             Role role = roleRepository.findById("USER").orElseThrow(()
                     -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
 
+            String rawPassword = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+
             User newUser = User.builder()
-                    .id("EM_" + userInfo.getId())
+                    .id("Account_" + userInfo.getId())
                     .username(userInfo.getEmail())
                     .email(userInfo.getEmail())
-                    .password(UUID.randomUUID().toString().replace("-", "").substring(0, 8))
+                    .password(passwordEncoder.encode(rawPassword))
                     .roles(Set.of(role))
                     .active(true)
                     .build();
 
-            UserProfileCreationRequest creationRequest = UserProfileCreationRequest.builder()
-                    .userId("EM_" + userInfo.getId())
-                    .username(userInfo.getEmail())
-                    .email(userInfo.getEmail())
-                    .fistName(userInfo.getFamilyName())
-                    .lastName(userInfo.getGivenName())
-                    .joinDate(LocalDateTime.now())
-                    .build();
+            newUser = userRepository.save(newUser);
 
-            client.createProfile(creationRequest);
+            // Create events for Outbox (CDC MySQL)
+            try {
+                // 1. User Created Event
+                UserCreatedEvent userCreatedEvent = UserCreatedEvent.builder()
+                        .userId(newUser.getId())
+                        .username(newUser.getUsername())
+                        .email(newUser.getEmail())
+                        .firstName(userInfo.getFamilyName())
+                        .lastName(userInfo.getGivenName())
+                        .joinDate(LocalDateTime.now())
+                        .build();
 
-            EmailRequest emailRequest = EmailRequest.builder()
-                    .channel("EMAIL")
-                    .recipient(userInfo.getEmail())
-                    .subject("Welcome to travelplanner!")
-                    .body("Hello,\n" +
-                            "You have successfully registered as a member of TravelPlanner with the following credentials:\n" +
-                            "Username: " + userInfo.getEmail() +
-                            "\n" +
-                            "Password: " + newUser.getPassword() +
-                            ".Please remember to change your password as soon as possible for your account security.")
-                    .build();
-            newUser.setPassword(passwordEncoder.encode(newUser.getPassword()));
-            userRepository.save(newUser);
-            kafkaTemplate.send("send-email", emailRequest);
+                outboxRepository.save(Outbox.builder()
+                        .topic("user.created")
+                        .payload(objectMapper.writeValueAsString(userCreatedEvent))
+                        .processed(false)
+                        .build());
+
+                // 2. Email Sent Event
+                EmailRequest emailRequest = EmailRequest.builder()
+                        .to(List.of(Recipient.builder()
+                                .email(userInfo.getEmail())
+                                .build()))
+                        .subject("Welcome to travelplanner!")
+                        .htmlContent("Hello,\n" +
+                                "You have successfully registered as a member of TravelPlanner with the following credentials:\n" +
+                                "Username: " + userInfo.getEmail() +
+                                "\n" +
+                                "Password: " + rawPassword +
+                                ".Please remember to change your password as soon as possible for your account security.")
+                        .build();
+
+                outboxRepository.save(Outbox.builder()
+                        .topic("email.sent")
+                        .payload(objectMapper.writeValueAsString(emailRequest))
+                        .processed(false)
+                        .build());
+
+            } catch (JsonProcessingException e) {
+                log.error("Error serializing outbox event", e);
+                throw new RuntimeException("Failed to save outbox event", e);
+            }
 
             return newUser;
         });

@@ -1,6 +1,6 @@
 package com.MyProject.identity.identity_service.service;
 
-import com.MyProject.common.dto.request.EmailRequest;
+import com.MyProject.identity.identity_service.dto.request.EmailRequest;
 import com.MyProject.identity.identity_service.dto.request.*;
 import com.MyProject.identity.identity_service.dto.response.RoleResponse;
 import com.MyProject.identity.identity_service.dto.response.UserResponse;
@@ -13,7 +13,6 @@ import com.MyProject.identity.identity_service.mapper.UserMapper;
 import com.MyProject.identity.identity_service.repository.ResetPasswordRepository;
 import com.MyProject.identity.identity_service.repository.RoleRepository;
 import com.MyProject.identity.identity_service.repository.UserRepository;
-import com.MyProject.identity.identity_service.repository.httpclient.UserProfileClient;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -60,9 +59,6 @@ class UserServiceTest {
 
     @Mock
     PasswordEncoder passwordEncoder;
-
-    @Mock
-    UserProfileClient client;
 
     @Mock
     KafkaTemplate<String, Object> kafkaTemplate;
@@ -112,7 +108,8 @@ class UserServiceTest {
                 .build();
 
         changePasswordRequest = ChangePasswordRequest.builder()
-                .password("1801062010")
+                .oldPassword("REDACTED_LEGACY_CREDENTIAL")
+                .newPassword("1801062010")
                 .build();
 
         users = List.of(user);
@@ -168,8 +165,7 @@ class UserServiceTest {
         verify(userMapper, times(1)).toUser(creationRequest);
         verify(passwordEncoder, times(1)).encode("REDACTED_LEGACY_CREDENTIAL");
         verify(userRepository, times(1)).save(user);
-        verify(client).createProfile(any(UserProfileCreationRequest.class));
-        verify(kafkaTemplate).send(eq("onboard-email"), any(EmailRequest.class));
+        verify(kafkaTemplate, times(2)).send(anyString(), any());
         verify(userMapper, times(1)).toUserResponse(any());
     }
 
@@ -199,7 +195,6 @@ class UserServiceTest {
 
         assertEquals(ErrorCode.USERNAME_EXISTED, exception.getErrorCode());
 
-        verify(client, never()).createProfile(any());
         verify(kafkaTemplate, never()).send(anyString(), any());
     }
 
@@ -208,14 +203,16 @@ class UserServiceTest {
         mockAuthenticatedUser();
 
         when(userRepository.findByUsername("aireak")).thenReturn(Optional.of(user));
-        when(passwordEncoder.encode(changePasswordRequest.getPassword())).thenReturn("encoded!");
+        when(passwordEncoder.matches(changePasswordRequest.getOldPassword(), user.getPassword())).thenReturn(true);
+        when(passwordEncoder.encode(changePasswordRequest.getNewPassword())).thenReturn("encoded!");
 
         userService.changePassword(changePasswordRequest);
 
         assertEquals("encoded!", user.getPassword());
 
         verify(userRepository, times(1)).findByUsername("aireak");
-        verify(passwordEncoder, times(1)).encode(changePasswordRequest.getPassword());
+        verify(passwordEncoder, times(1)).matches(anyString(), anyString());
+        verify(passwordEncoder, times(1)).encode(changePasswordRequest.getNewPassword());
         verify(userRepository).save(user);
     }
 
@@ -231,6 +228,7 @@ class UserServiceTest {
         assertEquals(ErrorCode.UNAUTHORIZED, exception.getErrorCode());
 
         verify(userRepository, never()).findByUsername(any());
+        verify(passwordEncoder, never()).matches(anyString(), anyString());
         verify(passwordEncoder, never()).encode(any());
         verify(userRepository, never()).save(any());
     }
@@ -246,6 +244,24 @@ class UserServiceTest {
         assertEquals(ErrorCode.USER_NOT_EXISTED, exception.getErrorCode());
 
         verify(userRepository, times(1)).findByUsername("aireak");
+        verify(passwordEncoder, never()).matches(anyString(), anyString());
+        verify(passwordEncoder, never()).encode(any());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void changePassword_oldPasswordIncorect(){
+        mockAuthenticatedUser();
+        when(userRepository.findByUsername("aireak")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches(changePasswordRequest.getOldPassword(), user.getPassword())).thenReturn(false);
+
+        AppException exception = assertThrows(AppException.class,
+                () -> userService.changePassword(changePasswordRequest));
+
+        assertEquals(ErrorCode.PASSWORD_INCORRECT, exception.getErrorCode());
+
+        verify(userRepository, times(1)).findByUsername("aireak");
+        verify(passwordEncoder, times(1)).matches(anyString(), anyString());
         verify(passwordEncoder, never()).encode(any());
         verify(userRepository, never()).save(any());
     }

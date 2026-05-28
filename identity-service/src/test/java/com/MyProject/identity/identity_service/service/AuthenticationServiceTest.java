@@ -1,28 +1,22 @@
 package com.MyProject.identity.identity_service.service;
 
-import com.MyProject.common.dto.request.IntrospectRequest;
-import com.MyProject.common.dto.response.IntrospectResponse;
+import com.MyProject.identity.identity_service.dto.response.IntrospectResponse;
 import com.MyProject.identity.identity_service.dto.request.ExchangeTokenRequest;
 import com.MyProject.identity.identity_service.dto.response.ExchangeTokenResponse;
 import com.MyProject.identity.identity_service.dto.response.OutboundUserResponse;
-import com.MyProject.identity.identity_service.entity.InvalidatedToken;
 import com.MyProject.identity.identity_service.exception.ErrorCode;
 import com.MyProject.identity.identity_service.repository.RoleRepository;
 import com.MyProject.identity.identity_service.repository.httpclient.OutboundIdentityClient;
 import com.MyProject.identity.identity_service.repository.httpclient.OutboundUserClient;
-import com.MyProject.identity.identity_service.repository.httpclient.UserProfileClient;
 import com.nimbusds.jose.*;
 import com.nimbusds.jose.crypto.MACSigner;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.MyProject.identity.identity_service.dto.request.AuthenticationRequest;
-import com.MyProject.identity.identity_service.dto.request.LogoutRequest;
-import com.MyProject.identity.identity_service.dto.request.RefreshRequest;
 import com.MyProject.identity.identity_service.dto.response.AuthenticationResponse;
 import com.MyProject.identity.identity_service.entity.Permission;
 import com.MyProject.identity.identity_service.entity.Role;
 import com.MyProject.identity.identity_service.entity.User;
 import com.MyProject.identity.identity_service.exception.AppException;
-import com.MyProject.identity.identity_service.repository.InvalidatedTokenRepository;
 import com.MyProject.identity.identity_service.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,7 +24,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -71,10 +64,10 @@ class AuthenticationServiceTest {
     RoleRepository roleRepository;
 
     @Mock
-    UserProfileClient client;
+    OutboxRepository outboxRepository;
 
     @Mock
-    KafkaTemplate<String, Object> kafkaTemplate;
+    com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     String signerKey = "aireak-very-secret-key-512-bit-long-for-hs512-algorithm-test-only";
     User user;
@@ -321,7 +314,7 @@ class AuthenticationServiceTest {
     void logout_success() throws Exception {
         mockAuthenticatedUser();
         String logoutToken = createValidAccessToken("123456789");
-        LogoutRequest request = new LogoutRequest(logoutToken);
+        com.MyProject.common.dto.request.TokenRequest request = new com.MyProject.common.dto.request.TokenRequest(logoutToken);
 
         when(invalidatedTokenRepository.existsById(anyString())).thenReturn(false);
 
@@ -335,7 +328,7 @@ class AuthenticationServiceTest {
     void logout_unAuthenticated() throws Exception {
         SecurityContextHolder.clearContext();
         String logoutToken = createValidAccessToken("123456789");
-        LogoutRequest request = new LogoutRequest(logoutToken);
+        com.MyProject.common.dto.request.TokenRequest request = new com.MyProject.common.dto.request.TokenRequest(logoutToken);
 
         var exception = assertThrows(AppException.class, () -> authenticationService.logout(request));
 
@@ -349,7 +342,7 @@ class AuthenticationServiceTest {
     void logoutToken_accessDenied() throws Exception {
         mockAuthenticatedUser();
         String logoutToken = createValidAccessToken("12345678910");
-        LogoutRequest request = new LogoutRequest(logoutToken);
+        com.MyProject.common.dto.request.TokenRequest request = new com.MyProject.common.dto.request.TokenRequest(logoutToken);
 
         var exception = assertThrows(AppException.class, () -> authenticationService.logout(request));
 
@@ -364,7 +357,7 @@ class AuthenticationServiceTest {
         mockAuthenticatedUser();
         ReflectionTestUtils.setField(authenticationService, "signerKey", "");
         String logoutToken = createValidAccessToken("123456789");
-        LogoutRequest request = new LogoutRequest(logoutToken);
+        com.MyProject.common.dto.request.TokenRequest request = new com.MyProject.common.dto.request.TokenRequest(logoutToken);
 
         var exception = assertThrows(AppException.class, () -> authenticationService.logout(request));
 
@@ -377,7 +370,7 @@ class AuthenticationServiceTest {
     @Test
     void introspect_success() throws Exception {
         String token = createValidAccessToken("123456789");
-        IntrospectRequest request = new IntrospectRequest(token);
+        com.MyProject.common.dto.request.TokenRequest request = new com.MyProject.common.dto.request.TokenRequest(token);
 
         when(invalidatedTokenRepository.existsById(anyString())).thenReturn(false);
 
@@ -391,11 +384,11 @@ class AuthenticationServiceTest {
     void introspect_expiredToken_tokenInvalid() throws Exception {
         mockAuthenticatedUser();
         String expiredToken = createExpiredRefreshToken();
-        IntrospectRequest introspectRequest = IntrospectRequest.builder()
+        com.MyProject.common.dto.request.TokenRequest tokenRequest = com.MyProject.common.dto.request.TokenRequest.builder()
                 .token(expiredToken)
                 .build();
 
-        var exception = assertThrows(AppException.class, () -> authenticationService.introspectResponse(introspectRequest));
+        var exception = assertThrows(AppException.class, () -> authenticationService.introspectResponse(tokenRequest));
 
         verify(invalidatedTokenRepository, never()).existsById(any());
 
@@ -406,13 +399,13 @@ class AuthenticationServiceTest {
     void introspect_alreadyInvalidatedToken() throws Exception {
         mockAuthenticatedUser();
         String refreshToken = createValidRefreshToken("123456789");
-        IntrospectRequest introspectRequest = IntrospectRequest.builder()
+        com.MyProject.common.dto.request.TokenRequest tokenRequest = com.MyProject.common.dto.request.TokenRequest.builder()
                 .token(refreshToken)
                 .build();
 
         when(invalidatedTokenRepository.existsById(anyString())).thenReturn(true);
 
-        var exception = assertThrows(AppException.class, () -> authenticationService.introspectResponse(introspectRequest));
+        var exception = assertThrows(AppException.class, () -> authenticationService.introspectResponse(tokenRequest));
 
         assertEquals(ErrorCode.TOKEN_ALREADY_INVALIDATED, exception.getErrorCode());
 
@@ -424,11 +417,11 @@ class AuthenticationServiceTest {
         mockAuthenticatedUser();
         ReflectionTestUtils.setField(authenticationService, "signerKey", "");
         String token = createValidRefreshToken("123456789");
-        IntrospectRequest introspectRequest = IntrospectRequest.builder()
+        com.MyProject.common.dto.request.TokenRequest tokenRequest = com.MyProject.common.dto.request.TokenRequest.builder()
                 .token(token)
                 .build();
 
-        var exception = assertThrows(AppException.class, () -> authenticationService.introspectResponse(introspectRequest));
+        var exception = assertThrows(AppException.class, () -> authenticationService.introspectResponse(tokenRequest));
 
         assertEquals(ErrorCode.VERIFY_TOKEN_FAILED, exception.getErrorCode());
 
@@ -439,7 +432,7 @@ class AuthenticationServiceTest {
     void refreshToken_success() throws Exception {
         mockAuthenticatedUser();
         String refreshToken = createValidRefreshToken("123456789");
-        RefreshRequest request = new RefreshRequest(refreshToken);
+        TokenRequest request = new TokenRequest(refreshToken);
 
         when(invalidatedTokenRepository.existsById(anyString())).thenReturn(false);
         when(userRepository.findByUsername(anyString())).thenReturn(Optional.of(user));
@@ -458,7 +451,7 @@ class AuthenticationServiceTest {
     void refreshToken_unAuthenticated() throws Exception {
         SecurityContextHolder.clearContext();
         String refreshToken = createValidRefreshToken("123456789");
-        RefreshRequest request = new RefreshRequest(refreshToken);
+        TokenRequest request = new TokenRequest(refreshToken);
 
         var exception = assertThrows(AppException.class, () -> authenticationService.refreshToken(request));
 
@@ -473,7 +466,7 @@ class AuthenticationServiceTest {
     void refreshToken_accessDenied() throws Exception {
         String token = createValidRefreshToken("12345678910");
         mockAuthenticatedUser();
-        RefreshRequest request = new RefreshRequest(token);
+        TokenRequest request = new TokenRequest(token);
 
         var exception = assertThrows(AppException.class, () -> authenticationService.refreshToken(request));
 
@@ -489,7 +482,7 @@ class AuthenticationServiceTest {
         mockAuthenticatedUser();
         ReflectionTestUtils.setField(authenticationService, "signerKey", "");
         String token = createValidRefreshToken("123456789");
-        RefreshRequest request = new RefreshRequest(token);
+        TokenRequest request = new TokenRequest(token);
 
         var exception = assertThrows(AppException.class, () -> authenticationService.refreshToken(request));
 
@@ -504,7 +497,7 @@ class AuthenticationServiceTest {
     void refreshToken_expiredToken_tokenInvalid() throws Exception {
         mockAuthenticatedUser();
         String expiredToken = createExpiredRefreshToken();
-        RefreshRequest request = new RefreshRequest(expiredToken);
+        TokenRequest request = new TokenRequest(expiredToken);
 
         var exception = assertThrows(AppException.class, () -> authenticationService.refreshToken(request));
 
@@ -519,7 +512,7 @@ class AuthenticationServiceTest {
     void refreshToken_alreadyInvalidatedToken() throws Exception {
         mockAuthenticatedUser();
         String refreshToken = createValidRefreshToken("123456789");
-        RefreshRequest request = new RefreshRequest(refreshToken);
+        TokenRequest request = new TokenRequest(refreshToken);
 
         when(invalidatedTokenRepository.existsById(anyString())).thenReturn(true);
 
@@ -536,7 +529,7 @@ class AuthenticationServiceTest {
     void refreshToken_userNotExisted() throws Exception {
         mockAuthenticatedUser();
         String refreshToken = createValidRefreshToken("123456789");
-        RefreshRequest request = new RefreshRequest(refreshToken);
+        TokenRequest request = new TokenRequest(refreshToken);
 
         when(userRepository.findByUsername(anyString())).thenReturn(Optional.empty());
         when(invalidatedTokenRepository.existsById(anyString())).thenReturn(false);
@@ -589,7 +582,6 @@ class AuthenticationServiceTest {
         verify(outboundUserClient, times(1)).getInfo(any(), any());
         verify(userRepository, times(1)).findByEmail(any());
         verify(roleRepository, never()).findById(any());
-        verify(client, never()).createProfile(any());
         verify(passwordEncoder, never()).encode(any());
         verify(userRepository, never()).save(any());
         verify(kafkaTemplate, never()).send(any(), any());
@@ -615,6 +607,7 @@ class AuthenticationServiceTest {
         when(outboundUserClient.getInfo("json", exchangeTokenResponse.getAccessToken())).thenReturn(outboundUserResponse);
         when(userRepository.findByEmail(outboundUserResponse.getEmail())).thenReturn(Optional.empty());
         when(roleRepository.findById("USER")).thenReturn(Optional.of(role));
+        when(userRepository.save(any())).thenReturn(user);
 
         var response = authenticationService.outboundAuthenticate("123");
 
@@ -632,16 +625,16 @@ class AuthenticationServiceTest {
         assertThat(duration).isCloseTo(duration, within(5L));
         assertThat(claims.getJWTID()).isNotNull();
         assertThat(claims.getClaim("scope")).isEqualTo("ROLE_USER ADD_FRIEND");
-        assertThat(claims.getClaim("userId")).isEqualTo("EM_123456789");
+        assertThat(claims.getClaim("userId")).isEqualTo("123456789");
 
         verify(outboundIdentityClient, times(1)).exchangeToken(any());
         verify(outboundUserClient, times(1)).getInfo(any(), any());
         verify(userRepository, times(1)).findByEmail(any());
         verify(roleRepository, times(1)).findById(any());
-        verify(client, times(1)).createProfile(any());
         verify(passwordEncoder, times(1)).encode(any());
         verify(userRepository, times(1)).save(any());
-        verify(kafkaTemplate, times(1)).send(any(), any());
+        verify(outboxRepository, times(2)).save(any());
+        verify(kafkaTemplate, never()).send(anyString(), any());
     }
 
     @Test
@@ -673,7 +666,6 @@ class AuthenticationServiceTest {
         verify(outboundUserClient, times(1)).getInfo(any(), any());
         verify(userRepository, times(1)).findByEmail(any());
         verify(roleRepository, times(1)).findById(any());
-        verify(client, never()).createProfile(any());
         verify(passwordEncoder, never()).encode(any());
         verify(userRepository, never()).save(any());
         verify(kafkaTemplate, never()).send(any(), any());
@@ -700,6 +692,7 @@ class AuthenticationServiceTest {
         when(outboundUserClient.getInfo("json", exchangeTokenResponse.getAccessToken())).thenReturn(outboundUserResponse);
         when(userRepository.findByEmail(outboundUserResponse.getEmail())).thenReturn(Optional.empty());
         when(roleRepository.findById("USER")).thenReturn(Optional.of(role));
+        when(userRepository.save(any())).thenReturn(user);
 
         var exception = assertThrows(AppException.class, () -> authenticationService.outboundAuthenticate("123"));
 
@@ -709,10 +702,10 @@ class AuthenticationServiceTest {
         verify(outboundUserClient, times(1)).getInfo(any(), any());
         verify(userRepository, times(1)).findByEmail(any());
         verify(roleRepository, times(1)).findById(any());
-        verify(client, times(1)).createProfile(any());
         verify(passwordEncoder, times(1)).encode(any());
         verify(userRepository, times(1)).save(any());
-        verify(kafkaTemplate, times(1)).send(any(), any());
+        verify(outboxRepository, times(2)).save(any());
+        verify(kafkaTemplate, never()).send(any(), any());
     }
 }
 

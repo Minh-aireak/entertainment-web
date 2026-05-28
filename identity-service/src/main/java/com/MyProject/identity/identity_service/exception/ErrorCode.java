@@ -1,5 +1,6 @@
 package com.MyProject.identity.identity_service.exception;
 
+import com.MyProject.common.dto.response.ApiResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 
@@ -7,6 +8,7 @@ import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.experimental.FieldDefaults;
+import org.springframework.http.ResponseEntity;
 
 @Getter
 @AllArgsConstructor
@@ -38,9 +40,21 @@ public enum ErrorCode {
     EMAIL_NOT_EXISTED(8024, "Email not existed!", HttpStatus.BAD_REQUEST),
     INVALID_TOKEN_RESET(8025, "Invalid token reset!", HttpStatus.BAD_REQUEST),
     TOKEN_EXPIRED(8026, "Token expired!", HttpStatus.BAD_REQUEST),
-    EMAIL_INVALID(8027, "Email invalid!", HttpStatus.BAD_REQUEST);
+    EMAIL_INVALID(8027, "Email invalid!", HttpStatus.BAD_REQUEST),
+    ROLE_IS_IN_USE(8028, "Role is in use!", HttpStatus.BAD_REQUEST);
 
     int code;
     String message;
     HttpStatusCode statusCode;
+
+    public static ApiResponse<Object> of(ErrorCode errorCode) {
+        return ApiResponse.builder()
+                .code(errorCode.getCode())
+                .message(errorCode.getMessage())
+                .build();
+    }
+
+    public static ResponseEntity<ApiResponse<Object>> toResponseEntity(ErrorCode errorCode) {
+        return ResponseEntity.status(errorCode.getStatusCode()).body(of(errorCode));
+    }
 }

@@ -2,8 +2,8 @@ package com.MyProject.identity.identity_service.dto.response;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-import tools.jackson.databind.PropertyNamingStrategies;
-import tools.jackson.databind.annotation.JsonNaming;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.databind.annotation.JsonNaming;
 
 @Data
 @NoArgsConstructor

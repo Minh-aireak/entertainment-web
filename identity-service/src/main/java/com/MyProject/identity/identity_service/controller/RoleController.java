@@ -2,12 +2,12 @@ package com.MyProject.identity.identity_service.controller;
 
 import java.util.List;
 
+import com.MyProject.common.dto.response.ApiResponse;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import com.MyProject.identity.identity_service.dto.request.RoleCreationRequest;
 import com.MyProject.identity.identity_service.dto.request.RoleUpdateRequest;
-import com.MyProject.identity.identity_service.dto.response.ApiResponse;
 import com.MyProject.identity.identity_service.dto.response.RoleResponse;
 import com.MyProject.identity.identity_service.service.RoleService;
 
@@ -27,6 +27,15 @@ public class RoleController {
     ApiResponse<RoleResponse> createRole(@RequestBody RoleCreationRequest request) {
         return ApiResponse.<RoleResponse>builder()
                 .result(roleService.createRole(request))
+                .message("Create role success!")
+                .build();
+    }
+
+    @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    ApiResponse<List<RoleResponse>> getAllRoles() {
+        return ApiResponse.<List<RoleResponse>>builder()
+                .result(roleService.getAllRoles())
                 .build();
     }
 
@@ -35,6 +44,7 @@ public class RoleController {
     ApiResponse<RoleResponse> updateRole(@RequestBody RoleUpdateRequest request) {
         return ApiResponse.<RoleResponse>builder()
                 .result(roleService.updateRole(request))
+                .message("Update role success!")
                 .build();
     }
 
@@ -42,14 +52,8 @@ public class RoleController {
     @PreAuthorize("hasRole('ADMIN')")
     ApiResponse<Void> deleteRole(@PathVariable String name) {
         roleService.deleteRole(name);
-        return ApiResponse.<Void>builder().message("Deleted role success!").build();
-    }
-
-    @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
-    ApiResponse<List<RoleResponse>> getAllRoles() {
-        return ApiResponse.<List<RoleResponse>>builder()
-                .result(roleService.getAllRoles())
+        return ApiResponse.<Void>builder()
+                .message("Deleted role success!")
                 .build();
     }
 }

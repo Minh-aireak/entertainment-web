@@ -1,7 +1,7 @@
 package com.MyProject.identity.identity_service.controller;
 
-import java.util.List;
-
+import com.MyProject.common.dto.response.ApiResponse;
+import com.MyProject.common.dto.response.PageResponse;
 import com.MyProject.identity.identity_service.dto.request.ForgotPasswordRequest;
 import com.MyProject.identity.identity_service.dto.request.ResetPasswordRequest;
 import jakarta.validation.Valid;
@@ -12,7 +12,6 @@ import org.springframework.web.bind.annotation.*;
 
 import com.MyProject.identity.identity_service.dto.request.UserCreationRequest;
 import com.MyProject.identity.identity_service.dto.request.ChangePasswordRequest;
-import com.MyProject.identity.identity_service.dto.response.ApiResponse;
 import com.MyProject.identity.identity_service.dto.response.UserResponse;
 import com.MyProject.identity.identity_service.service.UserService;
 
@@ -32,6 +31,7 @@ public class UserController {
     ApiResponse<UserResponse> createUser(@RequestBody @Valid UserCreationRequest request) {
         return ApiResponse.<UserResponse>builder()
                 .result(userService.createUser(request))
+                .message("Register account success!")
                 .build();
     }
 
@@ -45,18 +45,19 @@ public class UserController {
 
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
-    ApiResponse<List<UserResponse>> getAllUsers() {
-        return ApiResponse.<List<UserResponse>>builder()
-                .result(userService.getAllUsers())
+    ApiResponse<PageResponse<UserResponse>> getUsers(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ApiResponse.<PageResponse<UserResponse>>builder()
+                .result(userService.getUsers(page, size))
                 .build();
     }
 
-    @PutMapping("/{id}")
+    @PutMapping("/{id}/toggle-account")
     @PreAuthorize("hasRole('ADMIN')")
-    ApiResponse<Void> disableUser(@PathVariable String id) {
-        userService.disableUser(id);
+    ApiResponse<Void> toggleAccount(@PathVariable String id) {
         return ApiResponse.<Void>builder()
-                .message("User disabled successfully!")
+                .message(userService.toggleAccount(id))
                 .build();
     }
 

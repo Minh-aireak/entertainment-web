@@ -12,9 +12,7 @@ import com.MyProject.identity.identity_service.entity.User;
 
 @Mapper(componentModel = "spring", nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
 public interface UserMapper {
-    @Mapping(target = "id", ignore = true)
-    @Mapping(target = "roles", ignore = true)
-    @Mapping(target = "active", ignore = true)
+
     User toUser(UserCreationRequest request);
 
     UserResponse toUserResponse(User user);

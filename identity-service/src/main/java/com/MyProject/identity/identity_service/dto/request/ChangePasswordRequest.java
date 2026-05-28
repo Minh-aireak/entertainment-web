@@ -15,5 +15,8 @@ import lombok.experimental.FieldDefaults;
 @Builder
 public class ChangePasswordRequest {
     @Size(min = 8, message = "PASSWORD_INVALID")
-    String password;
+    String oldPassword;
+
+    @Size(min = 8, message = "PASSWORD_INVALID")
+    String newPassword;
 }

@@ -30,7 +30,7 @@ public class ApplicationInitConfig {
     @Profile("!test")
     @Transactional
     ApplicationRunner applicationRunner(UserRepository userRepository) {
-        return _ -> {
+        return args -> {
             if (userRepository.findByUsername("admin").isEmpty()) {
 
                 Role role = roleRepository

@@ -3,6 +3,7 @@ package com.MyProject.identity.identity_service.service;
 import java.util.HashSet;
 import java.util.List;
 
+import com.MyProject.identity.identity_service.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +28,7 @@ public class RoleService {
     RoleRepository roleRepository;
     RoleMapper roleMapper;
     PermissionRepository permissionRepository;
+    UserRepository userRepository;
 
     @Transactional(rollbackFor = Exception.class)
     public RoleResponse createRole(RoleCreationRequest request) {
@@ -60,11 +62,16 @@ public class RoleService {
 
     @Transactional(rollbackFor = Exception.class)
     public void deleteRole(String name) {
-        if (roleRepository.existsById(name)) {
-            roleRepository.deleteById(name);
-        } else {
-            throw new AppException(ErrorCode.ROLE_NOT_EXISTED);
+        Role role = roleRepository.findById(name)
+                .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
+
+        boolean isUsed = userRepository.existsByRolesContaining(role);
+
+        if (isUsed) {
+            throw new AppException(ErrorCode.ROLE_IS_IN_USE);
         }
+
+        roleRepository.delete(role);
     }
 
     @Transactional
