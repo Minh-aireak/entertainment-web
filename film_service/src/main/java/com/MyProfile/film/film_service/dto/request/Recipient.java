@@ -1,4 +1,4 @@
-package com.MyProject.common.dto;
+package com.MyProfile.film.film_service.dto.request;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -8,8 +8,7 @@ import lombok.experimental.FieldDefaults;
 @AllArgsConstructor
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class ProfileUpdatedEvent {
-    String userId;
-    String avatar;
-    String displayName;
+public class Recipient {
+    String name;
+    String email;
 }

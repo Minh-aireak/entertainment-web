@@ -1,4 +1,4 @@
-package com.MyProject.common.dto.response;
+package com.MyProject.profile.profile_service.dto.response;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -16,7 +16,7 @@ public class NotificationResponse {
     String userIdSender;
     String displayNameSender;
     String avatarSender;
-    Boolean isRead;
+    Boolean read;
     String message;
     LocalDateTime createdAt;
 }

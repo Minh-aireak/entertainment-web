@@ -3,7 +3,7 @@ package com.MyProject.common.dto.request;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
-import java.util.List;
+import java.util.Set;
 
 @Data
 @Builder
@@ -11,5 +11,5 @@ import java.util.List;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class BulkUserProfileRequest {
-    List<String> userIds;
+    Set<String> userIds;
 }

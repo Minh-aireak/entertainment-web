@@ -1,17 +1,15 @@
-package com.MyProject.common.entity;
+package com.MyProject.profile.profile_service.dto.event;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-import lombok.experimental.SuperBuilder;
 
+@Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Getter
-@Setter
-@SuperBuilder(toBuilder = true)
+@Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class ParticipantInfo {
+public class ProfileUpdatedEvent {
     String userId;
-    String displayName;
     String avatar;
+    String displayName;
 }

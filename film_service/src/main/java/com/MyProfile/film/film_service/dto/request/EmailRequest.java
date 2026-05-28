@@ -1,9 +1,10 @@
-package com.MyProject.common.dto.request;
+package com.MyProfile.film.film_service.dto.request;
 
+import com.MyProject.identity.identity_service.dto.request.Recipient;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
-import java.util.Map;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -11,10 +12,7 @@ import java.util.Map;
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class EmailRequest {
-    String channel;
-    String recipient;
-    String templateCode;
-    Map<String, Object> params;
+    List<Recipient> to;
     String subject;
-    String body;
+    String htmlContent;
 }
