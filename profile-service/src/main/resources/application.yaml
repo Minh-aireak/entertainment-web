@@ -1,30 +1,79 @@
 server:
   port: 8081
   servlet:
-    context-path: /profile
+    context-path: /profiles
 
 jwt:
-  signerKey: ${JWT_SIGNER_KEY}
+  signerKey: ${JWT_SIGNER_KEY:uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0}
 
 spring:
   data:
     redis:
-      host: localhost
-      port: 6379
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:REDACTED_LEGACY_CREDENTIAL}
+      repositories:
+        enabled: false
+    mongodb:
+      uri: mongodb://${MONGODB_ROOT_USERNAME:root}:${MONGODB_ROOT_PASSWORD:REDACTED_LEGACY_CREDENTIAL}@${MONGODB_HOST:localhost}:${MONGODB_PORT:27017}/profile-service?authSource=admin
+
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
       properties:
         spring.json.add.type.headers: true
-  neo4j:
-    uri: bolt://${NEO4J_HOST}:7687
-    authentication:
-      username: ${NEO4J_USERNAME}
-      password: ${NEO4J_PASSWORD}
+        delivery.timeout.ms: 120000
+        linger.ms: 1
+        request.timeout.ms: 30000
+    consumer:
+      group-id: profile-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
+        spring.json.trusted.packages: "*"
+
+  elasticsearch:
+    uris: http://${ELASTICSEARCH_HOST:localhost}:${ELASTICSEARCH_PORT:9200}
+
+  cloud:
+    openfeign:
+      circuitbreaker:
+        enabled: true
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      postService:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+      friendService:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+
+  timeout:
+    instances:
+      postService:
+        timeout-duration: 2s
+      friendService:
+        timeout-duration: 2s
 
 app:
   services:
     file:
-      url: "http://localhost:8084/file"
+      url: ${FILE_SERVICE_URL:http://localhost:8084}
+    post:
+      url: ${POST_SERVICE_URL:http://localhost:8083}
+    friend:
+      url: ${FRIEND_SERVICE_URL:http://localhost:8087}
+    notification:
+      url: ${NOTIFICATION_SERVICE_URL:http://localhost:8082}

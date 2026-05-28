@@ -35,4 +35,6 @@ public class UserProfileUpdateRequest {
     String phoneNumber;
 
     String city;
+
+    String avatar;
 }

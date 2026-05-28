@@ -1,11 +1,13 @@
 package com.MyProject.profile.profile_service.exception;
 
+import com.MyProject.common.dto.response.ApiResponse;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.experimental.FieldDefaults;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.http.ResponseEntity;
 
 @Getter
 @AllArgsConstructor
@@ -25,4 +27,15 @@ public enum ErrorCode {
     int code;
     String message;
     HttpStatusCode statusCode;
+
+    public static ApiResponse<Object> of(ErrorCode errorCode) {
+        return ApiResponse.builder()
+                .code(errorCode.getCode())
+                .message(errorCode.getMessage())
+                .build();
+    }
+
+    public static ResponseEntity<ApiResponse<Object>> toResponseEntity(ErrorCode errorCode) {
+        return ResponseEntity.status(errorCode.getStatusCode()).body(of(errorCode));
+    }
 }

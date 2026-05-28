@@ -1,6 +1,6 @@
 package com.MyProject.profile.profile_service.exception;
 
-import com.MyProject.profile.profile_service.dto.response.ApiResponse;
+import com.MyProject.common.dto.response.ApiResponse;
 import jakarta.validation.ConstraintViolation;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -17,7 +17,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(value = AppException.class)
     public ResponseEntity<ApiResponse<Object>> handlingAppException(AppException exception) {
-        return ApiResponse.toResponseEntity(exception.getErrorCode());
+        return ErrorCode.toResponseEntity(exception.getErrorCode());
     }
 
     @ExceptionHandler(value = MethodArgumentNotValidException.class)
@@ -49,6 +49,6 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(value = AccessDeniedException.class)
     public ResponseEntity<ApiResponse<Object>> handlingAccessDeniedException() {
-        return ApiResponse.toResponseEntity(ErrorCode.UNAUTHORIZED);
+        return ErrorCode.toResponseEntity(ErrorCode.UNAUTHORIZED);
     }
 }

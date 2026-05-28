@@ -1,4 +1,4 @@
-package com.MyProject.profile.profile_service.dto.request;
+package com.MyProfile.film.film_service.dto.request;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -8,8 +8,8 @@ import lombok.experimental.FieldDefaults;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @Builder
-public class SearchUserProfileRequest {
-    String displayName;
-    int page;
-    int size;
+public class PermissionCreationRequest {
+    String name;
+
+    String description;
 }

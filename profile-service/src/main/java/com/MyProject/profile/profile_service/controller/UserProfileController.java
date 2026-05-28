@@ -1,12 +1,11 @@
 package com.MyProject.profile.profile_service.controller;
 
 import com.MyProject.common.dto.request.BulkUserProfileRequest;
+import com.MyProject.common.dto.response.ApiResponse;
 import com.MyProject.common.dto.response.PageResponse;
 import com.MyProject.common.dto.response.UserProfileResponse;
-import com.MyProject.profile.profile_service.dto.request.SearchUserProfileRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileCreationRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileUpdateRequest;
-import com.MyProject.profile.profile_service.dto.response.ApiResponse;
 import com.MyProject.profile.profile_service.service.UserProfileService;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
@@ -15,9 +14,8 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @RestController
@@ -25,13 +23,6 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class UserProfileController {
     UserProfileService userProfileService;
-
-    @PostMapping("/internal/registration")
-    ApiResponse<UserProfileResponse> createProfile(@RequestBody UserProfileCreationRequest request){
-        return ApiResponse.<UserProfileResponse>builder()
-                .result(userProfileService.createProfile(request))
-                .build();
-    }
 
     @PutMapping("/my-profile")
     ApiResponse<UserProfileResponse> updateProfile(@RequestBody @Valid UserProfileUpdateRequest request){
@@ -41,21 +32,40 @@ public class UserProfileController {
     }
 
     @GetMapping("/my-profile")
-    ApiResponse<UserProfileResponse> getMyInfo(){
+    ApiResponse<UserProfileResponse> getMyProfile(){
         return ApiResponse.<UserProfileResponse>builder()
-                .result(userProfileService.getMyInfo())
+                .result(userProfileService.getMyProfile())
                 .build();
     }
 
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
-    ApiResponse<List<UserProfileResponse>> getAllProfiles(){
-        return ApiResponse.<List<UserProfileResponse>>builder()
-                .result(userProfileService.getAllProfiles())
+    ApiResponse<PageResponse<UserProfileResponse>> getAllProfiles(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size){
+        return ApiResponse.<PageResponse<UserProfileResponse>>builder()
+                .result(userProfileService.getAllProfiles(page, size))
                 .build();
     }
 
-    @GetMapping("/internal/user-profile/{userId}")
+    @PostMapping("/search/{displayName}")
+    ApiResponse<PageResponse<UserProfileResponse>> searchProfile(
+            @PathVariable("displayName") String displayName,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size){
+        return ApiResponse.<PageResponse<UserProfileResponse>>builder()
+                .result(userProfileService.searchProfile(displayName, page, size))
+                .build();
+    }
+
+    @PostMapping("/internal/registration")
+    ApiResponse<UserProfileResponse> createProfile(@RequestBody UserProfileCreationRequest request){
+        return ApiResponse.<UserProfileResponse>builder()
+                .result(userProfileService.createProfile(request))
+                .build();
+    }
+
+    @GetMapping("/{userId}")
     ApiResponse<UserProfileResponse> getProfile(@PathVariable String userId){
         return ApiResponse.<UserProfileResponse>builder()
                 .result(userProfileService.getProfile(userId))
@@ -63,23 +73,10 @@ public class UserProfileController {
     }
 
     @PostMapping("/internal/bulk-user-profiles")
-    ApiResponse<List<UserProfileResponse>> getBulkProfiles(@RequestBody BulkUserProfileRequest request){
-        return ApiResponse.<List<UserProfileResponse>>builder()
+    ApiResponse<Map<String, UserProfileResponse>> getBulkProfiles(@RequestBody BulkUserProfileRequest request){
+        return ApiResponse.<Map<String, UserProfileResponse>>builder()
                 .result(userProfileService.getBulkProfiles(request))
                 .build();
     }
 
-    @PostMapping("/avatar")
-    ApiResponse<UserProfileResponse> updateAvatar(@RequestParam("file") MultipartFile multipartFile){
-        return ApiResponse.<UserProfileResponse>builder()
-                .result(userProfileService.updateAvatar(multipartFile))
-                .build();
-    }
-
-    @PostMapping("/search")
-    ApiResponse<PageResponse<UserProfileResponse>> searchProfile(@RequestBody SearchUserProfileRequest request){
-        return ApiResponse.<PageResponse<UserProfileResponse>>builder()
-                .result(userProfileService.searchProfile(request))
-                .build();
-    }
 }

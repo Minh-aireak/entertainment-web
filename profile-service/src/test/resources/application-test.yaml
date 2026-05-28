@@ -6,15 +6,12 @@ server:
 spring:
   autoconfigure:
     exclude:
-      - org.springframework.boot.autoconfigure.neo4j.Neo4jAutoConfiguration
-      - org.springframework.boot.autoconfigure.data.neo4j.Neo4jDataAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration
+      - org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration
       - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
 
-  neo4j:
-    uri: bolt://localhost:7687
-    authentication:
-      username: fake
-      password: fake
+  mongodb:
+    uri: mongodb://localhost:27017/profile-test
   kafka:
     bootstrap-servers: localhost:9092
 

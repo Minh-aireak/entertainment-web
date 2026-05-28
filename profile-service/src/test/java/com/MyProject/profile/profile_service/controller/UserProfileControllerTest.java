@@ -6,7 +6,6 @@ import com.MyProject.common.dto.response.UserProfileResponse;
 import com.MyProject.profile.profile_service.configuration.CustomJwtDecoder;
 import com.MyProject.profile.profile_service.configuration.JwtAuthenticationEntryPoint;
 import com.MyProject.profile.profile_service.configuration.SecurityConfig;
-import com.MyProject.profile.profile_service.dto.request.SearchUserProfileRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileCreationRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileUpdateRequest;
 import com.MyProject.profile.profile_service.exception.AppException;
@@ -27,12 +26,14 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
-import tools.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.Mockito.*;
@@ -378,10 +379,10 @@ class UserProfileControllerTest {
     @WithMockUser
     void bulkProfiles_success() throws Exception {
         BulkUserProfileRequest req = BulkUserProfileRequest.builder()
-                .userIds(List.of("123456789"))
+                .userIds(Set.of("123456789"))
                 .build();
 
-        when(userProfileService.getBulkProfiles(any(BulkUserProfileRequest.class))).thenReturn(List.of(response));
+        when(userProfileService.getBulkProfiles(any(BulkUserProfileRequest.class))).thenReturn(Map.of("123456789", response));
 
         String content = objectMapper.writeValueAsString(req);
 
@@ -390,12 +391,11 @@ class UserProfileControllerTest {
                         .content(content))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("code").value(1000))
-                .andExpect(jsonPath("result", hasSize(1)))
-                .andExpect(jsonPath("result[0].userId").value("123456789"))
-                .andExpect(jsonPath("result[0].username").value("aireak"))
-                .andExpect(jsonPath("result[0].email").value("aireak@gmail.com"))
-                .andExpect(jsonPath("result[0].displayName").value("aireak"))
-                .andExpect(jsonPath("result[0].joinDate").value("2025-12-28T19:42:15.123"));
+                .andExpect(jsonPath("result['123456789'].userId").value("123456789"))
+                .andExpect(jsonPath("result['123456789'].username").value("aireak"))
+                .andExpect(jsonPath("result['123456789'].email").value("aireak@gmail.com"))
+                .andExpect(jsonPath("result['123456789'].displayName").value("aireak"))
+                .andExpect(jsonPath("result['123456789'].joinDate").value("2025-12-28T19:42:15.123"));
 
         verify(userProfileService, times(1)).getBulkProfiles(any(BulkUserProfileRequest.class));
     }

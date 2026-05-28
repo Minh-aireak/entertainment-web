@@ -1,23 +1,17 @@
-package com.MyProject.profile.profile_service.entity;
+package com.MyProject.profile.profile_service.dto.event;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-import org.springframework.data.mongodb.core.mapping.Document;
-import org.springframework.data.mongodb.core.mapping.MongoId;
-import org.springframework.data.mongodb.core.mapping.Field;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-@Document("user_profile")
-@Getter
-@Setter
-@Builder
+@Data
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class UserProfile {
-    @MongoId
+@Builder
+public class UserCreatedEvent {
     String userId;
     String username;
     String email;
@@ -28,5 +22,4 @@ public class UserProfile {
     String phoneNumber;
     String city;
     LocalDateTime joinDate;
-    String avatar;
 }
