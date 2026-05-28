@@ -1,4 +1,4 @@
-package com.MyProject.api_gateway.dto.response;
+package com.MyProject.common.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.*;
