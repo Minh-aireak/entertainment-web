@@ -1,20 +1,18 @@
-package com.MyProject.common.dto.request;
+package com.MyProject.chat_service.dto.event;
 
-import com.MyProject.common.entity.TypeNotification;
+import com.MyProject.chat_service.entity.TypeNotification;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.util.List;
-import java.util.Map;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class NotificationRequest {
+public class NotificationEvent {
     TypeNotification typeNotification;
     String userIdSender;
     List<String> toUserIds;
-    Map<String, Object> metadata;
 }

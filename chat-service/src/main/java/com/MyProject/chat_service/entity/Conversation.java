@@ -3,6 +3,9 @@ package com.MyProject.chat_service.entity;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.MongoId;
 
@@ -19,8 +22,23 @@ import java.util.List;
 public class Conversation {
     @MongoId
     String id;
+
     ConversationType type;
-    List<ParticipantInfo> participantInfos;
+
+    @CreatedDate
     Instant createdDate;
+
+    @LastModifiedDate
     Instant modifiedDate;
+
+    @Builder.Default
+    long totalSeq = 0L;
+
+    @Indexed
+    List<String> userIds;
+
+    String lastMessage;
+
+    @Builder.Default
+    boolean deleted = false;
 }

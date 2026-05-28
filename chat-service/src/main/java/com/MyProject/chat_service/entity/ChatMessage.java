@@ -2,14 +2,25 @@ package com.MyProject.chat_service.entity;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.MongoId;
 
 import java.time.Instant;
-import java.util.Map;
 
 @Document(collection = "chat-message")
+@CompoundIndex(
+        name = "conversation_created_idx",
+        def = "{'conversationId': 1, 'createdDate': -1}"
+)
+@CompoundIndex(
+        name = "client_msg_id_idx",
+        def = "{'clientMessageId': 1}",
+        unique = true,
+        sparse = true
+)
 @NoArgsConstructor
 @AllArgsConstructor
 @Getter
@@ -20,23 +31,27 @@ public class ChatMessage {
     @MongoId
     String id;
 
-    @Indexed
     String conversationId;
 
-    @Indexed
-    ParticipantInfo sender;
+    String senderId;
 
     MessageType messageType;
 
     String content;
 
+    long seq;
+
     String attachmentFileUrl;
 
     String replyToMessageId;
 
+    String clientMessageId;
+
+    @CreatedDate
     Instant createdDate;
+
+    @LastModifiedDate
     Instant modifiedDate;
 
     MessageStatus messageStatus;
-    Map<String, Instant> seenAtMap;
 }

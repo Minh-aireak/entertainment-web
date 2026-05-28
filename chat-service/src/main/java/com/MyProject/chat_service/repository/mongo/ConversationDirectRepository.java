@@ -1,4 +1,4 @@
-package com.MyProject.chat_service.repository;
+package com.MyProject.chat_service.repository.mongo;
 
 import com.MyProject.chat_service.entity.ConversationDirect;
 import org.springframework.data.mongodb.repository.MongoRepository;

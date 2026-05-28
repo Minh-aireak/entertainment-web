@@ -1,6 +1,5 @@
 package com.MyProject.chat_service.dto.response;
 
-import com.MyProject.chat_service.entity.ParticipantInfo;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -17,13 +16,23 @@ import java.util.List;
 public class ConversationResponse {
    String id;
    String type;
+   List<String> userIds;
+   Long totalSeq;
+   Instant createdDate;
+   Instant modifiedDate;
+
+   // Direct chat
    String participantsHash;
-   List<ParticipantInfo> participantInfos;
    String directName;
    String directAvatar;
+
+   // Group chat
    String groupName;
    String groupOwner;
    String groupAvatar;
-   Instant createdDate;
-   Instant modifiedDate;
+
+   String lastMessage;
+   boolean deleted;
+
+   List<ParticipantResponse> participants;
 }

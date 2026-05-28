@@ -27,7 +27,6 @@ public class ConversationDirect extends Conversation{
         return ConversationDirect.builder()
                 .id(c.getId())
                 .type(c.getType())
-                .participantInfos(c.getParticipantInfos())
                 .createdDate(c.getCreatedDate())
                 .modifiedDate(c.getModifiedDate());
     }

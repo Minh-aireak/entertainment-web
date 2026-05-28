@@ -1,6 +1,7 @@
 package com.MyProject.chat_service.controller;
 
-import com.MyProject.chat_service.dto.response.ApiResponse;
+import com.MyProject.common.dto.response.ApiResponse;
+import com.MyProject.common.dto.response.PageResponse;
 import com.MyProject.chat_service.dto.response.ConversationResponse;
 import com.MyProject.chat_service.service.ConversationService;
 import lombok.AccessLevel;
@@ -17,17 +18,27 @@ import java.util.List;
 public class ConversationController {
     ConversationService conversationService;
 
-    @PostMapping("/create")
+    @PostMapping
     ApiResponse<ConversationResponse> createConversation(@RequestBody List<String> ids) {
         return ApiResponse.<ConversationResponse>builder()
                 .result(conversationService.createConversation(ids))
                 .build();
     }
 
+    @GetMapping("/search")
+    ApiResponse<PageResponse<ConversationResponse>> searchConversations(@RequestParam String query,
+                                                                         @RequestParam(defaultValue = "1") int page,
+                                                                         @RequestParam(defaultValue = "10") int size) {
+        return ApiResponse.<PageResponse<ConversationResponse>>builder()
+                .result(conversationService.searchConversations(query, page, size))
+                .build();
+    }
+
     @GetMapping("/my-conversations")
-    ApiResponse<List<ConversationResponse>> getMyConversations() {
-        return ApiResponse.<List<ConversationResponse>>builder()
-                .result(conversationService.getMyConversations())
+    ApiResponse<PageResponse<ConversationResponse>> getMyConversations(@RequestParam(value = "page", defaultValue = "1") int page,
+                                                                        @RequestParam(value = "size", defaultValue = "10") int size) {
+        return ApiResponse.<PageResponse<ConversationResponse>>builder()
+                .result(conversationService.getMyConversations(page, size))
                 .build();
     }
 }

@@ -1,14 +1,12 @@
-package com.MyProject.common.dto.response;
+package com.MyProject.chat_service.dto.response;
 
-import com.MyProject.common.entity.MessageStatus;
-import com.MyProject.common.entity.MessageType;
-import com.MyProject.common.entity.ParticipantInfo;
+import com.MyProject.chat_service.entity.MessageStatus;
+import com.MyProject.chat_service.entity.MessageType;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.time.Instant;
-import java.util.Map;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Data
@@ -20,13 +18,16 @@ public class ChatMessageResponse {
    String id;
    String conversationId;
    boolean me;
-   ParticipantInfo sender;
    MessageType messageType;
    String content;
+   long seq;
    String attachmentFileUrl;
    String replyToMessageId;
    Instant createdDate;
    Instant modifiedDate;
    MessageStatus messageStatus;
-   Map<String, Instant> seenAtMap;
+   String senderId;
+   String senderName;
+   String senderAvatar;
+   String clientMessageId;
 }

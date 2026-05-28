@@ -11,5 +11,4 @@ import lombok.experimental.FieldDefaults;
 public class ChatMessageDeleteRequest {
    String chatMessageId;
    String conversationId;
-   String deleteType;
 }

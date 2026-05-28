@@ -24,7 +24,6 @@ public class ConversationGroup extends Conversation{
         return ConversationGroup.builder()
                 .id(c.getId())
                 .type(c.getType())
-                .participantInfos(c.getParticipantInfos())
                 .createdDate(c.getCreatedDate())
                 .modifiedDate(c.getModifiedDate());
     }
