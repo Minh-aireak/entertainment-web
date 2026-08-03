@@ -60,20 +60,26 @@ public class DebeziumConnectorService {
         // 1. MySQL Connector (Identity Service) - server.id = 184054
         registerMySQLConnector("identity-service", "identity-service", "outbox", "184054");
 
-        // 1.1 MySQL Connector (Friend Service) - server.id = 184055 (Phải khác identity-service)
-        registerMySQLConnector("friend-service", "friend-service", "outbox", "184055");
+        // 1.1 MySQL Connector (Film Service) - server.id = 184055
+        registerMySQLConnector("film-service", "film-service", "outbox", "184055");
 
-        // 2. MongoDB Connector (Chat Service)
+        // 2. MongoDB Connector (Friend Service)
+        registerMongoConnector("friend-service-connector", "friend-service", "outbox");
+
+        // 3. MongoDB Connector (Chat Service)
         registerMongoConnector("chat-service-connector", "chat-service", "outbox");
 
-        // 3. MongoDB Connector (Notification Service)
+        // 4. MongoDB Connector (Notification Service)
         registerMongoConnector("notification-service-connector", "notification-service", "outbox");
 
-        // 3.1 MongoDB Connector (Post Service)
+        // 5. MongoDB Connector (Post Service)
         registerMongoConnector("post-service-connector", "post-service", "outbox");
 
-        // 4. MongoDB Connector (Profile Service)
+        // 6. MongoDB Connector (Profile Service)
         registerMongoConnector("profile-service-connector", "profile-service", "outbox");
+
+        // 7. MongoDB Connector (Socket Service)
+        registerMongoConnector("socket-service-connector", "socket-service", "outbox");
     }
 
     private void registerMySQLConnector(String topicPrefix, String dbName, String tableName, String serverId) {
@@ -102,8 +108,8 @@ public class DebeziumConnectorService {
         config.put("transforms.outbox.table.expand.json.payload", "true");
 
         // Cấu hình chính xác để khớp với các cột trong bảng outbox của bạn
-        config.put("transforms.outbox.table.field.event.key", "id");   // Ánh xạ aggregateid vào cột id
-        config.put("transforms.outbox.table.field.event.type", "topic"); // Ánh xạ aggregatetype vào cột topic
+        config.put("transforms.outbox.table.field.event.key", "aggregate_id");   // Sử dụng aggregate_id làm Kafka key
+        config.put("transforms.outbox.table.field.event.type", "topic"); // Ánh xạ event type vào cột topic
         
         config.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
         config.put("value.converter.schemas.enable", "false");

@@ -1,0 +1,15 @@
+target/
+**/target/
+node_modules/
+**/node_modules/
+.git/
+.idea/
+.vscode/
+*.iml
+.trae/
+mvnw
+mvnw.cmd
+.mvn/
+*.log
+docker-compose.override.yml
+.env

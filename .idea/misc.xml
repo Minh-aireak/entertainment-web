@@ -12,15 +12,25 @@
         <option value="$PROJECT_DIR$/post-service/pom.xml" />
         <option value="$PROJECT_DIR$/file/pom.xml" />
         <option value="$PROJECT_DIR$/file-service/pom.xml" />
-        <option value="$PROJECT_DIR$/weather-service/pom.xml" />
         <option value="$PROJECT_DIR$/chat_service/pom.xml" />
         <option value="$PROJECT_DIR$/friend_service/pom.xml" />
         <option value="$PROJECT_DIR$/socket-service/pom.xml" />
         <option value="$PROJECT_DIR$/pom.xml" />
+        <option value="$PROJECT_DIR$/comment_service/pom.xml" />
+        <option value="$PROJECT_DIR$/friend-service/pom.xml" />
+        <option value="$PROJECT_DIR$/friend/pom.xml" />
+        <option value="$PROJECT_DIR$/friend-service1/pom.xml" />
+        <option value="$PROJECT_DIR$/film_service/pom.xml" />
+        <option value="$PROJECT_DIR$/contracts/notification-contract/pom.xml" />
       </list>
     </option>
+    <option name="ignoredFiles">
+      <set>
+        <option value="$PROJECT_DIR$/contracts/notification-contract/pom.xml" />
+      </set>
+    </option>
   </component>
-  <component name="ProjectRootManager" version="2" languageLevel="JDK_X" default="true" project-jdk-name="25" project-jdk-type="JavaSDK">
+  <component name="ProjectRootManager" version="2" languageLevel="JDK_24" project-jdk-name="temurin-24" project-jdk-type="JavaSDK">
     <output url="file://$PROJECT_DIR$/out" />
   </component>
 </project>
