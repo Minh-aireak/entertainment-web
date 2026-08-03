@@ -8,6 +8,7 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:REDACTED_LEGACY_CREDENTIAL}
   cloud:
     gateway:
       routes:
@@ -55,12 +56,7 @@ spring:
             - Path=/api/v1/files/**
           filters:
             - StripPrefix=2
-        - id: weather-service
-          uri: ${WEATHER_SERVICE_URL:http://localhost:8085}
-          predicates:
-            - Path=/api/v1/weathers/**
-          filters:
-            - StripPrefix=2
+
         - id: chat-service
           uri: ${CHAT_SERVICE_URL:http://localhost:8086}
           predicates:
@@ -74,7 +70,7 @@ spring:
           filters:
             - StripPrefix=2
         - id: socket-service
-          uri: ${SOCKET_SERVICE_URL:http://localhost:8088}
+          uri: ${SOCKET_SERVICE_WS_URL:ws://localhost:8088}
           predicates:
             - Path=/api/v1/sockets/**
           filters:
@@ -93,6 +89,79 @@ spring:
             - StripPrefix=2
 
 jwt:
-  signerKey: ${JWT_SIGNER_KEY}
+  signerKey: ${JWT_SIGNER_KEY:uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0}
 
-
+app:
+  gateway:
+    public-rate-limit:
+      enabled: true
+      rules:
+        - name: auth-login
+          path-pattern: /api/v1/identities/auth/login
+          method: POST
+          limit: 5
+          window-seconds: 60
+        - name: auth-refresh-token
+          path-pattern: /api/v1/identities/auth/refresh-token
+          method: POST
+          limit: 15
+          window-seconds: 60
+        - name: auth-logout
+          path-pattern: /api/v1/identities/auth/logout
+          method: POST
+          limit: 30
+          window-seconds: 60
+        - name: auth-google
+          path-pattern: /api/v1/identities/auth/outbound/google
+          limit: 10
+          window-seconds: 60
+        - name: user-registration
+          path-pattern: /api/v1/identities/users/registration
+          method: POST
+          limit: 3
+          window-seconds: 300
+        - name: forgot-password
+          path-pattern: /api/v1/identities/users/forgot-password
+          method: POST
+          limit: 3
+          window-seconds: 300
+        - name: reset-password
+          path-pattern: /api/v1/identities/users/reset-password
+          method: POST
+          limit: 5
+          window-seconds: 300
+        - name: public-film-read
+          path-pattern: /api/v1/films/**
+          method: GET
+          limit: 120
+          window-seconds: 60
+        - name: public-media-download
+          path-pattern: /api/v1/files/media/download/**
+          method: GET
+          limit: 60
+          window-seconds: 60
+        - name: public-socket-handshake
+          path-pattern: /api/v1/sockets/**
+          method: GET
+          limit: 30
+          window-seconds: 60
+        - name: profile-write
+          path-pattern: /api/v1/profiles/my-profile/**
+          method: PUT
+          limit: 15
+          window-seconds: 3
+        - name: profile-read
+          path-pattern: /api/v1/profiles/**
+          method: GET
+          limit: 50
+          window-seconds: 5
+        - name: profile-search
+          path-pattern: /api/v1/profiles/search/**
+          method: POST
+          limit: 8
+          window-seconds: 10
+        - name: profile-summary
+          path-pattern: /api/v1/profiles/my-summary
+          method: GET
+          limit: 30
+          window-seconds: 10
