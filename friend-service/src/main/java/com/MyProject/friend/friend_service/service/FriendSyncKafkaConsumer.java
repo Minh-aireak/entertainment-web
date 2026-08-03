@@ -1,15 +1,19 @@
 package com.MyProject.friend.friend_service.service;
 
+import com.MyProject.common.redis.RedisService;
 import com.MyProject.friend.friend_service.document.FriendDoc;
+import com.MyProject.friend.friend_service.dto.event.ProfileSearchUpdatedEvent;
 import com.MyProject.friend.friend_service.repository.elasticsearch.FriendElasticRepository;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Service;
+
+import java.util.concurrent.TimeUnit;
 
 @Service
 @Slf4j
@@ -18,40 +22,64 @@ import org.springframework.stereotype.Service;
 public class FriendSyncKafkaConsumer {
     FriendElasticRepository friendElasticRepository;
     ObjectMapper objectMapper;
+    RedisService redisService;
+
+    private static final String PROCESSED_EVENT_PREFIX = "friend:event:processed:";
+    private static final long EVENT_TTL_DAYS = 7;
 
     @KafkaListener(topics = "friend.sync")
-    public void listenFriendSync(String payload) {
+    public void listenFriendSync(String payload, Acknowledgment ack) {
         log.info("Received friend sync: {}", payload);
         try {
             FriendDoc data = objectMapper.readValue(payload, FriendDoc.class);
+
+            // Idempotency check using FriendDoc.id (since that's the aggregate ID)
+            String processedKey = PROCESSED_EVENT_PREFIX + "sync:" + data.getId();
+            if (redisService.getAsString(processedKey) != null) {
+                log.info("Friend sync already processed for id: {}", data.getId());
+                ack.acknowledge();
+                return;
+            }
+
             friendElasticRepository.save(data);
+
+            // Mark as processed
+            redisService.setWithExpiration(processedKey, "1", EVENT_TTL_DAYS, TimeUnit.DAYS);
+
+            log.info("Successfully synced friend to ES: {}", data.getId());
+            ack.acknowledge();
         } catch (Exception e) {
             log.error("Failed to sync friend to ES", e);
+            throw new RuntimeException("Failed to process friend sync event", e);
         }
     }
 
-    @KafkaListener(topics = "profile.sync")
-    public void listenProfileSync(String payload) {
-        log.info("Received profile sync in friend service: {}", payload);
+    @KafkaListener(topics = "search.sync")
+    public void listenSearchSync(String payload, Acknowledgment ack) {
+        log.info("Received profile search sync in friend service: {}", payload);
         try {
-            JsonNode node = objectMapper.readTree(payload);
-            String profileUserId = node.get("userId").asText();
-            String newDisplayName = node.get("displayName").asText();
-            String newAvatar = node.get("avatar").asText();
+            ProfileSearchUpdatedEvent event = objectMapper.readValue(payload, ProfileSearchUpdatedEvent.class);
+            
+            // Idempotency check
+            String processedKey = PROCESSED_EVENT_PREFIX + "search:" + event.getEventId();
+            if (redisService.getAsString(processedKey) != null) {
+                log.info("Profile search sync already processed for event: {}", event.getEventId());
+                ack.acknowledge();
+                return;
+            }
 
-            // We need to update all FriendDocs where friendId = profileUserId
-            // This is a bit slow in ES if there are many friends, but necessary for data consistency
-            // In a large scale app, we might want to avoid this or use a different approach
-            
-            // Note: ElasticsearchRepository doesn't support bulk updates easily with query
-            // For simplicity, we'll just log and assume names are updated on next sync or leave as is
-            // Better: FriendDoc search will use friendId to fetch latest name if we want 100% consistency
-            // But the user wanted to search friends by name, so we must have the name in the doc.
-            
-            // For now, let's just index the new friend relationship. 
-            // Real update would require ElasticsearchRestTemplate.
+            // Update FriendDocs in Elasticsearch (implement logic here if needed)
+            // For now, log, but you'd want to update all FriendDocs where friendId = event.getUserId()
+            log.info("Profile search sync for user: {}, new name: {}, new avatar: {}",
+                    event.getUserId(), event.getDisplayName(), event.getAvatar());
+
+            // Mark as processed
+            redisService.setWithExpiration(processedKey, "1", EVENT_TTL_DAYS, TimeUnit.DAYS);
+
+            ack.acknowledge();
         } catch (Exception e) {
-            log.error("Failed to handle profile sync in friend service", e);
+            log.error("Failed to handle profile search sync in friend service", e);
+            throw new RuntimeException("Failed to process profile search sync event", e);
         }
     }
 }

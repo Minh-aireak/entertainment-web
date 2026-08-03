@@ -9,16 +9,16 @@ WORKDIR /app
 # Copy toàn bộ project
 COPY . .
 
-# Build chỉ module friend_service
-RUN mvn -B clean package -Dmaven.test.skip=true -pl friend_service -am
+# Build chỉ module friend-service
+RUN mvn -B clean package -Dmaven.test.skip=true -pl friend-service -am
 
 # ---- 2. Runtime stage ----
 FROM eclipse-temurin:24-jre-alpine
 
 WORKDIR /app
 
-# Copy jar của module friend_service
-COPY --from=build /app/friend_service/target/friend_service-*.jar app.jar
+# Copy jar của module friend-service
+COPY --from=build /app/friend-service/target/friend-service-*.jar app.jar
 
 EXPOSE 8080
 

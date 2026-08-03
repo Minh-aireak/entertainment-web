@@ -1,15 +1,17 @@
 package com.MyProject.friend.friend_service.configuration;
 
+import com.MyProject.common.security.CookieBearerTokenResolver;
 import com.MyProject.common.security.CommonJwtAuthenticationEntryPoint;
 import com.MyProject.common.security.CommonJwtDecoder;
-import com.MyProject.common.security.CommonSecurityConfig;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
@@ -34,12 +36,19 @@ public class SecurityConfig {
                 .authenticated());
 
         httpSecurity.csrf(AbstractHttpConfigurer::disable);
+        httpSecurity.cors(Customizer.withDefaults());
 
         httpSecurity.oauth2ResourceServer(oauth2 ->
-                oauth2.jwt(jwtConfigurer ->
+                oauth2.bearerTokenResolver(bearerTokenResolver())
+                        .jwt(jwtConfigurer ->
                                 jwtConfigurer.decoder(jwtDecoder)
                                         .jwtAuthenticationConverter(jwtAuthenticationConverter))
                         .authenticationEntryPoint(new CommonJwtAuthenticationEntryPoint()));
         return httpSecurity.build();
+    }
+
+    @Bean
+    public BearerTokenResolver bearerTokenResolver() {
+        return new CookieBearerTokenResolver();
     }
 }

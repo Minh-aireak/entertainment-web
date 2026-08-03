@@ -12,6 +12,7 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD}
       connect-timeout: 5000
       timeout: 5000
       repositories:
@@ -32,11 +33,14 @@ spring:
     consumer:
       group-id: friend-service-group
       auto-offset-reset: earliest
+      enable-auto-commit: false
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       properties:
         spring.deserializer.value.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
         spring.json.trusted.packages: "*"
+    listener:
+      ack-mode: manual_immediate
 
   elasticsearch:
     uris: http://${ELASTICSEARCH_HOST:localhost}:${ELASTICSEARCH_PORT:9300}
@@ -48,5 +52,101 @@ app:
   services:
     profile:
       url: ${PROFILES_SERVICE_URL:http://localhost:8081}
+  rate-limit:
+    send-friend-request:
+      limit-for-period: 30
+      limit-refresh-period: 60s
+    accept-friend-request:
+      limit-for-period: 50
+      limit-refresh-period: 60s
+    unfriend:
+      limit-for-period: 30
+      limit-refresh-period: 60s
+    read-friends:
+      limit-for-period: 100
+      limit-refresh-period: 10s
+    search-friends:
+      limit-for-period: 20
+      limit-refresh-period: 10s
+    count-friends:
+      limit-for-period: 50
+      limit-refresh-period: 10s
+    read-friend-requests:
+      limit-for-period: 50
+      limit-refresh-period: 10s
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        register-health-indicator: true
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        permitted-number-of-calls-in-half-open-state: 5
+        wait-duration-in-open-state: 10s
+        failure-rate-threshold: 50
+        automatic-transition-from-open-to-half-open-enabled: true
+        writable-stack-trace-enabled: false
+        ignore-exceptions:
+          - com.MyProject.friend.friend_service.exception.AppException
+          - io.github.resilience4j.ratelimiter.RequestNotPermitted
+      downstream:
+        register-health-indicator: true
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        permitted-number-of-calls-in-half-open-state: 3
+        wait-duration-in-open-state: 10s
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 60
+        slow-call-duration-threshold: 2s
+        automatic-transition-from-open-to-half-open-enabled: true
+        writable-stack-trace-enabled: false
+        ignore-exceptions:
+          - com.MyProject.friend.friend_service.exception.AppException
+          - io.github.resilience4j.ratelimiter.RequestNotPermitted
+    instances:
+      friendSearchApi:
+        base-config: default
+        wait-duration-in-open-state: 20s
+      profileService:
+        base-config: downstream
+  ratelimiter:
+    configs:
+      default:
+        timeout-duration: 0s
+    instances:
+      friendApi:
+        base-config: default
+        limit-for-period: 200
+        limit-refresh-period: 1s
+      profileService:
+        base-config: default
+        limit-for-period: 60
+        limit-refresh-period: 1s
+  retry:
+    configs:
+      downstream:
+        max-attempts: 2
+        wait-duration: 300ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        retry-exceptions:
+          - feign.RetryableException
+          - java.io.IOException
+          - java.net.SocketTimeoutException
+          - java.util.concurrent.TimeoutException
+        ignore-exceptions:
+          - com.MyProject.friend.friend_service.exception.AppException
+          - io.github.resilience4j.ratelimiter.RequestNotPermitted
+          - io.github.resilience4j.circuitbreaker.CallNotPermittedException
+    instances:
+      profileService:
+        base-config: downstream
+management:
+  health:
+    circuitbreakers:
+      enabled: true
 
 

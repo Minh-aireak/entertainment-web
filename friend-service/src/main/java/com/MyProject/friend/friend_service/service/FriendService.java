@@ -1,6 +1,5 @@
 package com.MyProject.friend.friend_service.service;
 
-import com.MyProject.common.dto.request.BulkUserProfileRequest;
 import com.MyProject.common.dto.response.PageResponse;
 import com.MyProject.common.dto.response.UserProfileResponse;
 import com.MyProject.common.redis.RedisService;
@@ -11,13 +10,11 @@ import com.MyProject.friend.friend_service.dto.response.UserRelationshipResponse
 import com.MyProject.friend.friend_service.entity.*;
 import com.MyProject.friend.friend_service.repository.elasticsearch.FriendElasticRepository;
 import com.MyProject.friend.friend_service.repository.mongo.UserRelationshipRepository;
-import com.MyProject.friend.friend_service.repository.httpclient.ProfileClient;
 import com.MyProject.friend.friend_service.exception.AppException;
 import com.MyProject.friend.friend_service.exception.ErrorCode;
 import com.MyProject.friend.friend_service.repository.mongo.FriendRequestRepository;
-import com.MyProject.friend.friend_service.repository.mongo.OutboxRepository;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.MyProject.common.security.SecurityUtils;
+import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -26,17 +23,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -48,32 +38,11 @@ import java.util.stream.Stream;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class FriendService {
     FriendRequestRepository friendRequestRepository;
-    ProfileClient profileClient;
+    FriendProfileExternalService friendProfileExternalService;
     UserRelationshipRepository userRelationshipRepository;
     FriendElasticRepository friendElasticRepository;
-    OutboxRepository outboxRepository;
-    ObjectMapper objectMapper;
     RedisService redisService;
-
-    private void saveToOutbox(String aggregate, String topic, Object payload) {
-        try {
-            outboxRepository.save(Outbox.builder()
-                    .aggregateId(aggregate)
-                    .topic(topic)
-                    .payload(objectMapper.writeValueAsString(payload))
-                    .build());
-        } catch (Exception e) {
-            log.error("Failed to save to outbox", e);
-        }
-    }
-
-    private String getUserId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || authentication.getPrincipal() == null)
-            throw new AppException(ErrorCode.UNAUTHORIZED);
-        Jwt jwt = ((JwtAuthenticationToken) authentication).getToken();
-        return jwt.getClaim("userId");
-    }
+    OutboxEventPublisher outboxEventPublisher;
 
     private String generateHash(List<String> ids) {
         StringJoiner stringJoiner  = new StringJoiner("_");
@@ -83,12 +52,14 @@ public class FriendService {
 
     @Transactional
     public void sendFriendRequest(String toUserId) {
-        String senderUserId = getUserId();
+        String senderUserId = SecurityUtils.getCurrentUserId();
         List<String> listSorted = Stream.of(senderUserId, toUserId).sorted().toList();
         String hashFriendRequest = generateHash(listSorted);
 
-        FriendRequest existingRequest = friendRequestRepository.findByHashFriendRequest(hashFriendRequest)
-                .orElseThrow(() -> new AppException(ErrorCode.ALREADY_SEND_REQUEST));
+        friendRequestRepository.findByHashFriendRequest(hashFriendRequest)
+                .ifPresent(request -> {
+                    throw new AppException(ErrorCode.ALREADY_SEND_REQUEST);
+                });
 
         var friendRequestSaved = friendRequestRepository.save(FriendRequest.builder()
                 .senderId(senderUserId)
@@ -99,30 +70,22 @@ public class FriendService {
                 .build());
 
         NotificationEvent event = NotificationEvent.builder()
-                .typeNotification(TypeNotification.FRIEND_REQUEST)
+                .eventId(UUID.randomUUID().toString())
+                .typeNotification("FRIEND_REQUEST")
                 .userIdSender(senderUserId)
                 .toUserIds(List.of(toUserId))
                 .build();
 
-        try {
-            outboxRepository.save(Outbox.builder()
-                    .aggregateId(friendRequestSaved.getId())
-                    .topic("friend.request.sent")
-                    .payload(objectMapper.writeValueAsString(event))
-                    .build());
-        } catch (JsonProcessingException e) {
-            log.error("Failed to serialize notification event", e);
-            throw new RuntimeException("Failed to save outbox event", e);
-        }
+        outboxEventPublisher.publish(friendRequestSaved.getId(), "notification.events", event);
     }
 
     @Transactional
     public void friendRequestStatus(String senderId, FriendRequestStatus status) {
-        String hash = generateHash(Stream.of(getUserId(), senderId).sorted().toList());
+        String hash = generateHash(Stream.of(SecurityUtils.getCurrentUserId(), senderId).sorted().toList());
         FriendRequest request = friendRequestRepository.findByHashFriendRequest(hash)
                 .orElseThrow(() -> new AppException(ErrorCode.HASH_FRIEND_REQUEST));
 
-        String currentUserId = getUserId();
+        String currentUserId = SecurityUtils.getCurrentUserId();
         if (!request.getReceiverId().equals(currentUserId)) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
@@ -155,7 +118,7 @@ public class FriendService {
         syncFriendToEs(aggregate, current.getReceiverId(), current.getSenderId());
 
         // Publish event cho conversation service
-        saveToOutbox(
+        outboxEventPublisher.publish(
                 aggregate,
                 "friend.request.accepted.conversation",
                 List.of(current.getSenderId(), current.getReceiverId())
@@ -163,35 +126,37 @@ public class FriendService {
 
         // Publish event cho notification service
         NotificationEvent notificationEvent = NotificationEvent.builder()
-                .typeNotification(TypeNotification.FRIEND_ACCEPTED)
+                .eventId(UUID.randomUUID().toString())
+                .typeNotification("FRIEND_ACCEPTED")
                 .userIdSender(current.getSenderId())
                 .toUserIds(List.of(current.getReceiverId()))
                 .build();
 
-        saveToOutbox(
+        outboxEventPublisher.publish(
                 aggregate,
-                "friend.request.accepted.notification",
+                "notification.events",
                 notificationEvent
         );
     }
 
     @Transactional
     public void updateRelationshipStatus(String toUserId, RelationshipStatus status) {
-        List<String> listIds = Stream.of(getUserId(), toUserId).sorted().toList();
+        List<String> listIds = Stream.of(SecurityUtils.getCurrentUserId(), toUserId).sorted().toList();
         String hashFriend = generateHash(listIds);
         var current = userRelationshipRepository.findByHashFriend(hashFriend);
 
         if (Objects.isNull(current))
             throw new AppException(ErrorCode.HASH_FRIEND);
 
-        userRelationshipRepository.updateRelationshipStatus(hashFriend, status);
-
-        if (status.equals(RelationshipStatus.UNFRIEND))
+        if (status.equals(RelationshipStatus.UNFRIEND)) {
             userRelationshipRepository.deleteByHashFriend(hashFriend);
+        } else {
+            userRelationshipRepository.updateRelationshipStatus(hashFriend, status);
+        }
     }
 
     public PageResponse<UserRelationshipResponse> getListFriend(int page, int size) {
-        String currentUserId = getUserId();
+        String currentUserId = SecurityUtils.getCurrentUserId();
 
         Sort sort = Sort.by("acceptAt").descending();
         Pageable pageable = PageRequest.of(page - 1, size, sort);
@@ -248,7 +213,7 @@ public class FriendService {
                 .pageSize(pageData.getSize())
                 .totalPages(pageData.getTotalPages())
                 .totalElement(pageData.getTotalElements())
-                .data(null)
+                .data(List.of())
                 .build();
     }
 
@@ -258,7 +223,12 @@ public class FriendService {
                 .map(id -> "profile:user:" + id)
                 .toList();
 
-        List<Object> cachedValues = redisService.multiGet(keys);
+        List<UserProfileResponse> cachedValues = Collections.nCopies(keys.size(), null);
+        try {
+            cachedValues = redisService.multiGet(keys, new TypeReference<UserProfileResponse>() {});
+        } catch (Exception e) {
+            log.error("Failed to multiGet profiles from cache for keys: {}", keys, e);
+        }
 
         Map<String, UserProfileResponse> result = new HashMap<>();
         List<String> missingUserIds = new ArrayList<>();
@@ -266,11 +236,10 @@ public class FriendService {
         // 2. Phân loại hit/miss
         List<String> senderIdList = new ArrayList<>(senderIds); // giữ thứ tự với keys
         for (int i = 0; i < senderIdList.size(); i++) {
-            Object cached = cachedValues.get(i);
-            if (Objects.isNull(cached)) {
+            UserProfileResponse profile = (i < cachedValues.size()) ? cachedValues.get(i) : null;
+            if (Objects.isNull(profile)) {
                 missingUserIds.add(senderIdList.get(i));
             } else {
-                UserProfileResponse profile = (UserProfileResponse) cached;
                 result.put(profile.getUserId(), profile);
             }
         }
@@ -278,19 +247,22 @@ public class FriendService {
         // 3. Gọi API cho phần bị thiếu
         if (!missingUserIds.isEmpty()) {
             try {
-                BulkUserProfileRequest bulkRequest = BulkUserProfileRequest.builder()
-                        .userIds(new HashSet<>(missingUserIds))
-                        .build();
-
                 Map<String, UserProfileResponse> fetchedProfiles =
-                        profileClient.getBulkUserProfiles(bulkRequest).getResult();
+                        friendProfileExternalService.getBulkUserProfiles(new HashSet<>(missingUserIds));
 
-                // Cache lại
-                fetchedProfiles.forEach((userId, profile) ->
-                        redisService.setWithExpiration(
-                                "profile:user:" + userId, profile, 1, TimeUnit.HOURS));
+                if (!fetchedProfiles.isEmpty()) {
+                    // Cache lại
+                    fetchedProfiles.forEach((userId, profile) -> {
+                        try {
+                            redisService.setWithExpiration(
+                                    "profile:user:" + userId, profile, 1, TimeUnit.HOURS);
+                        } catch (Exception e) {
+                            log.error("Failed to cache profile for userId: {}", userId, e);
+                        }
+                    });
 
-                result.putAll(fetchedProfiles);
+                    result.putAll(fetchedProfiles);
+                }
             } catch (Exception e) {
                 log.error("Failed to fetch user profiles: {}", missingUserIds, e);
                 throw new AppException(ErrorCode.BULK_USER_PROFILE);
@@ -305,7 +277,7 @@ public class FriendService {
         Pageable pageable = PageRequest.of(page - 1, size, sort);
 
         Page<FriendRequest> friendRequestsPerPage = friendRequestRepository
-                .findByReceiverIdAndFriendRequestStatus(getUserId(), FriendRequestStatus.PENDING, pageable);
+                .findByReceiverIdAndFriendRequestStatus(SecurityUtils.getCurrentUserId(), FriendRequestStatus.PENDING, pageable);
 
         if (friendRequestsPerPage.isEmpty()) {
             return emptyPage(friendRequestsPerPage);
@@ -338,53 +310,45 @@ public class FriendService {
                 })
                 .toList();
 
-        List<FriendRequestResponse> list = userProfilesMap.values().stream()
-                    .map(userProfile -> FriendRequestResponse.builder()
-                            .senderId(userProfile.getUserId())
-                            .displayName(userProfile.getDisplayName())
-                            .avatar(userProfile.getAvatar())
-                            .status(FriendRequestStatus.PENDING)
-                            .build())
-                    .toList();
-
         return PageResponse.<FriendRequestResponse>builder()
                 .currentPage(page)
                 .pageSize(size)
                 .totalPages(friendRequestsPerPage.getTotalPages())
                 .totalElement(friendRequestsPerPage.getTotalElements())
-                .data(list)
+                .data(responses)
                 .build();
     }
 
     private void syncFriendToEs(String aggregate, String userId, String friendId) {
         try {
-            UserProfileResponse data = (UserProfileResponse) redisService.get("profile:user:" + friendId);
+            UserProfileResponse data = redisService.get("profile:user:" + friendId, new TypeReference<UserProfileResponse>() {});
 
             if (Objects.isNull(data)) {
-                data = profileClient.getBulkUserProfiles(
-                        BulkUserProfileRequest.builder()
-                                .userIds(Set.of(friendId))
-                                .build()
-                ).getResult().get(friendId);
+                data = friendProfileExternalService.getBulkUserProfiles(Set.of(friendId)).get(friendId);
+                if (Objects.isNull(data)) {
+                    log.warn("Profile fallback returned empty data for friendId: {}", friendId);
+                    return;
+                }
             }
 
             redisService.setWithExpiration("profile:user:" + friendId, data, 1, TimeUnit.HOURS);
 
-            FriendDoc friendRequest = FriendDoc.builder()
+            FriendDoc friendDoc = FriendDoc.builder()
+                    .id(aggregate)
                     .userId(userId)
                     .friendId(friendId)
                     .friendDisplayName(data.getDisplayName())
                     .friendAvatar(data.getAvatar())
                     .build();
 
-            saveToOutbox(aggregate, "friend.sync", friendRequest);
+            outboxEventPublisher.publish(aggregate, "friend.sync", friendDoc);
         } catch (Exception e) {
             log.error("Failed to sync friend to ES for user {} and friend {}", userId, friendId, e);
         }
     }
 
     public PageResponse<UserRelationshipResponse> searchFriends(String displayName, int page, int size) {
-        String userId = getUserId();
+        String userId = SecurityUtils.getCurrentUserId();
         Pageable pageable = PageRequest.of(page - 1, size);
         var searchResult = friendElasticRepository.findByUserIdAndFriendDisplayNameContaining(userId, displayName, pageable);
 
@@ -405,6 +369,7 @@ public class FriendService {
     }
 
     public int countMyFriends() {
-        return userRelationshipRepository.countMyFriends(getUserId(), RelationshipStatus.FRIEND);
+        Integer count = userRelationshipRepository.countMyFriends(SecurityUtils.getCurrentUserId(), RelationshipStatus.FRIEND);
+        return count != null ? count : 0;
     }
 }

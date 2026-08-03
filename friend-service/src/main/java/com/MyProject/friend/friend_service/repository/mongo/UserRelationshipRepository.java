@@ -28,8 +28,8 @@ public interface UserRelationshipRepository extends MongoRepository<UserRelation
             Pageable pageable
     );
 
-    @Update(value = "{ 'hashFriend': ?0 }",
-            update = "{ '$set': { 'relationshipStatus': ?1 } }")
+    @Query("{ 'hashFriend': ?0 }")
+    @Update("{ '$set': { 'relationshipStatus': ?1 } }")
     void updateRelationshipStatus(String hashFriend, RelationshipStatus status);
 
     @Query("""
@@ -45,5 +45,5 @@ public interface UserRelationshipRepository extends MongoRepository<UserRelation
           ]
         }
         """)
-    int countMyFriends(String userId, RelationshipStatus status);
+    Integer countMyFriends(String userId, RelationshipStatus status);
 }

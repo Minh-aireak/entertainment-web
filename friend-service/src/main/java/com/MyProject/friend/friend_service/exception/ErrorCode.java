@@ -23,7 +23,9 @@ public enum ErrorCode {
     ATTRIBUTE_NOT_NULL(8709, "{attribute} must not be null!", HttpStatus.BAD_REQUEST),
     FRIEND_REQUEST_NOT_FOUND(8710, "Friend request not found!", HttpStatus.NOT_FOUND),
     FRIEND_REQUEST_ALREADY_PROCESSED(8711, "Friend request already processed!", HttpStatus.BAD_REQUEST),
-    INVALID_STATUS(8712, "Invalid status!", HttpStatus.BAD_REQUEST);
+    INVALID_STATUS(8712, "Invalid status!", HttpStatus.BAD_REQUEST),
+    RATE_LIMIT_EXCEEDED(8713, "Too many requests to downstream service. Please try again later!", HttpStatus.TOO_MANY_REQUESTS),
+    SERVICE_UNAVAILABLE(8714, "Service unavailable! Please try again later!", HttpStatus.SERVICE_UNAVAILABLE);
 
     int code;
     String message;

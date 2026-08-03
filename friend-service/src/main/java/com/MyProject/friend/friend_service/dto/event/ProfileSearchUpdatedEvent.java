@@ -1,18 +1,20 @@
+
 package com.MyProject.friend.friend_service.dto.event;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
-import java.util.List;
-
 @Data
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class NotificationEvent {
+public class ProfileSearchUpdatedEvent {
     String eventId;
-    String typeNotification;
-    String userIdSender;
-    List<String> toUserIds;
+    String userId;
+    String avatar;
+    String displayName;
+    String username;
+    String version;
 }
+
