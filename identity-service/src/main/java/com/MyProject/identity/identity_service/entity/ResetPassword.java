@@ -20,7 +20,7 @@ public class ResetPassword {
     String token;
 
     @OneToOne
-    @JoinColumn(name = "id")
+    @JoinColumn(name = "user_id")
     User user;
 
     LocalDateTime expiryDate;

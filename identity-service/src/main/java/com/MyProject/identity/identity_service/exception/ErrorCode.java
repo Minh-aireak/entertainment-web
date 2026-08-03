@@ -41,7 +41,11 @@ public enum ErrorCode {
     INVALID_TOKEN_RESET(8025, "Invalid token reset!", HttpStatus.BAD_REQUEST),
     TOKEN_EXPIRED(8026, "Token expired!", HttpStatus.BAD_REQUEST),
     EMAIL_INVALID(8027, "Email invalid!", HttpStatus.BAD_REQUEST),
-    ROLE_IS_IN_USE(8028, "Role is in use!", HttpStatus.BAD_REQUEST);
+    ROLE_IS_IN_USE(8028, "Role is in use!", HttpStatus.BAD_REQUEST),
+    ACCESS_TOKEN_MISSING(8029, "Access token not found!", HttpStatus.UNAUTHORIZED),
+    REFRESH_TOKEN_MISSING(8030, "Refresh token not found!", HttpStatus.UNAUTHORIZED),
+    RATE_LIMIT_EXCEEDED(8031, "Too many requests. Please try again later!", HttpStatus.TOO_MANY_REQUESTS),
+    SERVICE_UNAVAILABLE(8032, "Identity service is temporarily unavailable. Please try again later!", HttpStatus.SERVICE_UNAVAILABLE);
 
     int code;
     String message;

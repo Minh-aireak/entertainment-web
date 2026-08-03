@@ -4,11 +4,14 @@ import com.MyProject.common.security.CommonJwtAuthenticationEntryPoint;
 import com.MyProject.common.security.CommonJwtDecoder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
@@ -19,6 +22,8 @@ public class SecurityConfig {
             "/auth/login",
             "/auth/introspect",
             "/auth/outbound/google",
+            "/auth/refresh-token",
+            "/auth/logout",
             "/users/forgot-password",
             "/users/reset-password",
             "/users/registration/**"
@@ -35,19 +40,28 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity httpSecurity) throws Exception {
         httpSecurity.csrf(AbstractHttpConfigurer::disable);
+        httpSecurity.cors(Customizer.withDefaults());
+        httpSecurity.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
         httpSecurity.authorizeHttpRequests(request ->
                 request.requestMatchers(publicEndpoint).permitAll()
-                .anyRequest()
-                .authenticated());
+                        .anyRequest()
+                        .authenticated());
 
-        httpSecurity.oauth2ResourceServer(oauth2 ->oauth2.jwt(jwt ->
-                                jwt.decoder(jwtDecoder)
-                                        .jwtAuthenticationConverter(jwtAuthenticationConverter)
-                        )
-                        .authenticationEntryPoint(new CommonJwtAuthenticationEntryPoint())
+        httpSecurity.oauth2ResourceServer(oauth2 -> oauth2
+                .bearerTokenResolver(bearerTokenResolver())
+                .jwt(jwt -> jwt
+                        .decoder(jwtDecoder)
+                        .jwtAuthenticationConverter(jwtAuthenticationConverter)
+                )
+                .authenticationEntryPoint(new CommonJwtAuthenticationEntryPoint())
         );
 
         return httpSecurity.build();
+    }
+
+    @Bean
+    public BearerTokenResolver bearerTokenResolver() {
+        return new CookieBearerTokenResolver();
     }
 }

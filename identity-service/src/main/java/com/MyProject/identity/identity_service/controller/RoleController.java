@@ -1,5 +1,8 @@
 package com.MyProject.identity.identity_service.controller;
 
+import com.MyProject.identity.identity_service.service.IdentityApiRateLimitService;
+import com.MyProject.common.security.SecurityUtils;
+
 import java.util.List;
 
 import com.MyProject.common.dto.response.ApiResponse;
@@ -21,10 +24,14 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class RoleController {
     RoleService roleService;
+    IdentityApiRateLimitService identityApiRateLimitService;
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
+
     ApiResponse<RoleResponse> createRole(@RequestBody RoleCreationRequest request) {
+        String userId = SecurityUtils.getCurrentUserId();
+        identityApiRateLimitService.checkRoleManagement(userId);
         return ApiResponse.<RoleResponse>builder()
                 .result(roleService.createRole(request))
                 .message("Create role success!")
@@ -33,7 +40,10 @@ public class RoleController {
 
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
+
     ApiResponse<List<RoleResponse>> getAllRoles() {
+        String userId = SecurityUtils.getCurrentUserId();
+        identityApiRateLimitService.checkRoleManagement(userId);
         return ApiResponse.<List<RoleResponse>>builder()
                 .result(roleService.getAllRoles())
                 .build();
@@ -41,7 +51,10 @@ public class RoleController {
 
     @PutMapping
     @PreAuthorize("hasRole('ADMIN')")
+
     ApiResponse<RoleResponse> updateRole(@RequestBody RoleUpdateRequest request) {
+        String userId = SecurityUtils.getCurrentUserId();
+        identityApiRateLimitService.checkRoleManagement(userId);
         return ApiResponse.<RoleResponse>builder()
                 .result(roleService.updateRole(request))
                 .message("Update role success!")
@@ -50,7 +63,10 @@ public class RoleController {
 
     @DeleteMapping("/{name}")
     @PreAuthorize("hasRole('ADMIN')")
+
     ApiResponse<Void> deleteRole(@PathVariable String name) {
+        String userId = SecurityUtils.getCurrentUserId();
+        identityApiRateLimitService.checkRoleManagement(userId);
         roleService.deleteRole(name);
         return ApiResponse.<Void>builder()
                 .message("Deleted role success!")

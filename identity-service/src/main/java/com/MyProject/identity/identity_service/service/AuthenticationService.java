@@ -6,18 +6,18 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
-import com.MyProject.identity.identity_service.dto.request.EmailRequest;
-import com.MyProject.common.redis.RedisService;
-import com.MyProject.identity.identity_service.dto.event.UserCreatedEvent;
+import com.MyProject.identity.identity_service.dto.event.UserRegisteredEvent;
 import com.MyProject.identity.identity_service.dto.request.*;
+import com.MyProject.identity.identity_service.dto.response.OutboundUserResponse;
+import com.MyProject.identity.identity_service.entity.RefreshToken;
+import com.MyProject.identity.identity_service.entity.ResetPassword;
 import com.MyProject.identity.identity_service.entity.Role;
+import com.MyProject.identity.identity_service.repository.RefreshTokenRepository;
+import com.MyProject.identity.identity_service.repository.ResetPasswordRepository;
 import com.MyProject.identity.identity_service.repository.RoleRepository;
 import com.MyProject.identity.identity_service.repository.httpclient.OutboundIdentityClient;
 import com.MyProject.identity.identity_service.repository.httpclient.OutboundUserClient;
-import com.MyProject.identity.identity_service.repository.OutboxRepository;
-import com.MyProject.identity.identity_service.entity.Outbox;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.core.JsonProcessingException;
+
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
@@ -28,6 +28,8 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 
 import com.nimbusds.jose.*;
 import com.nimbusds.jose.crypto.MACSigner;
@@ -56,9 +58,9 @@ public class AuthenticationService {
     OutboundIdentityClient outboundIdentityClient;
     OutboundUserClient outboundUserClient;
     RoleRepository roleRepository;
-    RedisService redisService;
-    OutboxRepository outboxRepository;
-    ObjectMapper objectMapper;
+    ResetPasswordRepository resetPasswordRepository;
+    OutboxEventPublisher outboxEventPublisher;
+    RefreshTokenRepository refreshTokenRepository;
 
     private String getInvalidatedTokenKey(String jid) {
         return "invalidated_token:" + jid;
@@ -103,29 +105,78 @@ public class AuthenticationService {
 
         if (!authenticated) throw new AppException(ErrorCode.PASSWORD_INCORRECT);
 
-        String token = generateToken(user);
+        String accessToken = generateToken(user);
+        String refreshToken = generateRefreshToken(user);
 
         return AuthenticationResponse.builder()
-                .token(token)
+                .token(accessToken)
+                .refreshToken(refreshToken)
                 .build();
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public void logout(String token) {
-        String userId = getUserId();
-        if (!isTokenOwnedByUser(token, userId)) {
-            throw new AppException(ErrorCode.ACCESS_DENIED);
+    public String generateRefreshToken(User user) {
+        // Keep refresh tokens session-scoped so a login/refresh on one device does not
+        // invalidate every other active device for the same user.
+        RefreshToken refreshToken = RefreshToken.builder()
+                .token(UUID.randomUUID().toString())
+                .user(user)
+                .expiryDate(Instant.now().plusSeconds(refreshableDuration))
+                .revoked(false)
+                .build();
+
+        refreshTokenRepository.save(refreshToken);
+
+        return refreshToken.getToken();
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public AuthenticationResponse refreshTokens(String refreshTokenStr) {
+        // Find refresh token in DB
+        RefreshToken refreshToken = refreshTokenRepository.findByToken(refreshTokenStr)
+                .orElseThrow(() -> new AppException(ErrorCode.TOKEN_INVALID));
+
+        // Check if token is valid
+        if (refreshToken.isRevoked() || refreshToken.getExpiryDate().isBefore(Instant.now())) {
+            throw new AppException(ErrorCode.TOKEN_INVALID);
         }
 
-        SignedJWT signedToken = verifyToken(token, true);
-
-        try {
-            String jid = signedToken.getJWTClaimsSet().getJWTID();
-            
-            // Skip Redis caching as requested
-        } catch (ParseException e) {
-            throw new AppException(ErrorCode.PARSE_EXCEPTION);
+        // Generate new access token
+        User user = refreshToken.getUser();
+        if (!user.isActive()) {
+            throw new AppException(ErrorCode.USER_NOT_ACTIVE);
         }
+        String newAccessToken = generateToken(user);
+
+        // Rotate only the token that was actually presented.
+        refreshToken.setRevoked(true);
+        refreshTokenRepository.save(refreshToken);
+        String newRefreshToken = generateRefreshToken(user);
+
+        return AuthenticationResponse.builder()
+                .token(newAccessToken)
+                .refreshToken(newRefreshToken)
+                .build();
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void revokeAllUserTokens(String userId) {
+        List<RefreshToken> tokens = refreshTokenRepository.findByUserIdAndRevokedFalse(userId);
+        tokens.forEach(token -> token.setRevoked(true));
+        refreshTokenRepository.saveAll(tokens);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void revokeRefreshToken(String refreshTokenStr) {
+        RefreshToken refreshToken = refreshTokenRepository.findByToken(refreshTokenStr)
+                .orElseThrow(() -> new AppException(ErrorCode.TOKEN_INVALID));
+        refreshToken.setRevoked(true);
+        refreshTokenRepository.save(refreshToken);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void logout(String refreshTokenStr) {
+        revokeRefreshToken(refreshTokenStr);
     }
 
     public IntrospectResponse introspectResponse(String token) {
@@ -195,54 +246,46 @@ public class AuthenticationService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public AuthenticationResponse refreshToken(String token) {
-        String userId = getUserId();
-
-        if (!isTokenOwnedByUser(token, userId)) {
-            throw new AppException(ErrorCode.ACCESS_DENIED);
-        }
-
-        SignedJWT signJWT = verifyToken(token, true);
-
-        try {
-            String jid = signJWT.getJWTClaimsSet().getJWTID();
-            
-            // Skip Redis caching as requested
-
-            String username = signJWT.getJWTClaimsSet().getSubject();
-
-            User user = userRepository.findByUsername(username)
-                    .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
-
-            var newToken = generateToken(user);
-
-            return AuthenticationResponse.builder().token(newToken).build();
-        } catch (ParseException e) {
-            throw new AppException(ErrorCode.PARSE_EXCEPTION);
-        }
+    public AuthenticationResponse refreshToken(String refreshTokenStr) {
+        return refreshTokens(refreshTokenStr);
     }
 
-    @Transactional(rollbackFor = Exception.class)
     public AuthenticationResponse outboundAuthenticate(String code) {
-        var response = outboundIdentityClient.exchangeToken(ExchangeTokenRequest
-                .builder()
-                        .code(code)
-                        .clientId(clientId)
-                        .clientSecret(clientSecret)
-                        .redirectUri(redirectUri)
-                        .grantType(authorizationCode)
-                .build());
+        MultiValueMap<String, String> data = new LinkedMultiValueMap<>();
+        data.add("code", code);
+        data.add("client_id", clientId);
+        data.add("client_secret", clientSecret);
+        data.add("redirect_uri", redirectUri);
+        data.add("grant_type", authorizationCode);
+
+        var response = outboundIdentityClient.exchangeToken(data);
 
         var userInfo = outboundUserClient.getInfo("json", response.getAccessToken());
 
-        var user = userRepository.findByEmail(userInfo.getEmail()).orElseGet(() -> {
+        var user = findOrCreateUser(userInfo);
+
+        if (!user.isActive()) {
+            throw new AppException(ErrorCode.USER_NOT_ACTIVE);
+        }
+
+        var token = generateToken(user);
+        var refreshToken = generateRefreshToken(user);
+
+        return AuthenticationResponse.builder()
+                .token(token)
+                .refreshToken(refreshToken)
+                .build();
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public User findOrCreateUser(OutboundUserResponse userInfo) {
+        return userRepository.findByEmail(userInfo.getEmail()).orElseGet(() -> {
             Role role = roleRepository.findById("USER").orElseThrow(()
                     -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
 
             String rawPassword = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
 
             User newUser = User.builder()
-                    .id("Account_" + userInfo.getId())
                     .username(userInfo.getEmail())
                     .email(userInfo.getEmail())
                     .password(passwordEncoder.encode(rawPassword))
@@ -252,57 +295,36 @@ public class AuthenticationService {
 
             newUser = userRepository.save(newUser);
 
-            // Create events for Outbox (CDC MySQL)
-            try {
-                // 1. User Created Event
-                UserCreatedEvent userCreatedEvent = UserCreatedEvent.builder()
-                        .userId(newUser.getId())
-                        .username(newUser.getUsername())
-                        .email(newUser.getEmail())
-                        .firstName(userInfo.getFamilyName())
-                        .lastName(userInfo.getGivenName())
-                        .joinDate(LocalDateTime.now())
-                        .build();
+            // 1. Generate Reset Password Token
+            ResetPassword resetPassword = ResetPassword.builder()
+                    .token(UUID.randomUUID().toString())
+                    .user(newUser)
+                    .expiryDate(LocalDateTime.now().plusSeconds(3600))
+                    .build();
+            resetPasswordRepository.save(resetPassword);
 
-                outboxRepository.save(Outbox.builder()
-                        .topic("user.created")
-                        .payload(objectMapper.writeValueAsString(userCreatedEvent))
-                        .processed(false)
-                        .build());
+            // Create ONE common event for both Profile and Notification services
+            String baseUrl = redirectUri.substring(0, redirectUri.lastIndexOf("/"));
+            String resetUrl = baseUrl + "/reset-password?token=" + resetPassword.getToken();
 
-                // 2. Email Sent Event
-                EmailRequest emailRequest = EmailRequest.builder()
-                        .to(List.of(Recipient.builder()
-                                .email(userInfo.getEmail())
-                                .build()))
-                        .subject("Welcome to travelplanner!")
-                        .htmlContent("Hello,\n" +
-                                "You have successfully registered as a member of TravelPlanner with the following credentials:\n" +
-                                "Username: " + userInfo.getEmail() +
-                                "\n" +
-                                "Password: " + rawPassword +
-                                ".Please remember to change your password as soon as possible for your account security.")
-                        .build();
+            UserRegisteredEvent userRegisteredEvent = UserRegisteredEvent.builder()
+                    .eventId(UUID.randomUUID().toString())
+                    .userId(newUser.getId())
+                    .username(newUser.getUsername())
+                    .email(newUser.getEmail())
+                    .displayName(userInfo.getFamilyName() != null ? userInfo.getGivenName() + " " + userInfo.getFamilyName() : userInfo.getGivenName())
+                    .firstName(userInfo.getGivenName())
+                    .lastName(userInfo.getFamilyName())
+                    .joinDate(LocalDateTime.now())
+                    .generatedPassword(rawPassword)
+                    .resetPasswordToken(resetPassword.getToken())
+                    .resetPasswordUrl(resetUrl)
+                    .build();
 
-                outboxRepository.save(Outbox.builder()
-                        .topic("email.sent")
-                        .payload(objectMapper.writeValueAsString(emailRequest))
-                        .processed(false)
-                        .build());
-
-            } catch (JsonProcessingException e) {
-                log.error("Error serializing outbox event", e);
-                throw new RuntimeException("Failed to save outbox event", e);
-            }
+            outboxEventPublisher.publish(newUser.getId(), "user.registered", userRegisteredEvent);
 
             return newUser;
         });
-
-        var token = generateToken(user);
-
-        return AuthenticationResponse.builder()
-                .token(token)
-                .build();
     }
 
     private String buildScope(User user) {

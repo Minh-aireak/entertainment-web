@@ -47,7 +47,7 @@ spring:
 jwt:
   signerKey: ${JWT_SIGNER_KEY:uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0}
   valid-duration: ${VALID_DURATION:3600}
-  refreshable-duration: ${REFRESHABLE_DURATION:360000}
+  refreshable-duration: ${REFRESHABLE_DURATION:2592000}
   client-id: ${CLIENT_ID:266132262326-islopun9fjajf96gds894ncmi43ugcku.apps.googleusercontent.com}
   client-secret: ${CLIENT_SECRET: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}
   redirect-uri: ${REDIRECT_URI:http://localhost:5173/authenticate}
@@ -57,4 +57,120 @@ app:
   services:
     debezium:
       connect-url: ${DEBEZIUM_CONNECT_URL:http://localhost:8100}
+  rate-limit:
+    user-registration:
+      limit-for-period: 5
+      limit-refresh-period: 1m
+    change-password:
+      limit-for-period: 3
+      limit-refresh-period: 5m
+    forgot-password:
+      limit-for-period: 3
+      limit-refresh-period: 5m
+    reset-password:
+      limit-for-period: 3
+      limit-refresh-period: 5m
+    user-management:
+      limit-for-period: 20
+      limit-refresh-period: 10s
+    role-management:
+      limit-for-period: 20
+      limit-refresh-period: 10s
+    permission-management:
+      limit-for-period: 20
+      limit-refresh-period: 10s
+    login:
+      limit-for-period: 10
+      limit-refresh-period: 1m
+    introspect:
+      limit-for-period: 100
+      limit-refresh-period: 1m
+    logout:
+      limit-for-period: 10
+      limit-refresh-period: 1m
+    refresh-token:
+      limit-for-period: 10
+      limit-refresh-period: 1m
+    outbound-google:
+      limit-for-period: 5
+      limit-refresh-period: 1m
+
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 5000
+        readTimeout: 5000
+      outbound-identity:
+        connectTimeout: 10000
+        readTimeout: 10000
+      outbound-user-client:
+        connectTimeout: 10000
+        readTimeout: 10000
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        register-health-indicator: true
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        permitted-number-of-calls-in-half-open-state: 5
+        wait-duration-in-open-state: 10s
+        failure-rate-threshold: 50
+        automatic-transition-from-open-to-half-open-enabled: true
+        writable-stack-trace-enabled: false
+        ignore-exceptions:
+          - com.MyProject.identity.identity_service.exception.AppException
+          - io.github.resilience4j.ratelimiter.RequestNotPermitted
+    instances: {}
+  ratelimiter:
+    configs:
+      default:
+        timeout-duration: 0s
+        limit-for-period: 100
+        limit-refresh-period: 10s
+    instances:
+      userRegistration:
+        base-config: default
+      changePassword:
+        base-config: default
+      forgotPassword:
+        base-config: default
+      resetPassword:
+        base-config: default
+      userManagement:
+        base-config: default
+      roleManagement:
+        base-config: default
+      permissionManagement:
+        base-config: default
+      login:
+        base-config: default
+      introspect:
+        base-config: default
+      logout:
+        base-config: default
+      refreshToken:
+        base-config: default
+      outboundGoogle:
+        base-config: default
+  retry:
+    configs:
+      default:
+        max-attempts: 2
+        wait-duration: 300ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        ignore-exceptions:
+          - com.MyProject.identity.identity_service.exception.AppException
+          - io.github.resilience4j.ratelimiter.RequestNotPermitted
+          - io.github.resilience4j.circuitbreaker.CallNotPermittedException
+    instances: {}
+
+management:
+  health:
+    circuitbreakers:
+      enabled: true
 

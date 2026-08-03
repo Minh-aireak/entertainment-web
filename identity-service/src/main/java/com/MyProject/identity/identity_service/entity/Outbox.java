@@ -22,6 +22,8 @@ public class Outbox {
     @GeneratedValue(strategy = GenerationType.UUID)
     String id;
 
+    String aggregateId;
+
     String topic;
 
     @Column(columnDefinition = "LONGTEXT")
@@ -29,6 +31,4 @@ public class Outbox {
 
     @CreatedDate
     LocalDateTime createdAt;
-
-    boolean processed;
 }
