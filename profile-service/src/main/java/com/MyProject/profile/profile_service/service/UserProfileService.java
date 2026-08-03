@@ -4,7 +4,10 @@ import com.MyProject.common.dto.request.BulkUserProfileRequest;
 import com.MyProject.common.dto.response.PageResponse;
 import com.MyProject.common.dto.response.UserProfileResponse;
 import com.MyProject.common.redis.RedisService;
+import com.MyProject.common.security.SecurityUtils;
 import com.MyProject.profile.profile_service.document.UserProfileDoc;
+import com.MyProject.profile.profile_service.dto.event.ProfileSearchUpdatedEvent;
+import com.MyProject.profile.profile_service.dto.event.ProfileSocketUpdatedEvent;
 import com.MyProject.profile.profile_service.dto.request.UserProfileCreationRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileUpdateRequest;
 import com.MyProject.profile.profile_service.entity.Outbox;
@@ -23,13 +26,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -61,14 +61,6 @@ public class UserProfileService {
         }
     }
 
-    private String getUserId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || authentication.getPrincipal() == null)
-            throw new AppException(ErrorCode.UNAUTHENTICATED);
-        Jwt jwt = ((JwtAuthenticationToken) authentication).getToken();
-        return jwt.getClaim("userId");
-    }
-
     private String getProfileKey(String userId) {
         return "profile:user:" + userId;
     }
@@ -78,6 +70,7 @@ public class UserProfileService {
         String cacheKey = getProfileKey(request.getUserId());
 
         // Ensure the profile is only created if it doesn't exist to avoid duplicates from retries
+        boolean isNew = !userProfileRepository.existsById(request.getUserId());
         UserProfile userProfile = userProfileRepository.findById(request.getUserId())
                 .orElseGet(() -> userProfileMapper.toUserProfile(request));
 
@@ -87,17 +80,23 @@ public class UserProfileService {
         // 1. Update cache FIRST
         redisService.setWithExpiration(cacheKey, response, 1, TimeUnit.HOURS);
 
-        // 2. Save to Outbox
-        saveToOutbox((response.getUserId()), "profile.sync", userProfileMapper.toUserProfileDoc(savedProfile));
+        // 2. For new profile: index directly to Elasticsearch (no need to publish events)
+        if (isNew) {
+            userProfileElasticRepository.save(userProfileMapper.toUserProfileDoc(savedProfile));
+        }
 
         return response;
     }
 
     @Transactional(rollbackFor = Exception.class)
     public UserProfileResponse updateProfile(UserProfileUpdateRequest request){
-        String userId = getUserId();
+        String userId = SecurityUtils.getCurrentUserId();
         UserProfile profile = userProfileRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
+
+        // Check which fields changed before updating
+        String oldDisplayName = profile.getDisplayName();
+        String oldAvatar = profile.getAvatar();
 
         String cacheKey = getProfileKey(userId);
 
@@ -106,22 +105,47 @@ public class UserProfileService {
         UserProfile savedProfile = userProfileRepository.save(profile);
 
         UserProfileResponse response = userProfileMapper.toUserProfileResponse(savedProfile);
-        // 1. Update cache FIRST
+        // 1. Update cache FIRST - regardless of which field changed
         redisService.setWithExpiration(cacheKey, response, 1, TimeUnit.HOURS);
 
-        // 2. Save to Outbox
-        saveToOutbox(getUserId(), "profile.sync", userProfileMapper.toUserProfileDoc(savedProfile));
+        // 2. Check if displayName or avatar changed - if yes, publish events
+        boolean displayNameChanged = !java.util.Objects.equals(oldDisplayName, savedProfile.getDisplayName());
+        boolean avatarChanged = !java.util.Objects.equals(oldAvatar, savedProfile.getAvatar());
+
+        if (displayNameChanged || avatarChanged) {
+            String eventId = java.util.UUID.randomUUID().toString();
+            String version = "1.0";
+            
+            // Publish search sync event
+            ProfileSearchUpdatedEvent searchEvent = ProfileSearchUpdatedEvent.builder()
+                    .eventId(eventId)
+                    .userId(savedProfile.getUserId())
+                    .avatar(savedProfile.getAvatar())
+                    .displayName(savedProfile.getDisplayName())
+                    .username(savedProfile.getUsername())
+                    .version(version)
+                    .build();
+            saveToOutbox(savedProfile.getUserId(), "search.sync", searchEvent);
+            
+            // Publish socket event
+            ProfileSocketUpdatedEvent socketEvent = ProfileSocketUpdatedEvent.builder()
+                    .eventId(eventId)
+                    .userId(savedProfile.getUserId())
+                    .version(version)
+                    .build();
+            saveToOutbox(savedProfile.getUserId(), "socket.events", socketEvent);
+        }
 
         return response;
     }
 
     public UserProfileResponse getMyProfile(){
-        String userId = getUserId();
+        String userId = SecurityUtils.getCurrentUserId();
         UserProfile profile = userProfileRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
         String cacheKey = getProfileKey(profile.getUserId());
-        UserProfileResponse cachedResponse = (UserProfileResponse) redisService.get(cacheKey);
+        UserProfileResponse cachedResponse = redisService.get(cacheKey, new TypeReference<UserProfileResponse>() {});
         if (Objects.nonNull(cachedResponse)) {
             return cachedResponse;
         }
@@ -142,7 +166,8 @@ public class UserProfileService {
         Sort sort = Sort.by("joinDate").ascending();
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        Page<UserProfile> pageData = userProfileRepository.findAll(pageable);
+        String currentUserId = SecurityUtils.getCurrentUserId();
+        Page<UserProfile> pageData = userProfileRepository.findByUserIdNot(currentUserId, pageable);
         List<UserProfileResponse> userProfileResponses = pageData.getContent()
                 .stream().map(userProfileMapper::toUserProfileResponse)
                 .toList();
@@ -166,7 +191,7 @@ public class UserProfileService {
 
     public UserProfileResponse getProfile(String userId){
         String cacheKey = getProfileKey(userId);
-        UserProfileResponse cachedResponse = (UserProfileResponse) redisService.get(cacheKey);
+        UserProfileResponse cachedResponse = redisService.get(cacheKey, new TypeReference<UserProfileResponse>() {});
         if (Objects.nonNull(cachedResponse)) {
             return cachedResponse;
         }

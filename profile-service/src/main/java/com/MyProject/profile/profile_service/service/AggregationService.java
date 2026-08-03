@@ -7,9 +7,11 @@ import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 
 @Service
 @RequiredArgsConstructor
@@ -19,15 +21,15 @@ public class AggregationService {
     private final PostServiceClient postServiceClient;
     private final FriendServiceClient friendServiceClient;
     private final UserProfileService userProfileService;
+    private final Executor asyncExecutor;
 
     // Gọi song song 2 service
     public UserFullSummaryResponse getUserSummary() {
-
         CompletableFuture<Integer> totalPosts = CompletableFuture
-                .supplyAsync(this::getPostCount);
+                .supplyAsync(this::getPostCount, asyncExecutor);
 
         CompletableFuture<Integer> totalFriends = CompletableFuture
-                .supplyAsync(this::getFriendCount);
+                .supplyAsync(this::getFriendCount, asyncExecutor);
 
         var response = userProfileService.getMyProfile();
 
@@ -38,10 +40,10 @@ public class AggregationService {
                 .username(response.getUsername())
                 .email(response.getEmail())
                 .displayName(response.getDisplayName())
-                .dob(response.getDob().toString())
+                .dob(response.getDob() != null ? response.getDob().toString() : null)
                 .phoneNumber(response.getPhoneNumber())
                 .city(response.getCity())
-                .joinDate(response.getJoinDate().toString())
+                .joinDate(response.getJoinDate() != null ? response.getJoinDate().toString() : null)
                 .avatar(response.getAvatar())
                 .totalPosts(totalPosts.join())
                 .totalFriends(totalFriends.join())

@@ -9,4 +9,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface UserProfileRepository extends MongoRepository<UserProfile, String> {
     Page<UserProfile> findAllByDisplayName(String displayName, Pageable pageable);
+
+    Page<UserProfile> findByUserIdNot(String userId, Pageable pageable);
 }

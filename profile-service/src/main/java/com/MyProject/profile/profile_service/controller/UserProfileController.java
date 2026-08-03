@@ -38,8 +38,7 @@ public class UserProfileController {
                 .build();
     }
 
-    @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/suggestions")
     ApiResponse<PageResponse<UserProfileResponse>> getAllProfiles(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size){
