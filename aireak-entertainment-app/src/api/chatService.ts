@@ -7,25 +7,23 @@ export const chatService = {
     return response.data;
   },
   
-  searchMessages: async (conversationId: string, query: string, page: number, pageSize: number) => {
-    const response = await axiosInstance.post<ApiResponse<PageResponse<ChatMessageResponse>>>(`/chats/messages/${conversationId}`, 
-      {
-        params: {
-          query,
-          page,
-          pageSize,
-        }
-      }
-    );
+  searchMessages: async (conversationId: string, query: string, page: number, size: number) => {
+    const response = await axiosInstance.get<ApiResponse<PageResponse<ChatMessageResponse>>>(`/chats/messages/${conversationId}/search`, {
+      params: {
+        query,
+        page,
+        size,
+      },
+    });
     return response.data;
   },
   
-  getMyChatMessages: async (conversationId: string, page: number, pageSize: number) => {
+  getMyChatMessages: async (conversationId: string, page: number, size: number) => {
     const response = await axiosInstance.get<ApiResponse<PageResponse<ChatMessageResponse>>>('/chats/messages/my-messages', {
       params: {
         conversationId,
         page,
-        pageSize,
+        size,
       },
     });
     return response.data;

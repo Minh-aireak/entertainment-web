@@ -1,29 +1,33 @@
 import axiosInstance from './axiosInstance';
-import type { 
-  ApiResponse, 
-  ScheduleResponse, 
-  ScheduleRequest, 
-  ScheduleUpdateRequest, 
+import type {
+  ApiResponse,
+  ScheduleResponse,
+  ScheduleRequest,
+  ScheduleUpdateRequest,
   PageResponse,
-  StatusResponse
+  StatusResponse,
+  LikeResponse
 } from '../models';
 
 export const postService = {
-  getPosts: (page: number, size: number, type: string) => 
-    axiosInstance.get<ApiResponse<PageResponse<ScheduleResponse>>>(`/post?page=${page}&size=${size}&type=${type}`),
-  
+  getPosts: (page: number, size: number, type: string) =>
+    axiosInstance.get<ApiResponse<PageResponse<ScheduleResponse>>>(`/posts?page=${page}&size=${size}&type=${type}`),
+
   getPostById: (id: string, type: string) =>
-    axiosInstance.get<ApiResponse<ScheduleResponse>>(`/post/${id}?type=${type}`),
+    axiosInstance.get<ApiResponse<ScheduleResponse>>(`/posts/${id}/${type}`),
 
-  createPost: (data: ScheduleRequest) => 
-    axiosInstance.post<ApiResponse<ScheduleResponse>>('/post', data),
-  
+  createPost: (data: ScheduleRequest) =>
+    axiosInstance.post<ApiResponse<ScheduleResponse>>('/posts', data),
+
   updatePost: (id: string, type: string, data: ScheduleUpdateRequest) =>
-    axiosInstance.put<ApiResponse<ScheduleResponse>>(`/post/${id}?type=${type}`, data),
+    axiosInstance.put<ApiResponse<ScheduleResponse>>(`/posts/${id}/${type}`, data),
 
-  deletePost: (id: string) =>
-    axiosInstance.delete<ApiResponse<void>>(`/post/${id}`),
+  deletePost: (id: string, type: string) =>
+    axiosInstance.delete<ApiResponse<void>>(`/posts/${id}/${type}`),
+
+  toggleLike: (id: string, type: string) =>
+    axiosInstance.post<ApiResponse<LikeResponse>>(`/posts/${id}/${type}/like`),
 
   getStatus: () =>
-    axiosInstance.get<ApiResponse<StatusResponse>>('/post/status'),
+    axiosInstance.get<ApiResponse<StatusResponse>>('/posts/status'),
 };

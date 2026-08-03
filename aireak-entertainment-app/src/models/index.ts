@@ -1,14 +1,32 @@
+export type FilmStatus = 'NOW_PLAYING' | 'UPCOMING' | 'ENDED' | 'ARCHIVED';
+
+export interface ApiResponse<T> {
+  code: number;
+  message?: string;
+  result: T;
+}
+
+export interface PageResponse<T> {
+  currentPage: number;
+  pageSize: number;
+  totalPages: number;
+  totalElement: number;
+  data: T[];
+}
+
 export interface UserFullSummaryResponse {
   userId: string;
   username: string;
   email: string;
   displayName: string;
-  dob: string;
-  phoneNumber: string;
-  city: string;
+  firstName?: string;
+  lastName?: string;
+  dob?: string;
+  phoneNumber?: string;
+  city?: string;
   joinDate: string;
-  avatar: string;
-  totalPost: number | null;
+  avatar?: string;
+  totalPosts: number | null;
   totalFriends: number | null;
 }
 
@@ -27,6 +45,13 @@ export interface ChatMessage {
   messageStatus: MessageStatus;
 }
 
+export interface ConversationParticipant {
+  userId: string;
+  displayName: string;
+  avatar?: string;
+  lastSeenMessageId?: string;
+}
+
 export interface Conversation {
   id: string;
   type: ConversationType;
@@ -36,6 +61,7 @@ export interface Conversation {
   userIds: string[];
   lastMessageId?: string;
   deleted: boolean;
+  participants?: ConversationParticipant[];
 }
 
 export interface ConversationDirect extends Conversation {
@@ -43,9 +69,9 @@ export interface ConversationDirect extends Conversation {
 }
 
 export interface ConversationGroup extends Conversation {
-  groupName: string;
+  conversationName: string;
   groupOwner: string;
-  groupAvatar?: string;
+  conversationAvatar?: string;
 }
 
 export interface UnreadCountResponse {
@@ -67,11 +93,11 @@ export interface UserProfile {
   username: string;
   email: string;
   displayName?: string;
-  firstName: string;
-  lastName: string;
-  dob: string;
+  firstName?: string;
+  lastName?: string;
+  dob?: string;
   phoneNumber?: string;
-  city: string;
+  city?: string;
   joinDate?: string;
   avatar?: string;
 }
@@ -98,8 +124,142 @@ export interface Notification {
 export interface WebSocketSession {
   id: string;
   socketSessionId: string;
+}
+
+export interface FilmSummaryResponse {
+  id: string;
+  title: string;
+  thumbnailUrl: string;
+  averageRating: number;
+  ratingCount: number;
+  followCount: number;
+  episodeCount: number;
+  season: number;
+  status?: FilmStatus;
+  lastUpdate: string;
+}
+
+export interface FilmRequest {
+  title: string;
+  description: string;
+  thumbnailUrl: string;
+  trailerUrl: string;
+  durationMinutes: number;
+  releaseDate: string;
+  series: boolean;
+  directorId: string;
+  season: number;
+  country: string;
+  genres: string[];
+  casts: FilmCastRequest[];
+  status?: FilmStatus;
+}
+
+export interface FilmCastRequest {
+  actorId: string;
+  characterName: string;
+  displayOrder: number;
+}
+
+export interface ActorRequest {
+  name: string;
+  avatarUrl: string;
+}
+
+export interface DirectorRequest {
+  name: string;
+  avatarUrl: string;
+}
+
+export interface RatingRequest {
+  stars: number;
+}
+
+export interface FilmResponse {
+  id: string;
+  title: string;
+  description: string;
+  thumbnailUrl: string;
+  trailerUrl: string;
+  durationMinutes: number;
+  releaseDate: string;
+  lastUpdate: string;
+  series: boolean;
+  averageRating: number;
+  ratingCount: number;
+  followCount: number;
+  season: number;
+  status?: FilmStatus;
+  director: DirectorResponse;
+  country: string;
+  genres: string[];
+  casts: FilmCastResponse[];
+}
+
+export interface FilmDetailResponse {
+  film: FilmResponse;
+  userRating?: number;
+  followed?: boolean;
+  comments?: PageResponse<CommentResponse>;
+}
+
+export interface DirectorResponse {
+  id: string;
+  name: string;
+  avatarUrl: string;
+}
+
+export interface FilmCastResponse {
+  id: string;
+  actor: ActorResponse;
+  characterName: string;
+  displayOrder: number;
+}
+
+export interface ActorResponse {
+  id: string;
+  name: string;
+  avatarUrl: string;
+}
+
+export interface CommentResponse {
+  id: string;
+  sourceId: string;
   userId: string;
-  createdAt: string;
+  content: string;
+  parentId?: string;
+  topParentId?: string;
+  likeCount: number;
+  replyCount: number;
+  type: CommentType;
+  status: CommentStatus;
+  durationCreatedDate: string;
+  avatar?: string;
+  displayName?: string;
+}
+
+export interface EpisodeResponse {
+  id: string;
+  seasonNumber: number;
+  episodeNumber: number;
+  title: string;
+  videoUrl: string;
+  durationMinutes: number;
+  filmId: string;
+}
+
+export interface EpisodeRequest {
+  seasonNumber: number;
+  episodeNumber: number;
+  title: string;
+  videoUrl: string;
+  durationMinutes: number;
+  filmId: string;
+}
+
+export interface FilmAggregateResponse {
+  topHotFilms: PageResponse<FilmSummaryResponse>;
+  latestFilms: PageResponse<FilmSummaryResponse>;
 }
 
 export type PostType =
@@ -129,8 +289,6 @@ export interface ActionConfig {
 }
 
 export interface TravelItinerary extends Post {
-  startPosition?: DataWeatherResponse;
-  endPosition?: DataWeatherResponse;
 }
 
 export interface FriendRequestResponse {
@@ -178,9 +336,11 @@ export interface Sender {
 }
 
 export type CommentStatus =
-  | "ORIGINAL"
+  | "SENT"
   | "EDITED"
   | "DELETED";
+
+export type CommentType = "TEXT" | "ICON";
 
 export interface User {
   id: string;
@@ -247,25 +407,10 @@ export interface ChatMessageUpdateRequest {
 export interface CreateCommentRequest {
   sourceId: string;
   content: string;
+  type: CommentType;
   parentId?: string;
   topParentId?: string;
   listIdsJoin?: string[];
-}
-
-export interface DataWeatherRequest {
-  lat: string;
-  lon: string;
-}
-
-export interface UserProfileUpdateRequest {
-  firstName: string;
-  lastName: string;
-  email: string;
-  displayName: string;
-  dob: string;
-  phoneNumber: string;
-  city: string;
-  avatar?: string;
 }
 
 export interface ScheduleRequest {
@@ -275,10 +420,6 @@ export interface ScheduleRequest {
   startTime: string;
   endTime: string;
   listUsersJoin?: string[];
-  latStart: string;
-  lonStart: string;
-  latEnd: string;
-  lonEnd: string;
 }
 
 export interface ScheduleUpdateRequest {
@@ -286,10 +427,6 @@ export interface ScheduleUpdateRequest {
   content: string;
   startTime: string;
   endTime: string;
-  latStart: string;
-  latEnd: string;
-  lonStart: string;
-  lonEnd: string;
 }
 
 export interface AuthenticationRequest {
@@ -308,7 +445,7 @@ export interface UserProfileCreationRequest {
   username: string;
   email: string;
   displayName: string;
-  fistName: string;
+  firstName: string;
   lastName: string;
   dob: string;
   phoneNumber: string;
@@ -358,20 +495,6 @@ export interface PermissionCreationRequest {
 export interface PermissionUpdateRequest {
   name: string;
   description: string;
-}
-
-export interface ApiResponse<T> {
-  code: number;
-  result: T;
-  message?: string;
-}
-
-export interface PageResponse<T> {
-  currentPage: number;
-  totalPages: number;
-  pageSize: number;
-  totalElement: number;
-  data: T[];
 }
 
 export interface UserResponse {
@@ -450,8 +573,13 @@ export interface ScheduleResponse {
   createdDate: string;
   modifiedDate: string;
   status: string;
-  startPosition?: DataWeatherResponse;
-  endPosition?: DataWeatherResponse;
+  likeCount: number;
+  liked: boolean;
+}
+
+export interface LikeResponse {
+  liked: boolean;
+  likeCount: number;
 }
 
 export interface StatusResponse {
@@ -465,57 +593,6 @@ export interface StatusUpdateResponse {
   title: string;
   newStatus: string;
   message: string;
-}
-
-export interface DataWeatherResponse {
-  list: ListForecast[];
-  city: City;
-}
-
-export interface ListForecast {
-  dt: number;
-  main: MainWeather;
-  weather: WeatherInfo[];
-  clouds: Clouds;
-  wind: Wind;
-  pop: number;
-  rain?: Rain;
-  sys: Sys;
-  dt_txt: string;
-}
-
-export interface MainWeather {
-  temp: number;
-  feels_like: number;
-  humidity: number;
-}
-
-export interface WeatherInfo {
-  main: string;
-  description: string;
-  icon: string;
-}
-
-export interface Clouds {
-  all: number;
-}
-
-export interface Wind {
-  speed: number;
-  gust: number;
-}
-
-export interface Rain {
-  "3h": number;
-}
-
-export interface Sys {
-  pod: string;
-}
-
-export interface City {
-  name: string;
-  country: string;
 }
 
 export interface ParticipantResponse {
@@ -533,15 +610,10 @@ export interface ConversationResponse {
   createdDate: string;
   modifiedDate?: string;
 
-  // Direct chat
   participantsHash?: string;
-  directName?: string;
-  directAvatar?: string;
-
-  // Group chat
-  groupName?: string;
+  conversationName?: string;
   groupOwner?: string;
-  groupAvatar?: string;
+  conversationAvatar?: string;
 
   lastMessage: string;
   deleted: boolean;
@@ -553,13 +625,23 @@ export interface UserProfileResponse {
   username: string;
   email: string;
   displayName: string;
-  firstName: string;
-  lastName: string;
-  dob: string;
-  phoneNumber: string;
-  city: string;
+  firstName?: string;
+  lastName?: string;
+  dob?: string;
+  phoneNumber?: string;
+  city?: string;
   joinDate: string;
-  avatar: string;
+  avatar?: string;
+}
+
+export interface UserProfileUpdateRequest {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  displayName?: string;
+  dob?: string;
+  phoneNumber?: string;
+  city?: string;
 }
 
 export interface PostResponse {
@@ -581,18 +663,6 @@ export interface SendEmailRequest {
   htmlContent: string;
 }
 
-export interface CommentResponse {
-  id: string;
-  sourceId: string;
-  userId: string;
-  content: string;
-  parentId?: string;
-  topParentId?: string;
-  likeCount: number;
-  replyCount: number;
-  durationCreatedDate: string;
-}
-
 export interface FriendResponse {
   userId: string;
   username: string;
@@ -603,8 +673,8 @@ export interface NotificationResponse {
   id: string;
   type: string;
   userIdSender: string;
-  displayNameSender: boolean;
-  avatarSender: string;
+  displayNameSender?: string;
+  avatarSender?: string;
   read: boolean;
   message: string;
   createdAt: string;
@@ -617,30 +687,6 @@ export interface TravelItineraryResponse {
   startDate: string;
   endDate: string;
   activities: string[];
-}
-
-export interface WeatherResponse {
-  list: {
-    dt: number;
-    main: {
-      temp: number;
-      feels_like: number;
-      humidity: number;
-    };
-    weather: {
-      main: string;
-      description: string;
-      icon: string;
-    }[];
-    wind: {
-      speed: number;
-    };
-    dt_txt: string;
-  }[];
-  city: {
-    name: string;
-    country: string;
-  };
 }
 
 export interface MessageCreatedEvent {
@@ -730,10 +776,13 @@ export interface FileResponse {
 }
 
 export interface FileInfo {
-  name: string;
-  contentType: string;
-  size: number;
-  md5Checksum: string;
-  path: string;
+  id: string;
   url: string;
+  type: string;
+  size: number;
+  width?: number;
+  height?: number;
+  duration?: number;
+  format?: string;
+  resolution?: string;
 }

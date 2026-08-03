@@ -9,6 +9,7 @@ import {
   InputAdornment,
   IconButton,
   Link,
+  Grid,
 } from '@mui/material';
 import { Visibility, VisibilityOff, Mail, Lock, Person } from '@mui/icons-material';
 import { toast } from 'react-hot-toast';
@@ -57,354 +58,257 @@ const Register: React.FC = () => {
 
   return (
     <AuthLayout>
-      {/* Register Card */}
-      <Paper
-        elevation={0}
+      <Box
         sx={{
-          p: { xs: 3, sm: 4 },
-          borderRadius: 3,
-          backgroundColor: '#141414',
-          border: '1px solid #262626',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
-          width: '100%',
-          maxWidth: '500px',
-          animation: 'slideUp 0.5s ease-out',
-          '@keyframes slideUp': {
-            from: {
-              opacity: 0,
-              transform: 'translateY(20px)',
-            },
-            to: {
-              opacity: 1,
-              transform: 'translateY(0)',
-            },
-          },
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          px: 2,
+          py: 6,
+          background: 'linear-gradient(180deg, rgba(0, 168, 78, 0.05) 0%, rgba(0, 0, 0, 0) 100%)',
         }}
       >
-        {/* Header */}
-        <Box sx={{ textAlign: 'center', mb: 4 }}>
-          <Typography
-            sx={{
-              color: 'rgba(255, 255, 255, 0.6)',
-              fontSize: '0.95rem',
-              letterSpacing: '0.5px',
-            }}
-          >
-            Đăng ký để khám phá các bộ phim tuyệt vời
-          </Typography>
-        </Box>
-
-        {/* Form */}
-        <Box component="form" onSubmit={handleSubmit} noValidate>
-          {/* Username Field */}
-          <Box sx={{ mb: 2.5 }}>
+        <Paper
+          elevation={0}
+          sx={{
+            p: { xs: 4, sm: 6 },
+            borderRadius: 4,
+            backgroundColor: '#141414',
+            border: '1px solid rgba(255, 255, 255, 0.05)',
+            boxShadow: '0 24px 48px rgba(0, 0, 0, 0.4)',
+            width: '100%',
+            maxWidth: '520px',
+            animation: 'fadeIn 0.6s ease-out',
+            '@keyframes fadeIn': {
+              from: { opacity: 0, transform: 'translateY(20px)' },
+              to: { opacity: 1, transform: 'translateY(0)' },
+            },
+          }}
+        >
+          {/* Header */}
+          <Box sx={{ mb: 4, textAlign: 'center' }}>
             <Typography
+              variant="h4"
               sx={{
-                fontSize: '0.85rem',
-                fontWeight: 600,
-                color: 'rgba(255, 255, 255, 0.8)',
-                mb: 1,
-                textTransform: 'none',
-                letterSpacing: '0.5px',
+                fontWeight: 800,
+                color: '#fff',
+                mb: 1.5,
+                letterSpacing: '-0.02em',
               }}
             >
-              Tên đăng nhập
+              Tạo tài khoản mới
             </Typography>
-            <TextField
-              fullWidth
-              id="username"
-              name="username"
-              placeholder="your_username"
-              value={formData.username}
-              onChange={handleChange}
-              required
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Person sx={{ color: 'rgba(255, 255, 255, 0.4)', mr: 1 }} />
-                    </InputAdornment>
-                  ),
-                },
-              }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  borderRadius: 2,
-                  border: '1px solid #333',
-                  transition: 'all 0.3s ease',
-                  '&:hover': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                    borderColor: '#444',
-                  },
-                  '&.Mui-focused': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                    borderColor: '#00A84E',
-                  },
-                  '& fieldset': {
-                    border: 'none',
-                  },
-                  '& input::placeholder': {
-                    color: 'rgba(255, 255, 255, 0.4)',
-                    opacity: 1,
-                  },
-                },
-              }}
-            />
           </Box>
 
-          {/* Email Field */}
-          <Box sx={{ mb: 2.5 }}>
-            <Typography
-              sx={{
-                fontSize: '0.85rem',
-                fontWeight: 600,
-                color: 'rgba(255, 255, 255, 0.8)',
-                mb: 1,
-                textTransform: 'none',
-                letterSpacing: '0.5px',
-              }}
-            >
-              Email
-            </Typography>
-            <TextField
-              fullWidth
-              id="email"
-              name="email"
-              type="email"
-              placeholder="name@example.com"
-              value={formData.email}
-              onChange={handleChange}
-              required
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Mail sx={{ color: 'rgba(255, 255, 255, 0.4)', mr: 1 }} />
-                    </InputAdornment>
-                  ),
-                },
-              }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  borderRadius: 2,
-                  border: '1px solid #333',
-                  transition: 'all 0.3s ease',
-                  '&:hover': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                    borderColor: '#444',
-                  },
-                  '&.Mui-focused': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                    borderColor: '#00A84E',
-                  },
-                  '& fieldset': {
-                    border: 'none',
-                  },
-                  '& input::placeholder': {
-                    color: 'rgba(255, 255, 255, 0.4)',
-                    opacity: 1,
-                  },
-                },
-              }}
-            />
-          </Box>
-
-          {/* Password Field */}
-          <Box sx={{ mb: 2.5 }}>
-            <Typography
-              sx={{
-                fontSize: '0.85rem',
-                fontWeight: 600,
-                color: 'rgba(255, 255, 255, 0.8)',
-                mb: 1,
-                textTransform: 'none',
-                letterSpacing: '0.5px',
-              }}
-            >
-              Mật khẩu
-            </Typography>
-            <TextField
-              fullWidth
-              id="password"
-              name="password"
-              type={showPassword ? 'text' : 'password'}
-              placeholder="••••••••"
-              value={formData.password}
-              onChange={handleChange}
-              required
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Lock sx={{ color: 'rgba(255, 255, 255, 0.4)', mr: 1 }} />
-                    </InputAdornment>
-                  ),
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        aria-label="toggle password visibility"
-                        onClick={() => setShowPassword(!showPassword)}
-                        edge="end"
-                        sx={{
-                          color: 'rgba(255, 255, 255, 0.4)',
-                          '&:hover': {
-                            backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                          },
-                        }}
-                      >
-                        {showPassword ? <VisibilityOff /> : <Visibility />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                },
-              }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  borderRadius: 2,
-                  border: '1px solid #333',
-                  transition: 'all 0.3s ease',
-                  '&:hover': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                    borderColor: '#444',
-                  },
-                  '&.Mui-focused': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                    borderColor: '#00A84E',
-                  },
-                  '& fieldset': {
-                    border: 'none',
-                  },
-                  '& input::placeholder': {
-                    color: 'rgba(255, 255, 255, 0.4)',
-                    opacity: 1,
-                  },
-                },
-              }}
-            />
-          </Box>
-
-          {/* Confirm Password Field */}
-          <Box sx={{ mb: 4 }}>
-            <Typography
-              sx={{
-                fontSize: '0.85rem',
-                fontWeight: 600,
-                color: 'rgba(255, 255, 255, 0.8)',
-                mb: 1,
-                textTransform: 'none',
-                letterSpacing: '0.5px',
-              }}
-            >
-              Xác nhận mật khẩu
-            </Typography>
-            <TextField
-              fullWidth
-              id="confirmPassword"
-              name="confirmPassword"
-              type={showConfirmPassword ? 'text' : 'password'}
-              placeholder="••••••••"
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              required
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Lock sx={{ color: 'rgba(255, 255, 255, 0.4)', mr: 1 }} />
-                    </InputAdornment>
-                  ),
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        aria-label="toggle confirm password visibility"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        edge="end"
-                        sx={{
-                          color: 'rgba(255, 255, 255, 0.4)',
-                          '&:hover': {
-                            backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                          },
-                        }}
-                      >
-                        {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                },
-              }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  borderRadius: 2,
-                  border: '1px solid #333',
-                  transition: 'all 0.3s ease',
-                  '&:hover': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                    borderColor: '#444',
-                  },
-                  '&.Mui-focused': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                    borderColor: '#00A84E',
-                  },
-                  '& fieldset': {
-                    border: 'none',
-                  },
-                  '& input::placeholder': {
-                    color: 'rgba(255, 255, 255, 0.4)',
-                    opacity: 1,
-                  },
-                },
-              }}
-            />
-          </Box>
-
-          {/* Submit Button */}
-          <Button
-            type="submit"
-            fullWidth
-            disabled={isLoading}
-            variant="contained"
-            sx={{
-              py: 1.5,
-              fontSize: '1rem',
-              fontWeight: 700,
-              borderRadius: 2,
-              backgroundColor: '#00A84E',
-              '&:hover': {
-                backgroundColor: '#00C853',
-                transform: 'none',
-              },
-              mb: 3,
-            }}
-          >
-            {isLoading ? 'Đang xử lý...' : 'Đăng ký ngay'}
-          </Button>
-
-          {/* Footer Link */}
-          <Box sx={{ textAlign: 'center' }}>
-            <Typography sx={{ fontSize: '0.9rem', color: 'rgba(255, 255, 255, 0.6)' }}>
-              Đã có tài khoản?{' '}
-              <Link
-                component={RouterLink}
-                to="/login"
-                sx={{
-                  color: '#00A84E',
-                  textDecoration: 'none',
-                  fontWeight: 600,
-                  '&:hover': {
-                    textDecoration: 'underline',
+          {/* Form */}
+          <Box component="form" onSubmit={handleSubmit} noValidate>
+            <Box sx={{ mb: 2.5 }}>
+              <TextField
+                fullWidth
+                id="username"
+                name="username"
+                label="Tên đăng nhập"
+                variant="outlined"
+                placeholder="your_username"
+                value={formData.username}
+                onChange={handleChange}
+                required
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Person sx={{ color: 'rgba(255, 255, 255, 0.3)', fontSize: 20 }} />
+                      </InputAdornment>
+                    ),
                   },
                 }}
-              >
-                Đăng nhập ngay
-              </Link>
-            </Typography>
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                    bgcolor: 'rgba(255, 255, 255, 0.03)',
+                    '&:hover fieldset': { borderColor: 'rgba(255, 255, 255, 0.2)' },
+                    '&.Mui-focused fieldset': { borderColor: '#00A84E' },
+                  },
+                  '& .MuiInputLabel-root': { color: 'rgba(255, 255, 255, 0.5)' },
+                  '& .MuiInputLabel-root.Mui-focused': { color: '#00A84E' },
+                  '& .MuiOutlinedInput-input': { color: '#fff' },
+                }}
+              />
+            </Box>
+
+            <Box sx={{ mb: 2.5 }}>
+              <TextField
+                fullWidth
+                id="email"
+                name="email"
+                type="email"
+                label="Email"
+                variant="outlined"
+                placeholder="email@example.com"
+                value={formData.email}
+                onChange={handleChange}
+                required
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Mail sx={{ color: 'rgba(255, 255, 255, 0.3)', fontSize: 20 }} />
+                      </InputAdornment>
+                    ),
+                  },
+                }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                    bgcolor: 'rgba(255, 255, 255, 0.03)',
+                    '&:hover fieldset': { borderColor: 'rgba(255, 255, 255, 0.2)' },
+                    '&.Mui-focused fieldset': { borderColor: '#00A84E' },
+                  },
+                  '& .MuiInputLabel-root': { color: 'rgba(255, 255, 255, 0.5)' },
+                  '& .MuiInputLabel-root.Mui-focused': { color: '#00A84E' },
+                  '& .MuiOutlinedInput-input': { color: '#fff' },
+                }}
+              />
+            </Box>
+
+            <Grid container spacing={2} sx={{ mb: 4 }}>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  fullWidth
+                  id="password"
+                  name="password"
+                  type={showPassword ? 'text' : 'password'}
+                  label="Mật khẩu"
+                  variant="outlined"
+                  placeholder="••••••••"
+                  value={formData.password}
+                  onChange={handleChange}
+                  required
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Lock sx={{ color: 'rgba(255, 255, 255, 0.3)', fontSize: 20 }} />
+                        </InputAdornment>
+                      ),
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            onClick={() => setShowPassword(!showPassword)}
+                            edge="end"
+                            sx={{ color: 'rgba(255, 255, 255, 0.3)' }}
+                          >
+                            {showPassword ? <VisibilityOff /> : <Visibility />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: 2,
+                      bgcolor: 'rgba(255, 255, 255, 0.03)',
+                      '&:hover fieldset': { borderColor: 'rgba(255, 255, 255, 0.2)' },
+                      '&.Mui-focused fieldset': { borderColor: '#00A84E' },
+                    },
+                    '& .MuiInputLabel-root': { color: 'rgba(255, 255, 255, 0.5)' },
+                    '& .MuiInputLabel-root.Mui-focused': { color: '#00A84E' },
+                    '& .MuiOutlinedInput-input': { color: '#fff' },
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  fullWidth
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  label="Xác nhận"
+                  variant="outlined"
+                  placeholder="••••••••"
+                  value={formData.confirmPassword}
+                  onChange={handleChange}
+                  required
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Lock sx={{ color: 'rgba(255, 255, 255, 0.3)', fontSize: 20 }} />
+                        </InputAdornment>
+                      ),
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                            edge="end"
+                            sx={{ color: 'rgba(255, 255, 255, 0.3)' }}
+                          >
+                            {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: 2,
+                      bgcolor: 'rgba(255, 255, 255, 0.03)',
+                      '&:hover fieldset': { borderColor: 'rgba(255, 255, 255, 0.2)' },
+                      '&.Mui-focused fieldset': { borderColor: '#00A84E' },
+                    },
+                    '& .MuiInputLabel-root': { color: 'rgba(255, 255, 255, 0.5)' },
+                    '& .MuiInputLabel-root.Mui-focused': { color: '#00A84E' },
+                    '& .MuiOutlinedInput-input': { color: '#fff' },
+                  }}
+                />
+              </Grid>
+            </Grid>
+
+            <Button
+              fullWidth
+              type="submit"
+              variant="contained"
+              disabled={isLoading}
+              sx={{
+                py: 1.8,
+                borderRadius: 2,
+                bgcolor: '#00A84E',
+                fontSize: '1rem',
+                fontWeight: 700,
+                textTransform: 'none',
+                boxShadow: '0 8px 16px rgba(0, 168, 78, 0.25)',
+                '&:hover': {
+                  bgcolor: '#008F41',
+                  boxShadow: '0 12px 24px rgba(0, 168, 78, 0.35)',
+                },
+              }}
+            >
+              {isLoading ? 'Đang đăng ký...' : 'Đăng ký tài khoản'}
+            </Button>
+
+            <Box sx={{ mt: 4, textAlign: 'center' }}>
+              <Typography sx={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.875rem' }}>
+                Đã có tài khoản?{' '}
+                <Link
+                  component={RouterLink}
+                  to="/login"
+                  sx={{
+                    color: '#00A84E',
+                    textDecoration: 'none',
+                    fontWeight: 700,
+                    ml: 0.5,
+                    '&:hover': { textDecoration: 'underline' },
+                  }}
+                >
+                  Đăng nhập
+                </Link>
+              </Typography>
+            </Box>
           </Box>
-        </Box>
-      </Paper>
+        </Paper>
+      </Box>
     </AuthLayout>
   );
 };

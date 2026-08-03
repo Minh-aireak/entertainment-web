@@ -5,13 +5,12 @@ import {
   People,
   Person,
   CalendarMonth,
-  Cloud,
   Groups,
   Movie,
   EventNote,
 } from '@mui/icons-material';
 
-export type AppModule = 'social' | 'movie' | 'schedule';
+export type AppModule = 'social' | 'film' | 'schedule';
 
 export interface ModuleConfig {
   id: AppModule;
@@ -38,11 +37,11 @@ export const APP_MODULES: ModuleConfig[] = [
     defaultPath: '/social',
   },
   {
-    id: 'movie',
+    id: 'film',
     labelKey: 'moduleMovie',
     icon: Movie,
-    basePath: '/movie',
-    defaultPath: '/movie',
+    basePath: '/film',
+    defaultPath: '/film',
   },
   {
     id: 'schedule',
@@ -60,19 +59,18 @@ export const MODULE_NAV: Record<AppModule, NavItemConfig[]> = {
     { textKey: 'friends', path: '/social/friends', icon: People },
     { textKey: 'profile', path: '/social/profile', icon: Person },
   ],
-  movie: [
-    { textKey: 'home', path: '/movie', icon: Home, end: true },
-    { textKey: 'trending', path: '/movie/trending', icon: Movie },
-    { textKey: 'library', path: '/movie/library', icon: Movie },
+  film: [
+    { textKey: 'home', path: '/film', icon: Home, end: true },
+    { textKey: 'trending', path: '/film/trending', icon: Movie },
+    { textKey: 'library', path: '/film/library', icon: Movie },
   ],
   schedule: [
     { textKey: 'itinerary', path: '/schedule/itinerary', icon: CalendarMonth },
-    { textKey: 'weather', path: '/schedule/weather', icon: Cloud },
   ],
 };
 
 export function getActiveModule(pathname: string): AppModule {
-  if (pathname.startsWith('/movie')) return 'movie';
+  if (pathname.startsWith('/film')) return 'film';
   if (pathname.startsWith('/schedule') || pathname.startsWith('/travel')) return 'schedule';
   return 'social';
 }

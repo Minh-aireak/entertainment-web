@@ -40,7 +40,6 @@ const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
             py: 1.5,
           }}
         >
-          {/* Logo */}
           <Link
             component={RouterLink}
             to="/login"
@@ -62,7 +61,7 @@ const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
                 letterSpacing: '0.02em',
               }}
             >
-              AIREAK CINEMA
+              AIREAK
             </Box>
           </Link>
 
@@ -70,46 +69,17 @@ const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
             sx={{
               display: { xs: 'none', md: 'flex' },
               alignItems: 'center',
-              gap: 4,
+              gap: 2,
             }}
           >
-            <Link
-              component={RouterLink}
-              to="/social"
-              sx={{
-                color: 'rgba(255, 255, 255, 0.7)',
-                textDecoration: 'none',
-                fontWeight: 600,
-                fontSize: '0.95rem',
-                '&:hover': { color: '#fff' },
-              }}
-            >
-              Phim
-            </Link>
-            <Link
-              component={RouterLink}
-              to="/travel"
-              sx={{
-                color: 'rgba(255, 255, 255, 0.7)',
-                textDecoration: 'none',
-                fontWeight: 600,
-                fontSize: '0.95rem',
-                '&:hover': { color: '#fff' },
-              }}
-            >
-              Lịch chiếu
-            </Link>
-          </Box>
-
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Button
               component={RouterLink}
               to="/login"
               sx={{
-                color: 'rgba(255, 255, 255, 0.8)',
+                color: '#fff',
                 textTransform: 'none',
                 fontWeight: 600,
-                '&:hover': { color: '#fff', bgcolor: 'transparent' },
+                '&:hover': { color: '#00A84E' },
               }}
             >
               Đăng nhập
@@ -119,21 +89,16 @@ const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
               to="/register"
               variant="contained"
               sx={{
-                borderRadius: '999px',
-                px: 3,
-                py: 0.75,
                 bgcolor: '#00A84E',
                 color: '#fff',
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                boxShadow: 'none',
-                '&:hover': {
-                  bgcolor: '#00C853',
-                  boxShadow: 'none',
-                },
+                textTransform: 'none',
+                fontWeight: 600,
+                borderRadius: '20px',
+                px: 3,
+                '&:hover': { bgcolor: '#008F41' },
               }}
             >
-              Đăng ký
+              Tham gia ngay
             </Button>
           </Box>
         </Toolbar>

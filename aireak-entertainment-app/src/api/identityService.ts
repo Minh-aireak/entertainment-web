@@ -14,45 +14,37 @@ import type {
   ChangePasswordRequest,
   ForgotPasswordRequest,
   ResetPasswordRequest,
-  AuthenticationResponse,
   PageResponse,
 } from '../models';
 
 export const identityService = {
   // Authentication
   login: async (data: AuthenticationRequest) => {
-    const response = await axiosInstance.post<ApiResponse<AuthenticationResponse>>('/identities/auth/login', data);
+    const response = await axiosInstance.post<ApiResponse<void>>('/identities/auth/login', data);
     return response.data;
   },
 
   introspect: async (token: string) => {
-    const response = await axiosInstance.post<ApiResponse<IntrospectResponse>>('/identities/auth/introspect', 
-      { 
-        params: { token }
-      });
+    const response = await axiosInstance.post<ApiResponse<IntrospectResponse>>(
+      '/identities/auth/introspect',
+      null,
+      { params: { token } },
+    );
     return response.data;
   },
 
-  logout: async (token: string) => {
-    const response = await axiosInstance.post<ApiResponse<void>>('/identities/auth/logout', 
-      { 
-        params: { token }
-      });
+  logout: async () => {
+    const response = await axiosInstance.post<ApiResponse<void>>('/identities/auth/logout');
     return response.data;
   },
       
-  refresh: async (token: string) => {
-    const response = await axiosInstance.post<ApiResponse<AuthenticationResponse>>('/identities/auth/refresh-token', 
-      { 
-        params: { token }
-      });
+  refresh: async () => {
+    const response = await axiosInstance.post<ApiResponse<void>>('/identities/auth/refresh-token');
     return response.data;
   },
 
   outboundAuthenticate: async (code: string) => {
-    const response = await axiosInstance.post<ApiResponse<AuthenticationResponse>>('/identities/auth/outbound/google', { 
-        params: { code }
-      });
+    const response = await axiosInstance.post<ApiResponse<void>>(`/identities/auth/outbound/google?code=${code}`);
     return response.data;
   },
 
@@ -109,11 +101,11 @@ export const identityService = {
     return response.data;
   },
 
-  getUsers: async () => {
+  getUsers: async (page: number = 1, size: number = 10) => {
     const response = await axiosInstance.get<ApiResponse<PageResponse<UserResponse>>>('/identities/users', {
       params: {
-        page: 1,
-        pageSize: 10,
+        page,
+        size,
       }
     });
     return response.data;

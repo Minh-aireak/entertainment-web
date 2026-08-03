@@ -1,6 +1,6 @@
 import React from 'react';
 import { Typography, Grid, Paper, Box, Button, Card, CardContent, CardActions } from '@mui/material';
-import { CalendarMonth, Cloud } from '@mui/icons-material';
+import { CalendarMonth } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -14,12 +14,6 @@ const TravelHome: React.FC = () => {
       description: t('travelItineraryDesc'),
       icon: <CalendarMonth sx={{ fontSize: 40, color: 'primary.main' }} />,
       path: '/travel/itinerary',
-    },
-    {
-      title: t('weather'),
-      description: t('travelWeatherDesc'),
-      icon: <Cloud sx={{ fontSize: 40, color: 'info.main' }} />,
-      path: '/travel/weather',
     },
   ];
 

@@ -1,10 +1,9 @@
 import { configureStore, createSlice, type PayloadAction } from '@reduxjs/toolkit';
-import type { User, ChatMessage, Conversation, TravelItinerary } from '../models';
+import type { User, ChatMessage, Conversation, TravelItinerary, ConversationParticipant, UserFullSummaryResponse, FilmAggregateResponse } from '../models';
 
 // --- Auth Slice ---
 interface AuthState {
   user: User | null;
-  token: string | null;
   isAuthenticated: boolean;
   loading: boolean;
   error: string | null;
@@ -12,9 +11,9 @@ interface AuthState {
 
 const authInitialState: AuthState = {
   user: null,
-  token: localStorage.getItem('token'),
-  isAuthenticated: !!localStorage.getItem('token'),
-  loading: false,
+  isAuthenticated: false,
+  // Keep protected routes pending until the HttpOnly-cookie session is restored.
+  loading: true,
   error: null,
 };
 
@@ -26,12 +25,10 @@ const authSlice = createSlice({
       state.loading = true;
       state.error = null;
     },
-    loginSuccess: (state, action: PayloadAction<{ user: User; token: string }>) => {
+    loginSuccess: (state, action: PayloadAction<{ user: User | null }>) => {
       state.loading = false;
       state.user = action.payload.user;
-      state.token = action.payload.token;
       state.isAuthenticated = true;
-      localStorage.setItem('token', action.payload.token);
     },
     loginFailure: (state, action: PayloadAction<string>) => {
       state.loading = false;
@@ -39,13 +36,77 @@ const authSlice = createSlice({
     },
     logout: (state) => {
       state.user = null;
-      state.token = null;
       state.isAuthenticated = false;
-      localStorage.removeItem('token');
+      state.loading = false;
+      state.error = null;
     },
     setUser: (state, action: PayloadAction<User>) => {
       state.user = action.payload;
       state.isAuthenticated = true;
+    },
+  },
+});
+
+// --- Profile Slice ---
+interface ProfileState {
+  profileData: UserFullSummaryResponse | null;
+  loading: boolean;
+  lastUpdated: number | null;
+}
+
+const profileInitialState: ProfileState = {
+  profileData: null,
+  loading: false,
+  lastUpdated: null,
+};
+
+const profileSlice = createSlice({
+  name: 'profile',
+  initialState: profileInitialState,
+  reducers: {
+    setProfileData: (state, action: PayloadAction<UserFullSummaryResponse>) => {
+      state.profileData = action.payload;
+      state.lastUpdated = Date.now();
+      state.loading = false;
+    },
+    setProfileLoading: (state, action: PayloadAction<boolean>) => {
+      state.loading = action.payload;
+    },
+    clearProfileData: (state) => {
+      state.profileData = null;
+      state.lastUpdated = null;
+    },
+  },
+});
+
+// --- Film Slice ---
+import type { PageResponse, FilmSummaryResponse } from '../models';
+
+interface FilmState {
+  aggregateData: FilmAggregateResponse | null;
+  nowPlayingFilms: PageResponse<FilmSummaryResponse> | null;
+  loading: boolean;
+}
+
+const filmInitialState: FilmState = {
+  aggregateData: null,
+  nowPlayingFilms: null,
+  loading: false,
+};
+
+const filmSlice = createSlice({
+  name: 'film',
+  initialState: filmInitialState,
+  reducers: {
+    setFilmAggregateData: (state, action: PayloadAction<FilmAggregateResponse>) => {
+      state.aggregateData = action.payload;
+      state.loading = false;
+    },
+    setNowPlayingFilms: (state, action: PayloadAction<PageResponse<FilmSummaryResponse>>) => {
+      state.nowPlayingFilms = action.payload;
+    },
+    setFilmLoading: (state, action: PayloadAction<boolean>) => {
+      state.loading = action.payload;
     },
   },
 });
@@ -82,7 +143,12 @@ const chatSlice = createSlice({
       if (!state.messages[conversationId]) {
         state.messages[conversationId] = [];
       }
-      state.messages[conversationId].push(message);
+      const existingIndex = state.messages[conversationId].findIndex(item => item.id === message.id);
+      if (existingIndex >= 0) {
+        state.messages[conversationId][existingIndex] = message;
+      } else {
+        state.messages[conversationId].push(message);
+      }
     },
     setMessages: (state, action: PayloadAction<{ conversationId: string; messages: ChatMessage[] }>) => {
       state.messages[action.payload.conversationId] = action.payload.messages;
@@ -103,7 +169,7 @@ const chatSlice = createSlice({
       const conv = state.conversations.find(c => c.id === conversationId);
       if (conv) {
         if (!conv.participants) conv.participants = [];
-        const participant = conv.participants.find(p => p.userId === userId);
+        const participant = conv.participants.find((p: ConversationParticipant) => p.userId === userId);
         if (participant) {
           participant.lastSeenMessageId = lastSeenMessageId;
         } else {
@@ -162,16 +228,42 @@ const itinerarySlice = createSlice({
   },
 });
 
+// --- UI Slice ---
+interface UIState {
+  themeMode: 'light' | 'dark';
+}
+
+const uiInitialState: UIState = {
+  themeMode: (localStorage.getItem('themeMode') as 'light' | 'dark') || 'dark',
+};
+
+const uiSlice = createSlice({
+  name: 'ui',
+  initialState: uiInitialState,
+  reducers: {
+    toggleThemeMode: (state) => {
+      state.themeMode = state.themeMode === 'light' ? 'dark' : 'light';
+      localStorage.setItem('themeMode', state.themeMode);
+    },
+  },
+});
+
 // --- Exports ---
 export const { loginStart, loginSuccess, loginFailure, logout, setUser } = authSlice.actions;
+export const { setProfileData, setProfileLoading, clearProfileData } = profileSlice.actions;
 export const { setConversations, setActiveConversation, addMessage, setMessages, updateUserStatus, updateMessageSeen } = chatSlice.actions;
 export const { fetchStart, fetchSuccess, fetchFailure, addItinerary, updateItinerary, deleteItinerary } = itinerarySlice.actions;
+export const { setFilmAggregateData, setNowPlayingFilms, setFilmLoading } = filmSlice.actions;
+export const { toggleThemeMode } = uiSlice.actions;
 
 export const store = configureStore({
   reducer: {
     auth: authSlice.reducer,
+    profile: profileSlice.reducer,
     chat: chatSlice.reducer,
     itinerary: itinerarySlice.reducer,
+    film: filmSlice.reducer,
+    ui: uiSlice.reducer,
   },
 });
 

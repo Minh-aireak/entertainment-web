@@ -7,26 +7,33 @@ export const profileService = {
     return response.data;
   },
 
+  updateAvatar: async (avatarUrl: string) => {
+    const response = await axiosInstance.put<ApiResponse<UserProfileResponse>>('/profiles/my-profile/avatar', {
+      avatar: avatarUrl,
+    });
+    return response.data;
+  },
+
   getMyProfile: async () => {
     const response = await axiosInstance.get<ApiResponse<UserProfileResponse>>('/profiles/my-profile');
     return response.data;
   },
 
-  getAllProfiles: async (page: number, pageSize: number) => {
-    const response = await axiosInstance.get<ApiResponse<PageResponse<UserProfileResponse>>>('/profiles', {
+  getAllProfiles: async (page: number, size: number) => {
+    const response = await axiosInstance.get<ApiResponse<PageResponse<UserProfileResponse>>>('/profiles/suggestions', {
       params: {
-        page,
-        pageSize,
+        page: page - 1,
+        size,
       },
     });
     return response.data;
   },
 
   searchProfile: async (displayName: string, page: number, size: number) => {
-    const response = await axiosInstance.post<ApiResponse<PageResponse<UserProfileResponse>>>('/profiles/search/${displayName}', {
+    const response = await axiosInstance.post<ApiResponse<PageResponse<UserProfileResponse>>>(`/profiles/search/${displayName}`, null, {
       params: {
         displayName,
-        page,
+        page: page - 1,
         size,
       },
     });
@@ -39,7 +46,7 @@ export const profileService = {
   },
 
   getUserSummary: async () => {
-    const response = await axiosInstance.get<ApiResponse<UserFullSummaryResponse>>('/profiles/my-summary');
+    const response = await axiosInstance.get<ApiResponse<UserFullSummaryResponse>>('/profiles/aggregation/my-summary');
     return response.data;
   },
 };

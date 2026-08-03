@@ -2,12 +2,12 @@ import axiosInstance from './axiosInstance';
 import type { ApiResponse, NotificationResponse, PageResponse } from '../models';
 
 export const notificationService = {
-  getMyNotifications: async (pageNum: number, pageSize: number) => {
+  getMyNotifications: async (page: number, size: number) => {
     const response = await axiosInstance.get<ApiResponse<PageResponse<NotificationResponse>>>('/notifications/my-notifications',
       {
         params: {
-          pageNum,
-          pageSize,
+          page,
+          size,
         }
       }
     );
@@ -20,6 +20,7 @@ export const notificationService = {
   },
   
   markAllAsRead: async () => {
-    await axiosInstance.post<ApiResponse<void>>(`/notifications/mark-all-as-read`);
+    const response = await axiosInstance.put<ApiResponse<void>>('/notifications/mark-all-as-read');
+    return response.data;
   },
 };

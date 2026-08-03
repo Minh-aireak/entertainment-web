@@ -18,8 +18,9 @@ import { Search, Send, MoreVert, Chat as ChatIcon } from '@mui/icons-material';
 import { useDispatch, useSelector } from 'react-redux';
 import { type RootState } from '../store/index';
 import { setConversations, setActiveConversation, addMessage, setMessages, updateUserStatus, updateMessageSeen } from '../store';
-import type { Conversation, ConversationType } from '../models';
+import type { Conversation, ConversationType, ConversationParticipant, ChatMessageCreateRequest } from '../models';
 import { chatService } from '../api/chatService';
+import { identityService } from '../api/identityService';
 
 const StyledBadge = styled(Badge)(({ theme }) => ({
   '& .MuiBadge-badge': {
@@ -50,7 +51,7 @@ const StyledBadge = styled(Badge)(({ theme }) => ({
   },
 }));
 
-const ChatPage: React.FC = () => {
+const ChatPage: React.FC = React.memo(() => {
   const dispatch = useDispatch();
   const { user } = useSelector((state: RootState) => state.auth);
 
@@ -58,7 +59,14 @@ const ChatPage: React.FC = () => {
   
   const [inputText, setInputText] = useState('');
   const socketRef = useRef<WebSocket | null>(null);
+  const activeConversationRef = useRef<string | null>(null);
+  const joinedRoomRef = useRef<string | null>(null);
+  const userIdRef = useRef<string | undefined>(user?.id);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    userIdRef.current = user?.id;
+  }, [user?.id]);
 
   const fetchConversations = useCallback(async () => {
     try {
@@ -90,91 +98,165 @@ const ChatPage: React.FC = () => {
     }
   }, [dispatch]);
 
+  const markAsSeen = useCallback(async (conversationId: string) => {
+    try {
+      await chatService.seenAt(conversationId);
+    } catch (error) {
+      console.error('Failed to mark as seen:', error);
+    }
+  }, []);
+
   useEffect(() => {
     fetchConversations();
   }, [fetchConversations]);
 
   useEffect(() => {
+    activeConversationRef.current = activeConversationId;
+
     if (activeConversationId) {
       fetchMessages(activeConversationId);
+      markAsSeen(activeConversationId);
+
+      if (socketRef.current?.readyState === WebSocket.OPEN) {
+        const previousRoomId = joinedRoomRef.current;
+        if (previousRoomId && previousRoomId !== activeConversationId) {
+          socketRef.current.send(JSON.stringify({
+            type: 'leave-room',
+            roomId: previousRoomId,
+          }));
+        }
+        socketRef.current.send(JSON.stringify({
+          type: 'join-room',
+          roomId: activeConversationId,
+        }));
+        joinedRoomRef.current = activeConversationId;
+      }
     }
-  }, [activeConversationId, fetchMessages]);
+  }, [activeConversationId, fetchMessages, markAsSeen]);
 
   useEffect(() => {
     const socketUrl = import.meta.env.VITE_SOCKET_URL || 'ws://localhost:8088/ws';
-    const token = localStorage.getItem('token');
+    let disposed = false;
+    let reconnectAttempt = 0;
+    let refreshedAfterAuthClose = false;
+    let reconnectTimer: number | undefined;
 
-    if (!token) return;
+    const connect = () => {
+      if (disposed) return;
 
-    const wsUrl = `${socketUrl}?token=${token}`;
-    const ws = new WebSocket(wsUrl);
-    socketRef.current = ws;
+      const ws = new WebSocket(socketUrl);
+      socketRef.current = ws;
 
-    ws.onopen = () => {
-      console.log('Connected to WebSocket server');
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const payload = JSON.parse(event.data);
-        const { event: eventType, data } = payload;
-
-        switch (eventType) {
-          case 'new-message':
-            dispatch(addMessage({ conversationId: data.conversationId, message: data }));
-            break;
-          case 'user-status-changed':
-            dispatch(updateUserStatus(data));
-            break;
-          case 'seen-message':
-            dispatch(updateMessageSeen(data));
-            break;
-          default:
-            console.log('Received unknown event:', eventType, data);
+      ws.onopen = () => {
+        reconnectAttempt = 0;
+        console.log('Connected to WebSocket server');
+        const roomId = activeConversationRef.current;
+        if (roomId) {
+          ws.send(JSON.stringify({ type: 'join-room', roomId }));
+          joinedRoomRef.current = roomId;
         }
-      } catch (error) {
-        console.error('Failed to parse WebSocket message:', error);
-      }
+      };
+
+      ws.onmessage = (event) => {
+        refreshedAfterAuthClose = false;
+        try {
+          const payload = JSON.parse(event.data);
+          const { event: eventType, data } = payload;
+
+          switch (eventType) {
+            case 'new-message':
+              dispatch(addMessage({
+                conversationId: data.conversationId,
+                message: { ...data, me: data.senderId === userIdRef.current },
+              }));
+              break;
+            case 'update-message':
+            case 'delete-message':
+              fetchMessages(data.conversationId);
+              fetchConversations();
+              break;
+            case 'update-conversation-list':
+            case 'conversation-created':
+              fetchConversations();
+              break;
+            case 'user-status-changed':
+              dispatch(updateUserStatus(data));
+              break;
+            case 'seen-message':
+              dispatch(updateMessageSeen(data));
+              break;
+            default:
+              console.debug('Received unhandled WebSocket event:', eventType);
+          }
+        } catch (error) {
+          console.error('Failed to parse WebSocket message:', error);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+
+      ws.onclose = async (event) => {
+        if (socketRef.current === ws) socketRef.current = null;
+        joinedRoomRef.current = null;
+        if (disposed) return;
+
+        if ((event.code === 1007 || event.code === 1008) && !refreshedAfterAuthClose) {
+          refreshedAfterAuthClose = true;
+          try {
+            const response = await identityService.refresh();
+            if (!disposed && response.code === 1000) {
+              connect();
+            }
+          } catch (error) {
+            console.error('Unable to refresh session for WebSocket reconnect:', error);
+          }
+          return;
+        }
+
+        const delay = Math.min(1000 * (2 ** reconnectAttempt), 10000);
+        reconnectAttempt += 1;
+        reconnectTimer = window.setTimeout(connect, delay);
+      };
     };
 
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-    };
-
-    ws.onclose = () => {
-      console.log('Disconnected from WebSocket server');
-    };
+    connect();
 
     return () => {
-      ws.close();
+      disposed = true;
+      if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
+      socketRef.current?.close(1000, 'Chat page unmounted');
+      socketRef.current = null;
+      joinedRoomRef.current = null;
     };
-  }, [dispatch]);
+  }, [dispatch, fetchConversations, fetchMessages]);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, activeConversationId]);
 
-  const handleSendMessage = () => {
-    if (inputText.trim() && activeConversationId && socketRef.current?.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify({
-        type: 'send-message',
-        data: {
+  const handleSendMessage = async () => {
+    if (inputText.trim() && activeConversationId) {
+      try {
+        const request: ChatMessageCreateRequest = {
           conversationId: activeConversationId,
           content: inputText,
           messageType: 'TEXT'
+        };
+        const response = await chatService.createChatMessage(request);
+        if (response.code === 1000) {
+          // Message will be added via WebSocket event
         }
-      }));
-      setInputText('');
+        setInputText('');
+      } catch (error) {
+        console.error('Failed to send message:', error);
+      }
     }
   };
 
   const getConversationName = (conv: any) => {
-    if (conv.type === 'GROUP') return conv.groupName;
-    // For direct chat, we would typically find the other user's name
-    // Mocking it for now
-    if (conv.id === '2') return 'Nguyễn Văn A';
-    if (conv.id === '3') return 'Trần Thị B';
-    return 'Unknown';
+    return conv.conversationName || 'Unknown';
   };
 
   const getLastMessage = (conv: any) => {
@@ -197,8 +279,8 @@ const ChatPage: React.FC = () => {
   const getMessageSeenAvatars = (messageId: string) => {
     if (!activeConversation?.participants) return [];
     return activeConversation.participants
-      .filter(p => p.userId !== user?.id && p.lastSeenMessageId === messageId)
-      .map(p => ({
+      .filter((p: ConversationParticipant) => p.userId !== user?.id && p.lastSeenMessageId === messageId)
+      .map((p: ConversationParticipant) => ({
         userId: p.userId,
         avatar: p.avatar,
         name: p.displayName
@@ -271,7 +353,7 @@ const ChatPage: React.FC = () => {
                     invisible={!online}
                   >
                     <Avatar 
-                      src={(conv as any).avatar}
+                      src={(conv as any).conversationAvatar}
                       sx={{ 
                         width: 50, 
                         height: 50, 
@@ -279,7 +361,7 @@ const ChatPage: React.FC = () => {
                         border: isSelected ? '2px solid #2D88FF' : 'none'
                       }}
                     >
-                      {!(conv as any).avatar && name[0]}
+                      {!(conv as any).conversationAvatar && name[0]}
                     </Avatar>
                   </StyledBadge>
                 </ListItemAvatar>
@@ -396,7 +478,7 @@ const ChatPage: React.FC = () => {
                       </Typography>
                       {seenAvatars.length > 0 && (
                         <Box sx={{ display: 'flex', gap: -0.5, ml: 1 }}>
-                          {seenAvatars.map(p => (
+                          {seenAvatars.map((p: any) => (
                             <Avatar 
                               key={p.userId} 
                               src={p.avatar} 
@@ -436,6 +518,6 @@ const ChatPage: React.FC = () => {
       </Box>
     </Box>
   );
-};
+});
 
 export default ChatPage;

@@ -3,48 +3,52 @@ import type { ApiResponse, PageResponse, UserRelationshipResponse, FriendRequest
 
 export const friendService = {
   sendFriendRequest: async (toUserId: string) => {
-    return await axiosInstance.post<ApiResponse<void>>(`/friends/requests/${toUserId}`)
+    const response = await axiosInstance.post<ApiResponse<void>>(`/friends/requests/${toUserId}`);
+    return response.data;
   },
 
-  getMyFriends: async (page: number = 1, pageSize: number = 10) => {
-    return await axiosInstance.get<ApiResponse<PageResponse<UserRelationshipResponse>>>('/my-friends', {
-      params: {
-        page,
-        pageSize,
-      },
-    });
-  },
-  
-  searchFriends: async (displayName: string, page: number = 1, pageSize: number = 10) => {
-    return await axiosInstance.get<ApiResponse<PageResponse<UserRelationshipResponse>>>('/friends/search', {
-      params: {
-        displayName,
-        page,
-        pageSize,
-      },
-    });
-  },
-
-  friendRequestStatus: async (senderId: string, status: FriendRequestStatus) => {
-    return await axiosInstance.put<ApiResponse<void>>(`/friends/requests/${senderId}`, {
-      params: {
-        status,
-      },
-    })
-  },
-
-  updateRelationshipStatus: async (toUserId: string, status: RelationshipStatus) => {
-    return await axiosInstance.put<ApiResponse<void>>(`/friends/relationship/${toUserId}`, {
-      status,
-    })
-  },
-
-  getMyFriendRequests: async (page: number, size: number) => {
-    return await axiosInstance.get<ApiResponse<PageResponse<FriendRequestResponse>>>('/requests', {
+  getMyFriends: async (page: number = 1, size: number = 10) => {
+    const response = await axiosInstance.get<ApiResponse<PageResponse<UserRelationshipResponse>>>('/friends/my-friends', {
       params: {
         page,
         size,
       },
     });
+    return response.data;
+  },
+  
+  searchFriends: async (displayName: string, page: number = 1, size: number = 10) => {
+    const response = await axiosInstance.get<ApiResponse<PageResponse<UserRelationshipResponse>>>('/friends/search', {
+      params: {
+        displayName,
+        page,
+        size,
+      },
+    });
+    return response.data;
+  },
+
+  friendRequestStatus: async (senderId: string, status: FriendRequestStatus) => {
+    const response = await axiosInstance.put<ApiResponse<void>>(`/friends/requests/${senderId}`, null, {
+      params: { status },
+    });
+    return response.data;
+  },
+
+  updateRelationshipStatus: async (toUserId: string, status: RelationshipStatus) => {
+    const response = await axiosInstance.put<ApiResponse<void>>(`/friends/relationship/${toUserId}`, null, {
+      params: { status },
+    });
+    return response.data;
+  },
+
+  getMyFriendRequests: async (page: number, size: number) => {
+    const response = await axiosInstance.get<ApiResponse<PageResponse<FriendRequestResponse>>>('/friends/requests', {
+      params: {
+        page,
+        size,
+      },
+    });
+    return response.data;
   },  
 };

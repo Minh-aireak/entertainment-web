@@ -13,10 +13,10 @@ import {
   CircularProgress,
 } from '@mui/material';
 import { Search, PersonRemove, Chat, Person, PersonAdd, Cancel } from '@mui/icons-material';
-import { useTranslation } from 'react-i18next';
 import { toast } from 'react-hot-toast';
 import { friendService } from '../api/friendService';
 import { profileService } from '../api/profileService';
+import type { UserRelationshipResponse, FriendRequestResponse, UserProfileResponse } from '../models';
 
 interface FriendUI {
   id: string;
@@ -25,8 +25,7 @@ interface FriendUI {
   status: 'FRIEND' | 'PENDING_SENT' | 'PENDING_RECEIVED' | 'SUGGESTION' | 'BLOCKED';
 }
 
-const FriendsPage: React.FC = () => {
-  const { t } = useTranslation();
+const FriendsPage: React.FC = React.memo(() => {
   const [tabValue, setTabValue] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -39,45 +38,55 @@ const FriendsPage: React.FC = () => {
   const fetchAllFriendData = useCallback(async () => {
     setLoading(true);
     try {
-      const [friendsRes, requestsRes, profilesRes] = await Promise.all([
-        friendService.getMyFriends(1, 100),
-        friendService.getMyFriendRequests(1, 100),
+      const results = await Promise.allSettled([
+        friendService.getMyFriends(1, 10),
+        friendService.getMyFriendRequests(1, 10),
         profileService.getAllProfiles(1, 20),
       ]);
 
-      if (friendsRes.data.code === 1000) {
-        setFriends(friendsRes.data.result.data.map(f => ({
+      // Handle Friends
+      if (results[0].status === 'fulfilled' && results[0].value.code === 1000) {
+        const friendData = results[0].value.result?.data ?? [];
+        setFriends(friendData.map((f: UserRelationshipResponse) => ({
           id: f.friendId,
           fullName: f.displayName,
           avatar: f.friendAvatar,
           status: 'FRIEND',
         })));
+      } else if (results[0].status === 'rejected') {
+        console.error('Failed to fetch friends:', results[0].reason);
       }
 
-      if (requestsRes.data.code === 1000) {
-        const received = requestsRes.data.result.data.filter(r => r.status === 'PENDING');
-        setReceivedRequests(received.map(r => ({
+      // Handle Requests
+      if (results[1].status === 'fulfilled' && results[1].value.code === 1000) {
+        const requestData = results[1].value.result?.data ?? [];
+        const received = requestData.filter((r: FriendRequestResponse) => r.status === 'PENDING');
+        setReceivedRequests(received.map((r: FriendRequestResponse) => ({
           id: r.senderId,
           fullName: r.displayName,
           avatar: r.avatar,
           status: 'PENDING_RECEIVED',
         })));
+      } else if (results[1].status === 'rejected') {
+        console.error('Failed to fetch requests:', results[1].reason);
       }
 
-      if (profilesRes.code === 1000) {
-        // Simple suggestion logic: profiles that are not me and not already friends/pending
-        // In a real app, the backend would provide suggestions
-        setSuggestions(profilesRes.result.data.map(p => ({
+      // Handle Suggestions
+      if (results[2].status === 'fulfilled' && results[2].value.code === 1000) {
+        const suggestionData = results[2].value.result?.data ?? [];
+        setSuggestions(suggestionData.map((p: UserProfileResponse) => ({
           id: p.userId,
           fullName: p.displayName,
           avatar: p.avatar,
           status: 'SUGGESTION',
         })));
+      } else if (results[2].status === 'rejected') {
+        console.error('Failed to fetch suggestions:', results[2].reason);
       }
 
     } catch (error) {
       console.error('Failed to fetch friend data:', error);
-      toast.error('Không thể tải danh sách bạn bè');
+      toast.error('Có lỗi xảy ra khi tải dữ liệu');
     } finally {
       setLoading(false);
     }
@@ -106,7 +115,7 @@ const FriendsPage: React.FC = () => {
   const handleAccept = async (id: string) => {
     try {
       const res = await friendService.friendRequestStatus(id, 'ACCEPTED');
-      if (res.data.code === 1000) {
+      if (res.code === 1000) {
         toast.success('Đã chấp nhận lời mời kết bạn');
         fetchAllFriendData();
       }
@@ -118,7 +127,7 @@ const FriendsPage: React.FC = () => {
   const handleDecline = async (id: string) => {
     try {
       const res = await friendService.friendRequestStatus(id, 'CANCEL');
-      if (res.data.code === 1000) {
+      if (res.code === 1000) {
         toast.success('Đã từ chối lời mời');
         fetchAllFriendData();
       }
@@ -130,7 +139,7 @@ const FriendsPage: React.FC = () => {
   const handleAddFriend = async (id: string) => {
     try {
       const res = await friendService.sendFriendRequest(id);
-      if (res.data.code === 1000) {
+      if (res.code === 1000) {
         toast.success('Đã gửi lời mời kết bạn');
         // Move from suggestion to sent requests locally for immediate feedback
         const user = suggestions.find(s => s.id === id);
@@ -148,7 +157,7 @@ const FriendsPage: React.FC = () => {
     if (window.confirm('Bạn có chắc chắn muốn hủy kết bạn?')) {
       try {
         const res = await friendService.updateRelationshipStatus(id, 'UNFRIEND');
-        if (res.data.code === 1000) {
+        if (res.code === 1000) {
           toast.success('Đã hủy kết bạn');
           setFriends(prev => prev.filter(f => f.id !== id));
         }
@@ -276,6 +285,6 @@ const FriendsPage: React.FC = () => {
       </Grid>
     </Box>
   );
-};
+});
 
 export default FriendsPage;

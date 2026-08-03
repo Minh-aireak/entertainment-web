@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   AppBar,
@@ -15,38 +15,40 @@ import {
   Button,
   Divider,
   Tooltip,
+  Avatar,
+  Badge,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
-  AdminPanelSettings,
-  Logout,
   Movie,
-  MailOutlined as MailIcon,
-  PersonOutlined as ProfileIcon,
   LightMode as ThemeIcon,
-  Edit as EditIcon,
-  ChevronLeft as ChevronLeftIcon,
-  ChevronRight as ChevronRightIcon,
-  Groups as SocialIcon,
-  EventNote as ScheduleIcon,
+  DarkMode as DarkModeIcon,
+  ChevronRight,
+  ChevronLeft,
+  Home,
+  Message,
+  Group,
+  Person,
+  Explore,
+  TrendingUp,
+  Bookmark,
+  Notifications,
+  Logout as LogoutIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useSelector, useDispatch } from 'react-redux';
-import { type RootState, logout } from '../../store/index';
-import {
-  APP_MODULES,
-  MODULE_NAV,
-  getActiveModule,
-  isNavItemActive,
-} from '../../config/navigation';
+import { type RootState, logout, toggleThemeMode } from '../../store/index';
+import { identityService } from '../../api/identityService';
+import { clearClientAuthState } from '../../api/axiosInstance';
+import { chatService } from '../../api/chatService';
+import { friendService } from '../../api/friendService';
+import { notificationService } from '../../api/notificationService';
+import { filmService } from '../../api/filmService';
 
 const NAVBAR_HEIGHT = 64;
-const SIDEBAR_EXPANDED_WIDTH = 280;
+const SIDEBAR_EXPANDED_WIDTH = 300;
 const SIDEBAR_COLLAPSED_WIDTH = 80;
-const BG_NAV = '#121212';
-const BG_SIDEBAR = '#121212';
-const BG_PAGE = '#0F0F0F';
-const ACCENT_ORANGE = '#F57C00';
+const ACCENT_GREEN = '#00A84E';
 const ACCENT_RED = '#FF5252';
 
 interface MainLayoutProps {
@@ -58,51 +60,103 @@ const pillButtonSx = {
   px: 3,
   py: 0.8,
   minHeight: 38,
-  fontWeight: 600,
+  fontWeight: 700,
   fontSize: '0.9rem',
   textTransform: 'none' as const,
   boxShadow: 'none',
   transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
   '&:hover': { 
-    boxShadow: '0 4px 12px rgba(245, 124, 0, 0.2)',
+    boxShadow: '0 4px 12px rgba(0, 168, 78, 0.2)',
     transform: 'translateY(-1px)',
   },
 };
 
-const navIconSx = (selected: boolean) => ({
-  color: selected ? ACCENT_ORANGE : 'rgba(255, 255, 255, 0.7)',
-  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-  '&:hover': {
-    color: '#fff',
-    bgcolor: 'rgba(255, 255, 255, 0.08)',
-  },
-  mx: 1,
-});
+type SidebarBadgeKey = 'messages' | 'friendRequests' | 'notifications' | 'watchlist';
 
-const listItemSx = (selected: boolean, isCollapsed: boolean) => ({
-  borderRadius: '12px',
-  mb: 0.75,
-  mx: isCollapsed ? 1 : 1.5,
-  py: 1.25,
-  px: isCollapsed ? 0 : 2,
+interface SidebarMenuItem {
+  id: string;
+  label: string;
+  icon: typeof Home;
+  path: string;
+  badgeKey?: SidebarBadgeKey;
+}
+
+interface SidebarCounts {
+  messages: number;
+  friendRequests: number;
+  notifications: number;
+  watchlist: number;
+}
+
+const EMPTY_SIDEBAR_COUNTS: SidebarCounts = {
+  messages: 0,
+  friendRequests: 0,
+  notifications: 0,
+  watchlist: 0,
+};
+
+const socialMenuItems = [
+  { id: 'home', label: 'Trang chủ', icon: Home, path: '/social' },
+  { id: 'messages', label: 'Nhắn tin', icon: Message, path: '/social/chat', badgeKey: 'messages' },
+  { id: 'friends', label: 'Bạn bè', icon: Group, path: '/social/friends', badgeKey: 'friendRequests' },
+  { id: 'profile', label: 'Trang cá nhân', icon: Person, path: '/social/profile' },
+] satisfies SidebarMenuItem[];
+
+const entertainmentMenuItems = [
+  { id: 'explore', label: 'Khám phá phim', icon: Explore, path: '/film' },
+  { id: 'trending', label: 'Thịnh hành', icon: TrendingUp, path: '/film/trending' },
+  { id: 'watchlist', label: 'Thư viện của tôi', icon: Bookmark, path: '/film/library', badgeKey: 'watchlist' },
+] satisfies SidebarMenuItem[];
+
+const onlineMenuItems = [
+  { id: 'notifications', label: 'Thông báo', icon: Notifications, path: '/social/notifications', badgeKey: 'notifications' },
+] satisfies SidebarMenuItem[];
+
+const listItemSx = (selected: boolean, isCollapsed: boolean, isLast?: boolean) => ({
+  borderRadius: isCollapsed ? '16px' : '16px',
+  mb: isLast ? 0 : 0.75,
+  mx: isCollapsed ? 'auto' : 2,
+  width: isCollapsed ? 52 : 'auto',
+  height: isCollapsed ? 52 : 52,
+  py: 0,
+  px: isCollapsed ? 0 : 1.75,
+  display: 'flex',
+  alignItems: 'center',
   justifyContent: isCollapsed ? 'center' : 'flex-start',
-  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-  bgcolor: selected ? 'rgba(245, 124, 0, 0.08)' : 'transparent',
-  border: selected ? `1px solid rgba(245, 124, 0, 0.15)` : '1px solid transparent',
+  transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+  bgcolor: selected ? ACCENT_GREEN : 'transparent',
+  opacity: selected ? 1 : 0.9,
+  color: selected ? '#fff' : 'rgba(255,255,255,0.8)',
+  position: 'relative' as const,
   '& .MuiListItemIcon-root': { 
-    color: selected ? ACCENT_ORANGE : 'rgba(255, 255, 255, 0.5)',
-    minWidth: isCollapsed ? 0 : 40,
+    color: selected ? '#fff' : 'rgba(255,255,255,0.6)',
+    minWidth: isCollapsed ? 0 : 44,
+    display: 'flex',
+    justifyContent: 'center',
+    marginRight: isCollapsed ? 0 : 1,
+    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+  },
+  '& .MuiListItemText-root': {
+    margin: 0,
+    opacity: isCollapsed ? 0 : 1,
+    width: isCollapsed ? 0 : 'auto',
+    visibility: isCollapsed ? 'hidden' : 'visible',
+    overflow: 'hidden',
+    ml: isCollapsed ? 0 : 0.5,
+    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
   },
   '& .MuiListItemText-primary': { 
-    color: selected ? ACCENT_ORANGE : 'rgba(255, 255, 255, 0.7)',
+    color: 'inherit',
     fontWeight: selected ? 700 : 500,
     fontSize: '0.95rem',
-    display: isCollapsed ? 'none' : 'block',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
   },
   '&:hover': {
-    bgcolor: selected ? 'rgba(245, 124, 0, 0.12)' : 'rgba(255, 255, 255, 0.05)',
-    '& .MuiListItemIcon-root': { color: selected ? ACCENT_ORANGE : '#fff' },
-    '& .MuiListItemText-primary': { color: selected ? ACCENT_ORANGE : '#fff' },
+    bgcolor: selected ? '#008F41' : 'rgba(0, 168, 78, 0.12)',
+    opacity: 1,
+    '& .MuiListItemIcon-root': { color: selected ? '#fff' : ACCENT_GREEN },
   },
 });
 
@@ -111,197 +165,412 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useDispatch();
-  const { user, isAuthenticated } = useSelector((state: RootState) => state.auth);
+  const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
+  const { profileData } = useSelector((state: RootState) => state.profile);
+  const themeMode = useSelector((state: RootState) => state.ui.themeMode);
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  
-  const activeModule = getActiveModule(location.pathname);
-  const moduleNavItems = MODULE_NAV[activeModule];
-  const activeModuleConfig = APP_MODULES.find((m) => m.id === activeModule)!;
+  const [sidebarCounts, setSidebarCounts] = useState<SidebarCounts>(EMPTY_SIDEBAR_COUNTS);
+
+  const refreshSidebarCounts = useCallback(async () => {
+    if (!isAuthenticated) {
+      setSidebarCounts(EMPTY_SIDEBAR_COUNTS);
+      return;
+    }
+
+    const [messages, requests, notifications, watchlist] = await Promise.allSettled([
+      chatService.getUnreadCount(),
+      friendService.getMyFriendRequests(1, 1),
+      notificationService.getUnreadCount(),
+      filmService.getMyFollowedFilms(),
+    ]);
+
+    setSidebarCounts((current) => ({
+      messages: messages.status === 'fulfilled' ? messages.value.result?.total ?? 0 : current.messages,
+      friendRequests: requests.status === 'fulfilled' ? requests.value.result?.totalElement ?? 0 : current.friendRequests,
+      notifications: notifications.status === 'fulfilled' ? notifications.value.result ?? 0 : current.notifications,
+      watchlist: watchlist.status === 'fulfilled' ? watchlist.value.result?.length ?? 0 : current.watchlist,
+    }));
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    refreshSidebarCounts();
+  }, [location.pathname, refreshSidebarCounts]);
+
+  useEffect(() => {
+    const handleRefresh = () => refreshSidebarCounts();
+    window.addEventListener('focus', handleRefresh);
+    window.addEventListener('sidebar-counts:refresh', handleRefresh);
+    const intervalId = window.setInterval(handleRefresh, 60_000);
+
+    return () => {
+      window.removeEventListener('focus', handleRefresh);
+      window.removeEventListener('sidebar-counts:refresh', handleRefresh);
+      window.clearInterval(intervalId);
+    };
+  }, [refreshSidebarCounts]);
 
   const handleDrawerToggle = () => setMobileOpen(!mobileOpen);
-  const toggleSidebar = () => setIsSidebarCollapsed(!isSidebarCollapsed);
 
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login');
+  const handleLogout = async () => {
+    try {
+      await identityService.logout();
+    } catch (error) {
+      console.error('Failed to logout on server:', error);
+    } finally {
+      clearClientAuthState();
+      dispatch(logout());
+      navigate('/login');
+    }
   };
 
   const featureSidebar = (isMobile: boolean = false) => {
     const isCollapsed = !isMobile && isSidebarCollapsed;
     const sidebarWidth = isMobile ? SIDEBAR_EXPANDED_WIDTH : (isCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH);
 
+    const displayName = profileData?.displayName || user?.username || 'User';
+    const avatar = profileData?.avatar || '';
+    const initial = displayName.charAt(0).toUpperCase();
+
+    // Check if a menu item is active
+    const isMenuItemActive = (path: string) => {
+      if (path === '/social' || path === '/film') return location.pathname === path;
+      return location.pathname === path || location.pathname.startsWith(`${path}/`);
+    };
+
     return (
       <Box
+        className="sidebar-container"
         sx={{
           width: sidebarWidth,
           flexShrink: 0,
-          bgcolor: BG_SIDEBAR,
-          borderRight: '1px solid rgba(255,255,255,0.08)',
+          background: '#121212',
+          borderRight: '1px solid rgba(255,255,255,0.06)',
           display: 'flex',
           flexDirection: 'column',
           height: '100%',
-          transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          transition: 'width 0.35s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.35s ease',
           overflow: 'hidden',
           position: 'relative',
+          boxShadow: '8px 0 24px rgba(0,0,0,0.15)',
+          zIndex: 10,
         }}
       >
         {/* Sidebar Header */}
-        <Box sx={{ px: isCollapsed ? 0 : 3, py: 4, textAlign: isCollapsed ? 'center' : 'left' }}>
-          {!isCollapsed && (
-            <Typography
-              variant="overline"
-              sx={{
-                color: 'rgba(255,255,255,0.4)',
-                letterSpacing: '0.15em',
-                fontSize: '0.7rem',
-                fontWeight: 700,
-              }}
-            >
-              {t('navigation')}
-            </Typography>
-          )}
-          <Typography
-            sx={{
-              color: '#fff',
-              fontWeight: 800,
-              fontSize: isCollapsed ? '0.8rem' : '1.25rem',
-              mt: isCollapsed ? 0 : 0.5,
-              letterSpacing: '-0.02em',
-              whiteSpace: 'nowrap',
+        <Box sx={{ px: isCollapsed ? 1.5 : 3, py: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box 
+            sx={{ 
+              width: 48, 
+              height: 48, 
+              borderRadius: '16px', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              background: 'linear-gradient(135deg, #00A84E 0%, #00c75c 100%)',
+              boxShadow: '0 4px 14px rgba(0, 168, 78, 0.3)',
+              flexShrink: 0
             }}
           >
-            {isCollapsed ? activeModuleConfig.id.toUpperCase().charAt(0) : t(activeModuleConfig.labelKey)}
-          </Typography>
+            <Movie sx={{ color: '#fff', fontSize: 24 }} />
+          </Box>
+          <Box sx={{ 
+            opacity: isCollapsed ? 0 : 1, 
+            width: isCollapsed ? 0 : 'auto', 
+            overflow: 'hidden',
+            transition: 'all 0.3s ease',
+            ml: isCollapsed ? 0 : 0.5
+          }}>
+            <Typography sx={{ fontWeight: 800, fontSize: '1.15rem', color: '#fff', letterSpacing: '-0.02em' }}>
+              AIREAK
+            </Typography>
+            <Typography sx={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', mt: 0.2 }}>
+              Entertainment Hub
+            </Typography>
+          </Box>
         </Box>
 
-        {/* Main Modules (Social, Movie, Schedule) */}
-        <List sx={{ px: isCollapsed ? 1 : 1.5, py: 0 }}>
-          {!isCollapsed && (
-            <Box sx={{ px: 1.5, mb: 1.5 }}>
-              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px' }}>
-                Main Apps
-              </Typography>
-            </Box>
-          )}
-          {APP_MODULES.map((mod) => {
-            const modSelected = activeModule === mod.id;
-            const Icon = mod.icon;
-            return (
-              <Tooltip key={mod.id} title={isCollapsed ? t(mod.labelKey) : ""} placement="right">
-                <ListItem disablePadding sx={{ mb: 0.5 }}>
-                  <ListItemButton
-                    onClick={() => navigate(mod.defaultPath)}
-                    selected={modSelected}
-                    sx={listItemSx(modSelected, isCollapsed)}
-                  >
-                    <ListItemIcon>
-                      <Icon fontSize="medium" />
-                    </ListItemIcon>
-                    <ListItemText primary={t(mod.labelKey)} />
-                  </ListItemButton>
-                </ListItem>
-              </Tooltip>
-            );
-          })}
-        </List>
+        <Divider sx={{ mx: isCollapsed ? 2 : 3, borderColor: 'rgba(255,255,255,0.06)' }} />
 
-        <Divider sx={{ my: 3, mx: 2, borderColor: 'rgba(255,255,255,0.05)' }} />
+        {/* MẠNG XÃ HỘI Section */}
+        <Box sx={{ px: isCollapsed ? 1 : 2, py: 2 }}>
+          <Typography sx={{ 
+            px: isCollapsed ? 0 : 2, 
+            mb: 1.5, 
+            fontSize: '0.7rem', 
+            fontWeight: 700, 
+            color: 'rgba(255,255,255,0.5)', 
+            letterSpacing: '0.12em', 
+            textTransform: 'uppercase' as const,
+            opacity: isCollapsed ? 0 : 1,
+            height: isCollapsed ? 0 : 'auto',
+            overflow: 'hidden',
+            transition: 'all 0.3s ease'
+          }}>
+            MẠNG XÃ HỘI
+          </Typography>
+          <List sx={{ px: 0, py: 0 }}>
+            {socialMenuItems.map((item, idx) => {
+              const selected = isMenuItemActive(item.path);
+              const Icon = item.icon;
+              const isLast = idx === socialMenuItems.length - 1;
+              const badgeValue = item.badgeKey ? sidebarCounts[item.badgeKey] : 0;
+              return (
+                <Tooltip key={item.id} title={isCollapsed ? item.label : ""} placement="right">
+                  <ListItem disablePadding sx={{ mb: isLast ? 0 : 0.5 }}>
+                    <ListItemButton
+                      component={Link}
+                      to={item.path}
+                      selected={selected}
+                      onClick={() => isMobile && setMobileOpen(false)}
+                      sx={listItemSx(selected, isCollapsed, isLast)}
+                    >
+                      <ListItemIcon>
+                        <Badge badgeContent={badgeValue} color="error" max={99} invisible={!isCollapsed || badgeValue === 0}>
+                          <Icon fontSize="medium" />
+                        </Badge>
+                      </ListItemIcon>
+                      <ListItemText primary={item.label} />
+                      {badgeValue > 0 && !isCollapsed && (
+                        <Box sx={{ minWidth: 22, height: 22, px: 0.75, borderRadius: 11, bgcolor: 'error.main', color: '#fff', fontSize: '0.7rem', fontWeight: 800, display: 'grid', placeItems: 'center' }}>
+                          {badgeValue > 99 ? '99+' : badgeValue}
+                        </Box>
+                      )}
+                    </ListItemButton>
+                  </ListItem>
+                </Tooltip>
+              );
+            })}
+          </List>
+        </Box>
 
-        {/* Module Specific Nav */}
-        <List sx={{ px: isCollapsed ? 1 : 1.5, py: 0, flex: 1 }}>
-          {!isCollapsed && (
-            <Box sx={{ px: 1.5, mb: 1.5 }}>
-              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px' }}>
-                {t(activeModuleConfig.labelKey)}
-              </Typography>
-            </Box>
-          )}
-          {moduleNavItems.map((item) => {
-            const Icon = item.icon;
-            const selected = isNavItemActive(location.pathname, item);
-            return (
-              <Tooltip key={item.path} title={isCollapsed ? t(item.textKey) : ""} placement="right">
-                <ListItem disablePadding sx={{ mb: 0.5 }}>
-                  <ListItemButton
-                    component={Link}
-                    to={item.path}
-                    selected={selected}
-                    onClick={() => isMobile && setMobileOpen(false)}
-                    sx={listItemSx(selected, isCollapsed)}
-                  >
-                    <ListItemIcon>
-                      <Icon fontSize="medium" />
-                    </ListItemIcon>
-                    <ListItemText primary={t(item.textKey)} />
-                  </ListItemButton>
-                </ListItem>
-              </Tooltip>
-            );
-          })}
-        </List>
+        {/* GIẢI TRÍ Section */}
+        <Box sx={{ px: isCollapsed ? 1 : 2, py: 1 }}>
+          <Typography sx={{ 
+            px: isCollapsed ? 0 : 2, 
+            mb: 1.5, 
+            fontSize: '0.7rem', 
+            fontWeight: 700, 
+            color: 'rgba(255,255,255,0.5)', 
+            letterSpacing: '0.12em', 
+            textTransform: 'uppercase' as const,
+            opacity: isCollapsed ? 0 : 1,
+            height: isCollapsed ? 0 : 'auto',
+            overflow: 'hidden',
+            transition: 'all 0.3s ease'
+          }}>
+            GIẢI TRÍ
+          </Typography>
+          <List sx={{ px: 0, py: 0 }}>
+            {entertainmentMenuItems.map((item, idx) => {
+              const selected = isMenuItemActive(item.path);
+              const Icon = item.icon;
+              const isLast = idx === entertainmentMenuItems.length - 1;
+              const badgeValue = item.badgeKey ? sidebarCounts[item.badgeKey] : 0;
+              return (
+                <Tooltip key={item.id} title={isCollapsed ? item.label : ""} placement="right">
+                  <ListItem disablePadding sx={{ mb: isLast ? 0 : 0.5 }}>
+                    <ListItemButton
+                      component={Link}
+                      to={item.path}
+                      selected={selected}
+                      onClick={() => isMobile && setMobileOpen(false)}
+                      sx={listItemSx(selected, isCollapsed, isLast)}
+                    >
+                      <ListItemIcon>
+                        <Badge badgeContent={badgeValue} color="primary" max={99} invisible={!isCollapsed || badgeValue === 0}>
+                          <Icon fontSize="medium" />
+                        </Badge>
+                      </ListItemIcon>
+                      <ListItemText primary={item.label} />
+                      {badgeValue > 0 && !isCollapsed && (
+                        <Box sx={{ minWidth: 22, height: 22, px: 0.75, borderRadius: 11, bgcolor: 'rgba(255,255,255,0.18)', color: '#fff', fontSize: '0.7rem', fontWeight: 800, display: 'grid', placeItems: 'center' }}>
+                          {badgeValue > 99 ? '99+' : badgeValue}
+                        </Box>
+                      )}
+                    </ListItemButton>
+                  </ListItem>
+                </Tooltip>
+              );
+            })}
+          </List>
+        </Box>
 
-        {/* Sidebar Footer / Toggle */}
-        {!isMobile && (
-          <Box sx={{ p: 2, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-            <IconButton 
-              onClick={toggleSidebar}
-              sx={{ 
-                width: '100%', 
-                borderRadius: '12px',
-                color: 'rgba(255,255,255,0.5)',
-                '&:hover': { bgcolor: 'rgba(255,255,255,0.05)', color: '#fff' }
-              }}
-            >
-              {isCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
-            </IconButton>
-          </Box>
-        )}
+        <Box sx={{ flexGrow: 1 }} />
 
-        {!isCollapsed && (
-          <Box sx={{ p: 2 }}>
-            <Box
-              sx={{
-                bgcolor: 'rgba(245, 124, 0, 0.1)',
-                borderRadius: '16px',
-                p: 2,
-                border: '1px solid rgba(245, 124, 0, 0.2)',
-              }}
-            >
-              <Typography sx={{ color: '#fff', fontWeight: 700, fontSize: '0.85rem' }}>
-                Aireak Premium
-              </Typography>
-              <Button
-                fullWidth
-                size="small"
-                variant="contained"
-                sx={{
-                  mt: 1.5,
-                  bgcolor: ACCENT_ORANGE,
-                  color: '#fff',
+        <Divider sx={{ mx: isCollapsed ? 2 : 3, borderColor: 'rgba(255,255,255,0.06)' }} />
+
+        {/* Updates Section */}
+        <Box sx={{ px: isCollapsed ? 1 : 2, py: 2 }}>
+          <Typography sx={{ 
+            px: isCollapsed ? 0 : 2, 
+            mb: 1.5, 
+            fontSize: '0.7rem', 
+            fontWeight: 700, 
+            color: 'rgba(255,255,255,0.5)', 
+            letterSpacing: '0.12em', 
+            textTransform: 'uppercase' as const,
+            opacity: isCollapsed ? 0 : 1,
+            height: isCollapsed ? 0 : 'auto',
+            overflow: 'hidden',
+            transition: 'all 0.3s ease'
+          }}>
+            CẬP NHẬT
+          </Typography>
+          <List sx={{ px: 0, py: 0 }}>
+            {onlineMenuItems.map((item, idx) => {
+              const selected = isMenuItemActive(item.path);
+              const Icon = item.icon;
+              const isLast = idx === onlineMenuItems.length - 1;
+              const badgeValue = item.badgeKey ? sidebarCounts[item.badgeKey] : 0;
+              return (
+                <Tooltip key={item.id} title={isCollapsed ? item.label : ""} placement="right">
+                  <ListItem disablePadding sx={{ mb: isLast ? 0 : 0.5 }}>
+                    <ListItemButton
+                      component={Link}
+                      to={item.path}
+                      selected={selected}
+                      onClick={() => isMobile && setMobileOpen(false)}
+                      sx={listItemSx(selected, isCollapsed, isLast)}
+                    >
+                      <ListItemIcon>
+                        <Badge badgeContent={badgeValue} color="error" max={99} invisible={!isCollapsed || badgeValue === 0}>
+                          <Icon fontSize="medium" />
+                        </Badge>
+                      </ListItemIcon>
+                      <ListItemText primary={item.label} />
+                      {badgeValue > 0 && !isCollapsed && (
+                        <Box sx={{ minWidth: 22, height: 22, px: 0.75, borderRadius: 11, bgcolor: 'error.main', color: '#fff', fontSize: '0.7rem', fontWeight: 800, display: 'grid', placeItems: 'center' }}>
+                          {badgeValue > 99 ? '99+' : badgeValue}
+                        </Box>
+                      )}
+                    </ListItemButton>
+                  </ListItem>
+                </Tooltip>
+              );
+            })}
+          </List>
+
+          {/* User Profile & Logout */}
+          {isAuthenticated && (
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: isCollapsed ? 0 : 2, 
+              mt: 1.5,
+              px: isCollapsed ? 0 : 1.5,
+              py: isCollapsed ? 0 : 1,
+              borderRadius: '16px',
+              border: '1px solid rgba(255,255,255,0.06)',
+              transition: 'all 0.3s ease'
+            }}>
+              <Avatar 
+                src={avatar}
+                sx={{ 
+                  width: isCollapsed ? 44 : 44, 
+                  height: isCollapsed ? 44 : 44, 
+                  flexShrink: 0,
+                  borderRadius: '14px',
+                  background: 'linear-gradient(135deg, #00A84E 0%, #006b31 100%)',
                   fontWeight: 700,
-                  fontSize: '0.75rem',
-                  '&:hover': { bgcolor: '#E65100' },
+                  fontSize: '1.1rem',
+                  color: '#fff',
+                  position: 'relative',
+                  '&::after': {
+                    content: '""',
+                    position: 'absolute',
+                    bottom: 2,
+                    right: 2,
+                    width: 12,
+                    height: 12,
+                    bgcolor: '#4caf50',
+                    borderRadius: '50%',
+                    border: '2px solid #121212'
+                  }
                 }}
               >
-                Upgrade
-              </Button>
+                {initial}
+              </Avatar>
+              <Box sx={{ 
+                flex: 1, 
+                minWidth: 0, 
+                opacity: isCollapsed ? 0 : 1, 
+                width: isCollapsed ? 0 : 'auto', 
+                overflow: 'hidden',
+                transition: 'all 0.3s ease'
+              }}>
+                <Typography sx={{ fontSize: '0.95rem', fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                  {displayName}
+                </Typography>
+                <Typography sx={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.5)', mt: 0.2 }}>
+                  {profileData?.email || user?.email || 'user@aireak.com'}
+                </Typography>
+              </Box>
+              {!isCollapsed && (
+                <Tooltip title={t('logout') || "Đăng xuất"} placement="top">
+                  <IconButton 
+                    onClick={handleLogout} 
+                    sx={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: '12px',
+                      color: 'rgba(255,255,255,0.6)',
+                      transition: 'all 0.25s ease',
+                      '&:hover': { 
+                        bgcolor: 'rgba(255, 82, 82, 0.15)',
+                        color: ACCENT_RED,
+                      },
+                    }}
+                  >
+                    <LogoutIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
             </Box>
-          </Box>
+          )}
+        </Box>
+
+        {/* Sidebar Toggle Button on Right Edge */}
+        {!isMobile && (
+          <IconButton
+            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            sx={{
+              position: 'absolute',
+              right: 0,
+              top: '50%',
+              transform: 'translateY(-50%) translateX(50%)',
+              width: 32,
+              height: 56,
+              borderRadius: '0 12px 12px 0',
+              bgcolor: '#121212',
+              borderRight: '1px solid rgba(255,255,255,0.06)',
+              borderTop: '1px solid rgba(255,255,255,0.06)',
+              borderBottom: '1px solid rgba(255,255,255,0.06)',
+              color: 'rgba(255,255,255,0.6)',
+              zIndex: 20,
+              transition: 'all 0.25s ease',
+              '&:hover': { 
+                bgcolor: '#1e1e1e',
+                color: '#fff',
+              },
+            }}
+          >
+            {isSidebarCollapsed ? <ChevronRight fontSize="small" /> : <ChevronLeft fontSize="small" />}
+          </IconButton>
         )}
       </Box>
     );
   };
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: BG_PAGE, display: 'flex', flexDirection: 'column' }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', display: 'flex', flexDirection: 'column' }}>
       <AppBar
         position="sticky"
         elevation={0}
         sx={{
-          bgcolor: BG_NAV,
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          bgcolor: 'background.paper',
+          borderBottom: '1px solid',
+          borderColor: 'divider',
           zIndex: (theme) => theme.zIndex.drawer + 1,
         }}
       >
@@ -318,56 +587,28 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             component={Link}
             to="/social"
             sx={{
-              display: 'flex',
+              display: { xs: 'flex', md: 'none' },
               alignItems: 'center',
               gap: 1.5,
               textDecoration: 'none',
               flexShrink: 0,
             }}
           >
-            <Movie sx={{ color: ACCENT_ORANGE, fontSize: { xs: 24, md: 28 } }} />
+            <Movie sx={{ color: ACCENT_GREEN, fontSize: 26 }} />
             <Typography
               noWrap
               sx={{
-                color: '#ffffff',
+                color: 'text.primary',
                 fontWeight: 800,
-                letterSpacing: '0.05em',
-                fontSize: { xs: '0.9rem', sm: '1.05rem' },
-                display: { xs: 'none', sm: 'block' },
+                letterSpacing: '-0.02em',
+                fontSize: '1.05rem',
               }}
             >
               AIREAK
             </Typography>
           </Box>
 
-          <Box sx={{ flex: 1, display: { xs: 'none', md: 'flex' }, justifyContent: 'center', alignItems: 'center' }}>
-            <Tooltip title={t('moduleSocial')}>
-              <IconButton component={Link} to="/social" sx={navIconSx(activeModule === 'social')}>
-                <SocialIcon />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title={t('moduleMovie')}>
-              <IconButton component={Link} to="/movie" sx={navIconSx(activeModule === 'movie')}>
-                <Movie />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title={t('moduleSchedule')}>
-              <IconButton component={Link} to="/schedule" sx={navIconSx(activeModule === 'schedule')}>
-                <ScheduleIcon />
-              </IconButton>
-            </Tooltip>
-            <Divider orientation="vertical" flexItem sx={{ mx: 2, my: 1.5, borderColor: 'rgba(255,255,255,0.1)' }} />
-            <Tooltip title={t('messages')}>
-              <IconButton component={Link} to="/social/chat" sx={navIconSx(location.pathname.includes('/chat'))}>
-                <MailIcon />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title={t('profile')}>
-              <IconButton component={Link} to="/social/profile" sx={navIconSx(location.pathname.includes('/profile'))}>
-                <ProfileIcon />
-              </IconButton>
-            </Tooltip>
-          </Box>
+          <Box sx={{ flexGrow: 1 }} />
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             {!isAuthenticated ? (
@@ -377,9 +618,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                   onClick={() => navigate('/login')}
                   sx={{
                     ...pillButtonSx,
-                    bgcolor: ACCENT_ORANGE,
+                    bgcolor: ACCENT_GREEN,
                     color: '#fff',
-                    '&:hover': { bgcolor: '#E65100' },
+                    '&:hover': { bgcolor: '#008F41' },
                   }}
                 >
                   {t('login') || 'Login'}
@@ -387,49 +628,30 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 <Button
                   onClick={() => navigate('/register')}
                   sx={{
-                    color: 'rgba(255, 255, 255, 0.7)',
+                    color: 'text.secondary',
                     textTransform: 'none',
                     fontWeight: 600,
-                    '&:hover': { color: '#fff' },
+                    '&:hover': { color: 'text.primary' },
                   }}
                 >
                   {t('register') || 'Register'}
                 </Button>
               </Box>
             ) : (
-              <>
-                <IconButton sx={{ color: 'rgba(255,255,255,0.7)' }}>
-                  <ThemeIcon fontSize="small" />
-                </IconButton>
-                <IconButton sx={{ color: 'rgba(255,255,255,0.7)' }}>
-                  <EditIcon fontSize="small" />
-                </IconButton>
-                <Typography
-                  sx={{
-                    color: 'rgba(255,255,255,0.5)',
-                    fontSize: '0.8rem',
-                    cursor: 'pointer',
-                    '&:hover': { color: '#fff' },
-                    display: { xs: 'none', sm: 'block' },
+              <Tooltip title={themeMode === 'dark' ? t('lightMode') || "Chế độ sáng" : t('darkMode') || "Chế độ tối"}>
+                <IconButton 
+                  onClick={() => dispatch(toggleThemeMode())}
+                  sx={{ 
+                    color: 'text.secondary',
+                    width: 44,
+                    height: 44,
+                    borderRadius: '12px',
+                    '&:hover': { bgcolor: 'rgba(0,168,78,0.08)' }
                   }}
                 >
-                  无障碍
-                </Typography>
-
-                {user?.roles.some((r) => r.name === 'ADMIN') && (
-                  <IconButton
-                    onClick={() => navigate('/admin')}
-                    sx={{ color: ACCENT_ORANGE }}
-                    title={t('adminPage')}
-                  >
-                    <AdminPanelSettings />
-                  </IconButton>
-                )}
-
-                <IconButton onClick={handleLogout} sx={{ color: ACCENT_RED }}>
-                  <Logout fontSize="small" />
+                  {themeMode === 'dark' ? <ThemeIcon fontSize="medium" /> : <DarkModeIcon fontSize="medium" />}
                 </IconButton>
-              </>
+              </Tooltip>
             )}
           </Box>
         </Toolbar>
@@ -458,7 +680,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             display: { md: 'none' },
             '& .MuiDrawer-paper': {
               width: SIDEBAR_EXPANDED_WIDTH,
-              bgcolor: BG_NAV,
+              background: '#121212',
+              borderRight: '1px solid rgba(255,255,255,0.06)'
             },
           }}
         >
@@ -471,7 +694,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             flex: 1,
             minWidth: 0,
             p: { xs: 2, md: 3 },
-            bgcolor: BG_PAGE,
+            bgcolor: 'background.default',
             minHeight: `calc(100vh - ${NAVBAR_HEIGHT}px)`,
           }}
         >
