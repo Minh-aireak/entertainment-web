@@ -28,8 +28,23 @@ public class ChatMessageDoc {
     @Field(type = FieldType.Text, analyzer = "standard")
     String content;
 
+    @Field(type = FieldType.Keyword)
+    String messageType;
+
+    @Field(type = FieldType.Keyword)
+    String messageStatus;
+
+    @Field(type = FieldType.Keyword)
+    String attachmentFileUrl;
+
+    @Field(type = FieldType.Keyword)
+    String replyToMessageId;
+
     @Field(type = FieldType.Date)
     Instant createdAt;
+
+    @Field(type = FieldType.Date)
+    Instant modifiedAt;
 
     @Field(type = FieldType.Long)
     long seq;

@@ -28,6 +28,10 @@ public class ConversationDirect extends Conversation{
                 .id(c.getId())
                 .type(c.getType())
                 .createdDate(c.getCreatedDate())
-                .modifiedDate(c.getModifiedDate());
+                .modifiedDate(c.getModifiedDate())
+                .totalSeq(c.getTotalSeq())
+                .userIds(c.getUserIds())
+                .lastMessage(c.getLastMessage())
+                .deleted(c.isDeleted());
     }
 }

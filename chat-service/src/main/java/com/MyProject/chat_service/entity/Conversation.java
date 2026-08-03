@@ -1,5 +1,6 @@
 package com.MyProject.chat_service.entity;
 
+import com.MyProject.chat_service.enums.ConversationType;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;

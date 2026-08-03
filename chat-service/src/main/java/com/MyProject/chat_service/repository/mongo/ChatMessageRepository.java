@@ -23,5 +23,9 @@ public interface ChatMessageRepository extends MongoRepository<ChatMessage, Stri
 
     long countByConversationIdAndSeqGreaterThan(String conversationId, long lastSeenSeq);
 
-    Optional<ChatMessage> findByClientMessageId(String clientMessageId);
+    Optional<ChatMessage> findByClientMessageIdAndSenderIdAndConversationId(
+            String clientMessageId,
+            String senderId,
+            String conversationId
+    );
 }

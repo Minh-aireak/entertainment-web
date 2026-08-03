@@ -36,13 +36,4 @@ public class ConversationRepositoryImpl implements ConversationRepositoryCustom 
                 .set("lastMessage", content);
         mongoTemplate.updateFirst(query, update, Conversation.class);
     }
-
-    @Override
-    public void deleteLastMessage(String conversationId, String content) {
-        Query query = new Query(Criteria.where("_id").is(conversationId));
-        Update update = new Update()
-                .set("lastMessage", content)
-                .set("deleted", true);
-        mongoTemplate.updateFirst(query, update, Conversation.class);
-    }
 }

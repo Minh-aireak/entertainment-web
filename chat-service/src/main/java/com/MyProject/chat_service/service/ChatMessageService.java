@@ -10,34 +10,38 @@ import com.MyProject.chat_service.dto.request.ChatMessageDeleteRequest;
 import com.MyProject.chat_service.dto.request.ChatMessageUpdateRequest;
 import com.MyProject.chat_service.dto.response.UnreadCountResponse;
 import com.MyProject.chat_service.entity.*;
+import com.MyProject.chat_service.enums.MessageStatus;
+import com.MyProject.chat_service.enums.MessageType;
 import com.MyProject.chat_service.repository.mongo.OutboxRepository;
 import com.MyProject.chat_service.repository.elasticsearch.ChatMessageElasticRepository;
 import com.MyProject.chat_service.repository.mongo.ConversationMemberRepository;
-import com.MyProject.common.dto.request.BulkUserProfileRequest;
 import com.MyProject.common.dto.response.PageResponse;
 import com.MyProject.chat_service.exception.AppException;
-import com.MyProject.chat_service.exception.ErrorCode;
+import com.MyProject.chat_service.enums.ErrorCode;
 import com.MyProject.chat_service.mapper.ChatMessageMapper;
 import com.MyProject.chat_service.repository.mongo.ChatMessageRepository;
 import com.MyProject.chat_service.repository.mongo.ConversationRepository;
-import com.MyProject.chat_service.repository.httpclient.ProfileClient;
 import com.MyProject.chat_service.dto.response.ChatMessageResponse;
 import com.MyProject.common.dto.response.UserProfileResponse;
 import com.MyProject.common.redis.RedisService;
+import com.MyProject.common.security.SecurityUtils;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.util.*;
@@ -50,7 +54,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ChatMessageService {
-    ProfileClient profileClient;
+    ChatProfileExternalService chatProfileExternalService;
     ChatMessageMapper chatMessageMapper;
     ConversationRepository conversationRepository;
     ChatMessageRepository chatMessageRepository;
@@ -58,7 +62,7 @@ public class ChatMessageService {
     ChatMessageElasticRepository chatMessageElasticRepository;
     RedisService redisService;
     OutboxRepository outboxRepository;
-    com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    ObjectMapper objectMapper;
 
     private String getLastMessageCacheKey(String conversationId) {
         return "chat:last-message:" + conversationId;
@@ -72,17 +76,12 @@ public class ChatMessageService {
         return "chat:unread:" + userId + ":" + conversationId;
     }
 
-    private String getProfileCacheKey(String userId) {
-        return "profile:user:" + userId;
+    private String getConversationCacheKey(String conversationId) {
+        return "chat:conversation:" + conversationId;
     }
 
-    private String getUserId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (!(authentication instanceof JwtAuthenticationToken)) {
-            throw new AppException(ErrorCode.UNAUTHORIZED);
-        }
-        Jwt jwt = ((JwtAuthenticationToken) authentication).getToken();
-        return jwt.getClaim("userId");
+    private String getProfileCacheKey(String userId) {
+        return "profile:user:" + userId;
     }
 
     private ChatMessage handleMessageContent(String userId, ChatMessageCreateRequest request, String clientMessageId){
@@ -122,40 +121,61 @@ public class ChatMessageService {
         return "chat:unread:total:" + userId;
     }
 
-    private void updateSeen(String conversationId, ChatMessage savedMessage, String userId) {
+    private void runAfterCommit(Runnable action) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            action.run();
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                action.run();
+            }
+        });
+    }
+
+    private void syncSeenCache(String conversationId, ChatMessage savedMessage, String userId) {
         String unreadKey = getUnreadCountCacheKey(userId, conversationId);
         String totalUnreadKey = getTotalUnreadCacheKey(userId);
 
         try {
-            // Atomic reset using Lua script
             redisService.resetUnreadCount(unreadKey, totalUnreadKey);
         } catch (Exception e) {
             log.warn("Failed to reset unread counters in Redis for user {}", userId);
         }
 
-        // Redis: last seen pointer for read receipts (Store SEQ instead of content for better logic)
-        redisService.setWithExpiration(
-                getReadCacheKey(userId, conversationId),
-                String.valueOf(savedMessage.getSeq()),
-                12,
-                TimeUnit.HOURS
-        );
+        try {
+            redisService.setWithExpiration(
+                    getReadCacheKey(userId, conversationId),
+                    String.valueOf(savedMessage.getSeq()),
+                    12,
+                    TimeUnit.HOURS
+            );
+        } catch (Exception e) {
+            log.warn("Failed to update read pointer in Redis for user {}", userId);
+        }
+    }
 
-        // DB update
-        conversationMemberRepository
+    private void scheduleSeenCacheSync(String conversationId, ChatMessage savedMessage, String userId) {
+        runAfterCommit(() -> syncSeenCache(conversationId, savedMessage, userId));
+    }
+
+    private ConversationMember updateSeenState(String conversationId, ChatMessage savedMessage, String userId) {
+        ConversationMember member = conversationMemberRepository
                 .findByConversationIdAndUserId(conversationId, userId)
-                .ifPresent(member -> {
-                    member.setLastSeenMessageId(savedMessage.getId());
-                    member.setLastSeenSeq(savedMessage.getSeq());
-                    member.setLastSeenAt(Instant.now());
-                    conversationMemberRepository.save(member);
-                });
+                .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_MEMBER_NOT_FOUND));
+
+        member.setLastSeenMessageId(savedMessage.getId());
+        member.setLastSeenSeq(savedMessage.getSeq());
+        member.setLastSeenAt(Instant.now());
+        return conversationMemberRepository.save(member);
     }
 
     @Transactional
     public ChatMessageResponse createChatMessage(ChatMessageCreateRequest request) {
 
-        String userId = getUserId();
+        String userId = SecurityUtils.getCurrentUserId();
 
         // 1. Efficiently validate membership before any state change
         if (!conversationMemberRepository.existsByConversationIdAndUserId(request.getConversationId(), userId)) {
@@ -164,10 +184,16 @@ public class ChatMessageService {
 
         // 2. Idempotency check: If clientMessageId is provided, check if it already exists
         if (request.getClientMessageId() != null && !request.getClientMessageId().isBlank()) {
-            Optional<ChatMessage> existing = chatMessageRepository.findByClientMessageId(request.getClientMessageId());
+            Optional<ChatMessage> existing = chatMessageRepository.findByClientMessageIdAndSenderIdAndConversationId(
+                    request.getClientMessageId(),
+                    userId,
+                    request.getConversationId()
+            );
             if (existing.isPresent()) {
                 log.info("Duplicate message detected with clientMessageId: {}", request.getClientMessageId());
-                return chatMessageMapper.toChatMessageResponse(existing.get());
+                ChatMessageResponse duplicateResponse = chatMessageMapper.toChatMessageResponse(existing.get());
+                duplicateResponse.setMe(true);
+                return duplicateResponse;
             }
         }
 
@@ -187,47 +213,62 @@ public class ChatMessageService {
         // 4. Assign the ACTUAL seq returned from DB
         chatMessage.setSeq(conversation.getTotalSeq());
         
-        var savedMessage = chatMessageRepository.save(chatMessage);
+        ChatMessage savedMessage;
+        try {
+            savedMessage = chatMessageRepository.save(chatMessage);
+        } catch (DuplicateKeyException duplicateKeyException) {
+            if (request.getClientMessageId() != null && !request.getClientMessageId().isBlank()) {
+                return chatMessageRepository.findByClientMessageIdAndSenderIdAndConversationId(
+                                request.getClientMessageId(),
+                                userId,
+                                request.getConversationId()
+                        )
+                        .map(existing -> {
+                            ChatMessageResponse duplicateResponse = chatMessageMapper.toChatMessageResponse(existing);
+                            duplicateResponse.setMe(true);
+                            return duplicateResponse;
+                        })
+                        .orElseThrow(() -> duplicateKeyException);
+            }
+            throw duplicateKeyException;
+        }
         var response = chatMessageMapper.toChatMessageResponse(savedMessage);
 
         // 5. Save to Outbox for CDC to elasticsearch
         publishMessageEvent("chat.message.created", response);
 
-        // 6. Save to Outbox for CDC to notification service
+        // Save to Outbox for CDC to notification service
         List<String> otherUserIds = conversation.getUserIds()
                 .stream()
                 .filter(id -> !id.equals(userId))
                 .toList();
         saveToOutbox(
                 response.getId(),
-                "chat.message.created.notification",
+                "notification.events",
                 NotificationEvent.builder()
-                        .typeNotification(TypeNotification.NEW_CHAT)
+                        .eventId(java.util.UUID.randomUUID().toString())
+                        .typeNotification("NEW_CHAT")
                         .userIdSender(response.getSenderId())
                         .toUserIds(otherUserIds)
                         .build());
 
         // 7. Update sender seen (Pointer management)
-        updateSeen(request.getConversationId(), savedMessage, userId);
+        updateSeenState(request.getConversationId(), savedMessage, userId);
+        scheduleSeenCacheSync(request.getConversationId(), savedMessage, userId);
 
-        // 8. Update last message cache for conversation
-        updateLastMessageCache(request.getConversationId(), response.getContent());
+        // 8. Refresh caches only after transaction commits successfully
+        runAfterCommit(() -> {
+            updateLastMessageCache(request.getConversationId(), response.getContent());
+            invalidateConversationCache(request.getConversationId());
+        });
         response.setMe(true);
 
         return response;
     }
 
     public PageResponse<ChatMessageResponse> getMyChatMessages(String conversationId, int page, int size) {
-        String userId = getUserId();
-
-        var conversation = conversationRepository.findById(conversationId)
-                .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND));
-
-        var participants = conversationMemberRepository.findByUserId(userId);
-        boolean isParticipant = participants.stream()
-                .anyMatch(p -> userId.equals(p.getUserId()));
-
-        if (!isParticipant) {
+        String userId = SecurityUtils.getCurrentUserId();
+        if (!conversationMemberRepository.existsByConversationIdAndUserId(conversationId, userId)) {
             throw new AppException(ErrorCode.USERID_NOT_FOUND);
         }
 
@@ -282,15 +323,20 @@ public class ChatMessageService {
                 .toList();
 
         // MultiGet 1 lần thay vì loop
-        List<Object> cachedValues = redisService.multiGet(keys);
+        List<UserProfileResponse> cachedValues = Collections.nCopies(keys.size(), null);
+        try {
+            cachedValues = redisService.multiGet(keys, new TypeReference<UserProfileResponse>() {});
+        } catch (Exception e) {
+            log.error("Failed to multiGet profiles from cache for keys: {}", keys, e);
+        }
 
         Map<String, UserProfileResponse> result = new HashMap<>();
         List<String> missingIds = new ArrayList<>();
 
         for (int i = 0; i < senderIdList.size(); i++) {
-            Object cached = cachedValues.get(i);
+            UserProfileResponse cached = (i < cachedValues.size()) ? cachedValues.get(i) : null;
             if (Objects.nonNull(cached)) {
-                result.put(senderIdList.get(i), (UserProfileResponse) cached);
+                result.put(senderIdList.get(i), cached);
             } else {
                 missingIds.add(senderIdList.get(i));
             }
@@ -299,16 +345,17 @@ public class ChatMessageService {
         // Fetch missing từ Profile Service
         if (!missingIds.isEmpty()) {
             try {
-                Map<String, UserProfileResponse> fetchedProfiles = profileClient.getBulkUserProfiles(
-                                BulkUserProfileRequest.builder()
-                                        .userIds(new HashSet<>(missingIds))
-                                        .build())
-                        .getResult();
+                Map<String, UserProfileResponse> fetchedProfiles =
+                        chatProfileExternalService.getBulkUserProfilesForApi(new HashSet<>(missingIds));
 
                 fetchedProfiles.forEach((userId, profile) -> {
                     result.put(userId, profile);
-                    redisService.setWithExpiration(
-                            getProfileCacheKey(userId), profile, 1, TimeUnit.HOURS);
+                    try {
+                        redisService.setWithExpiration(
+                                getProfileCacheKey(userId), profile, 1, TimeUnit.HOURS);
+                    } catch (Exception e) {
+                        log.error("Failed to set cache for profile userId: {}", userId, e);
+                    }
                 });
             } catch (Exception e) {
                 log.error("Failed to fetch bulk profiles for ids: {}", missingIds, e);
@@ -322,18 +369,30 @@ public class ChatMessageService {
 
         String key = getLastMessageCacheKey(conversationId);
 
-        redisService.setWithExpiration(
-                key,
-                contentResponse,
-                12,
-                TimeUnit.HOURS
-        );
+        try {
+            redisService.setWithExpiration(
+                    key,
+                    contentResponse,
+                    12,
+                    TimeUnit.HOURS
+            );
+        } catch (Exception e) {
+            log.warn("Failed to update last message cache for conversation: {}", conversationId, e);
+        }
+    }
+
+    private void invalidateConversationCache(String conversationId) {
+        try {
+            redisService.delete(getConversationCacheKey(conversationId));
+        } catch (Exception e) {
+            log.warn("Failed to invalidate conversation cache for conversation: {}", conversationId, e);
+        }
     }
 
     @Transactional
     public void deleteChatMessage(ChatMessageDeleteRequest request) {
 
-        String userId = getUserId();
+        String userId = SecurityUtils.getCurrentUserId();
 
         ChatMessage chatMessage = chatMessageRepository.findById(request.getChatMessageId())
                 .orElseThrow(() -> new AppException(ErrorCode.MESSAGE_NOT_FOUND));
@@ -359,35 +418,35 @@ public class ChatMessageService {
         // 4. Update Conversation lastMessage if this was the last one
         Optional<ChatMessage> lastMessage = chatMessageRepository.findTopByConversationIdOrderByCreatedDateDesc(conversationId);
         if (lastMessage.isPresent() && lastMessage.get().getId().equals(chatMessage.getId())) {
-            conversationRepository.deleteLastMessage(
+            conversationRepository.updateLastMessage(
                     conversationId,
                     chatMessage.getMessageType().getDefaultContent());
 
-            updateLastMessageCache(conversationId, chatMessage.getMessageType().getDefaultContent());
+            runAfterCommit(() -> {
+                updateLastMessageCache(conversationId, chatMessage.getMessageType().getDefaultContent());
+                invalidateConversationCache(conversationId);
+            });
 
             // 5. Save to Outbox for Conversation sync to ES
-            try {
-                outboxRepository.save(Outbox.builder()
-                        .aggregateId(chatMessage.getId())
-                        .topic("chat.conversation.deleted")
-                        .payload(objectMapper.writeValueAsString(ConversationDoc.builder()
-                                .id(conversationId)
-                                .lastMessage(chatMessage.getMessageType().getDefaultContent())
-                                .deleted(true)
-                                .build()))
-                        .build());
-            } catch (Exception e) {
-                log.error("Failed to serialize conversation update for outbox", e);
-            }
+            saveToOutbox(
+                    chatMessage.getId(),
+                    "chat.conversation.updated",
+                    ConversationDoc.builder()
+                            .id(conversationId)
+                            .lastMessage(chatMessage.getMessageType().getDefaultContent())
+                            .build()
+            );
         }
     }
 
     @Transactional
     public ChatMessageResponse updateChatMessage(ChatMessageUpdateRequest request) {
+        String userId = SecurityUtils.getCurrentUserId();
+
         var chatMessage = chatMessageRepository.findById(request.getChatMessageId())
                 .orElseThrow(() -> new AppException(ErrorCode.MESSAGE_NOT_FOUND));
 
-        if (!chatMessage.getSenderId().equals(getUserId())) {
+        if (!chatMessage.getSenderId().equals(userId)) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
@@ -406,21 +465,20 @@ public class ChatMessageService {
         Optional<ChatMessage> lastMessage = chatMessageRepository.findTopByConversationIdOrderByCreatedDateDesc(chatMessage.getConversationId());
         if (lastMessage.isPresent() && lastMessage.get().getId().equals(chatMessage.getId())) {
             conversationRepository.updateLastMessage(chatMessage.getConversationId(), request.getContent());
-            updateLastMessageCache(chatMessage.getConversationId(), request.getContent());
+            runAfterCommit(() -> {
+                updateLastMessageCache(chatMessage.getConversationId(), request.getContent());
+                invalidateConversationCache(chatMessage.getConversationId());
+            });
 
             // 4. Save to Outbox for Conversation sync to ES
-            try {
-                outboxRepository.save(Outbox.builder()
-                        .aggregateId(chatMessage.getId())
-                        .topic("chat.conversation.updated")
-                        .payload(objectMapper.writeValueAsString(ConversationDoc.builder()
-                                .id(chatMessage.getConversationId())
-                                .lastMessage(request.getContent())
-                                .build()))
-                        .build());
-            } catch (Exception e) {
-                log.error("Failed to serialize conversation update for outbox", e);
-            }
+            saveToOutbox(
+                    chatMessage.getId(),
+                    "chat.conversation.updated",
+                    ConversationDoc.builder()
+                            .id(chatMessage.getConversationId())
+                            .lastMessage(request.getContent())
+                            .build()
+            );
         }
 
         return response;
@@ -429,7 +487,10 @@ public class ChatMessageService {
     @Transactional
     public void seenAt(String conversationId) {
 
-        String userId = getUserId();
+        String userId = SecurityUtils.getCurrentUserId();
+        if (!conversationMemberRepository.existsByConversationIdAndUserId(conversationId, userId)) {
+            throw new AppException(ErrorCode.CONVERSATION_MEMBER_NOT_FOUND);
+        }
 
         // 1. check conversation + participant
         Conversation conversation = conversationRepository.findById(conversationId)
@@ -443,12 +504,8 @@ public class ChatMessageService {
 
         String lastMessageId = lastMessage.get().getId();
 
-        // Update user seen
-        updateSeen(conversationId, lastMessage.get(), userId);
-
-        // 3. Real-time notification: Notify others that this user has seen the message
-        ConversationMember currentMember = conversationMemberRepository.findByConversationIdAndUserId(conversationId, userId)
-                .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_MEMBER_NOT_FOUND));
+        // Update user seen in DB. Cache is synchronized only after commit to avoid rollback drift.
+        ConversationMember currentMember = updateSeenState(conversationId, lastMessage.get(), userId);
 
         List<String> receiverIds = conversationMemberRepository.findByConversationIdAndUserIdNot(conversationId, userId)
                 .stream()
@@ -456,81 +513,85 @@ public class ChatMessageService {
                 .toList();
 
         if (!receiverIds.isEmpty()) {
-            try {
-                outboxRepository.save(Outbox.builder()
-                        .aggregateId(currentMember.getId())
-                        .topic("chat.conversation.seen")
-                        .payload(objectMapper.writeValueAsString(ConversationSeenEvent.builder()
-                                .eventId(UUID.randomUUID().toString())
-                                .eventType("chat.conversation.seen")
-                                .timestamp(Instant.now())
-                                .conversationId(conversationId)
-                                .userId(userId)
-                                .lastSeenMessageId(lastMessageId)
-                                .receiverIds(receiverIds)
-                                .build()))
-                        .build());
-            } catch (Exception e) {
-                log.error("Failed to publish seen event to outbox", e);
-            }
+            saveToOutbox(
+                    currentMember.getId(),
+                    "chat.conversation.seen",
+                    ConversationSeenEvent.builder()
+                            .eventId(UUID.randomUUID().toString())
+                            .eventType("chat.conversation.seen")
+                            .timestamp(Instant.now())
+                            .conversationId(conversationId)
+                            .userId(userId)
+                            .lastSeenMessageId(lastMessageId)
+                            .receiverIds(receiverIds)
+                            .build()
+            );
         }
+
+        scheduleSeenCacheSync(conversationId, lastMessage.get(), userId);
     }
 
     public UnreadCountResponse getUnreadCount() {
-        String userId = getUserId();
+        String userId = SecurityUtils.getCurrentUserId();
         String totalKey = getTotalUnreadCacheKey(userId);
+        Long totalObj = redisService.get(totalKey, new TypeReference<Long>() {});
 
-        // 1. Try to get total from Redis first
-        Object totalObj = redisService.get(totalKey);
-        
         List<ConversationMember> members = conversationMemberRepository.findByUserId(userId);
         Map<String, Long> data = new HashMap<>();
-        
-        boolean hasTotalInRedis = totalObj != null;
-        long total = hasTotalInRedis ? Long.parseLong(totalObj.toString()) : 0L;
+        long computedTotal = 0L;
+        Map<String, Conversation> conversationsById = conversationRepository.findAllById(
+                        members.stream()
+                                .map(ConversationMember::getConversationId)
+                                .collect(Collectors.toSet())
+                ).stream()
+                .collect(Collectors.toMap(Conversation::getId, conversation -> conversation));
+        Map<String, Long> lastSeenSeqByConversation = new HashMap<>();
 
-        for (ConversationMember m : members) {
-            Object convUnreadObj = redisService.get(getUnreadCountCacheKey(userId, m.getConversationId()));
-            if (convUnreadObj != null) {
-                data.put(m.getConversationId(), Long.parseLong(convUnreadObj.toString()));
-            } else {
-                // Fallback to DB and warm cache
-                long unread = calculateAndCacheUnread(userId, m);
-                data.put(m.getConversationId(), unread);
-                if (!hasTotalInRedis) total += unread;
-            }
+        for (ConversationMember member : members) {
+            long lastSeenSeq = member.getLastSeenSeq() == null ? 0L : member.getLastSeenSeq();
+            lastSeenSeqByConversation.merge(
+                    member.getConversationId(),
+                    lastSeenSeq,
+                    Math::max
+            );
         }
 
-        if (!hasTotalInRedis) {
-            redisService.set(totalKey, total);
+        for (Map.Entry<String, Long> entry : lastSeenSeqByConversation.entrySet()) {
+            String conversationId = entry.getKey();
+            String unreadKey = getUnreadCountCacheKey(userId, conversationId);
+
+            Conversation conversation = conversationsById.get(conversationId);
+            long lastSeenSeq = entry.getValue();
+            long authoritativeUnread = conversation == null
+                    ? 0L
+                    : Math.max(0, conversation.getTotalSeq() - lastSeenSeq);
+
+            Long cachedUnread = redisService.get(unreadKey, new TypeReference<Long>() {});
+            if (!Objects.equals(cachedUnread, authoritativeUnread)) {
+                redisService.setWithExpiration(unreadKey, authoritativeUnread, 12, TimeUnit.HOURS);
+            }
+
+            data.put(conversationId, authoritativeUnread);
+            computedTotal += authoritativeUnread;
+        }
+
+        if (!Objects.equals(totalObj, computedTotal)) {
+            redisService.setWithExpiration(totalKey, computedTotal, 12, TimeUnit.HOURS);
         }
 
         return UnreadCountResponse.builder()
                 .data(data)
-                .total(total)
+                .total(computedTotal)
                 .build();
     }
 
-    private long calculateAndCacheUnread(String userId, ConversationMember m) {
-        String conversationId = m.getConversationId();
-        Long lastSeenSeq = m.getLastSeenSeq();
-        
-        Conversation conversation = conversationRepository.findById(conversationId).orElse(null);
-        if (conversation == null) return 0L;
-
-        long totalSeq = conversation.getTotalSeq();
-        long unread = (lastSeenSeq == null) ? totalSeq : Math.max(0, totalSeq - lastSeenSeq);
-
-        redisService.setWithExpiration(
-                getUnreadCountCacheKey(userId, conversationId),
-                unread,
-                12,
-                TimeUnit.HOURS
-        );
-        return unread;
-    }
-
+    @CircuitBreaker(name = "chatSearchApi", fallbackMethod = "searchMessagesFallback")
     public PageResponse<ChatMessageResponse> searchMessages(String conversationId, String query, int page, int size) {
+        String userId = SecurityUtils.getCurrentUserId();
+        if (!conversationMemberRepository.existsByConversationIdAndUserId(conversationId, userId)) {
+            throw new AppException(ErrorCode.USERID_NOT_FOUND);
+        }
+
         Pageable pageable = PageRequest.of(page - 1, size, Sort.by("createdAt").descending());
         var searchResult = chatMessageElasticRepository.searchMessages(conversationId, query, pageable);
 
@@ -550,9 +611,15 @@ public class ChatMessageService {
                             .conversationId(doc.getConversationId())
                             .senderId(doc.getSenderId())
                             .content(doc.getContent())
+                            .messageType(doc.getMessageType() != null ? MessageType.valueOf(doc.getMessageType()) : null)
+                            .messageStatus(doc.getMessageStatus() != null ? MessageStatus.valueOf(doc.getMessageStatus()) : null)
+                            .attachmentFileUrl(doc.getAttachmentFileUrl())
+                            .replyToMessageId(doc.getReplyToMessageId())
                             .createdDate(doc.getCreatedAt())
+                            .modifiedDate(doc.getModifiedAt())
                             .seq(doc.getSeq())
                             .clientMessageId(doc.getClientMessageId())
+                            .me(Objects.equals(doc.getSenderId(), userId))
                             .build();
                     
                     // Fill profile info
@@ -575,15 +642,26 @@ public class ChatMessageService {
                 .build();
     }
 
-    private void publishMessageEvent(String topic, ChatMessageResponse response) {
+    public PageResponse<ChatMessageResponse> searchMessagesFallback(
+            String conversationId,
+            String query,
+            int page,
+            int size,
+            Throwable throwable
+    ) {
+        throw buildSearchFallbackException("search messages", throwable);
+    }
+
+    private void publishMessageEvent(String eventType, ChatMessageResponse response) {
         List<String> receiverIds = conversationMemberRepository
                 .findByConversationIdAndUserIdNot(response.getConversationId(), response.getSenderId())
                 .stream()
                 .map(ConversationMember::getUserId)
                 .toList();
 
-       saveToOutbox(response.getId(), topic, MessageCreatedEvent.builder()
+       saveToOutbox(response.getId(), "chat.messages", MessageCreatedEvent.builder()
                .eventId(UUID.randomUUID().toString())
+               .eventType(eventType)
                .timestamp(Instant.now())
                .producer("chat-service")
                .receiverIds(receiverIds)
@@ -599,7 +677,20 @@ public class ChatMessageService {
                     .payload(objectMapper.writeValueAsString(payload))
                     .build());
         } catch (Exception e) {
-            log.error("Failed save outbox with topic: {}", topic);
+            log.error("Failed to save outbox with topic: {}", topic, e);
+            throw new AppException(ErrorCode.OUTBOX_SAVE_FAILED);
         }
+    }
+
+    private AppException buildSearchFallbackException(String action, Throwable throwable) {
+        if (throwable instanceof AppException appException) {
+            return appException;
+        }
+        if (throwable instanceof CallNotPermittedException) {
+            log.warn("Circuit breaker is open while trying to {}.", action);
+            return new AppException(ErrorCode.SERVICE_UNAVAILABLE);
+        }
+        log.error("Fallback triggered while trying to {}.", action, throwable);
+        return new AppException(ErrorCode.SERVICE_UNAVAILABLE);
     }
 }

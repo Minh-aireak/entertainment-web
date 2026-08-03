@@ -1,4 +1,4 @@
-package com.MyProject.chat_service.entity;
+package com.MyProject.chat_service.enums;
 
 import lombok.Getter;
 

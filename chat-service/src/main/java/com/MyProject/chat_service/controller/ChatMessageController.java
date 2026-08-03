@@ -3,6 +3,8 @@ package com.MyProject.chat_service.controller;
 import com.MyProject.chat_service.dto.request.ChatMessageCreateRequest;
 import com.MyProject.chat_service.dto.request.ChatMessageDeleteRequest;
 import com.MyProject.chat_service.dto.request.ChatMessageUpdateRequest;
+import com.MyProject.chat_service.service.ChatApiRateLimitService;
+import com.MyProject.common.security.SecurityUtils;
 import com.MyProject.common.dto.response.ApiResponse;
 import com.MyProject.common.dto.response.PageResponse;
 import com.MyProject.chat_service.service.ChatMessageService;
@@ -20,9 +22,12 @@ import org.springframework.web.bind.annotation.*;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ChatMessageController {
     ChatMessageService chatMessageService;
+    ChatApiRateLimitService chatApiRateLimitService;
 
     @PostMapping
     ApiResponse<ChatMessageResponse> createChatMessage(@RequestBody @Valid ChatMessageCreateRequest request) {
+        String userId = SecurityUtils.getCurrentUserId();
+        chatApiRateLimitService.checkMessageWrite(userId, request.getConversationId());
         return ApiResponse.<ChatMessageResponse>builder()
                 .result(chatMessageService.createChatMessage(request))
                 .build();
@@ -33,6 +38,8 @@ public class ChatMessageController {
                                                                    @RequestParam String query,
                                                                    @RequestParam(defaultValue = "1") int page,
                                                                    @RequestParam(defaultValue = "10") int size) {
+        String userId = SecurityUtils.getCurrentUserId();
+        chatApiRateLimitService.checkMessageSearch(userId, conversationId);
         return ApiResponse.<PageResponse<ChatMessageResponse>>builder()
                 .result(chatMessageService.searchMessages(conversationId, query, page, size))
                 .build();
@@ -42,6 +49,8 @@ public class ChatMessageController {
     ApiResponse<PageResponse<ChatMessageResponse>> getMyChatMessages(@RequestParam String conversationId,
                                                                      @RequestParam int page,
                                                                      @RequestParam int size) {
+        String userId = SecurityUtils.getCurrentUserId();
+        chatApiRateLimitService.checkMessageRead(userId, conversationId);
         return ApiResponse.<PageResponse<ChatMessageResponse>>builder()
                 .result(chatMessageService.getMyChatMessages(conversationId, page, size))
                 .build();
@@ -49,6 +58,8 @@ public class ChatMessageController {
 
     @DeleteMapping
     ApiResponse<Void> deleteChatMessage(@RequestBody ChatMessageDeleteRequest request) {
+        String userId = SecurityUtils.getCurrentUserId();
+        chatApiRateLimitService.checkMessageDelete(userId);
         chatMessageService.deleteChatMessage(request);
         return ApiResponse.<Void>builder()
                 .build();
@@ -56,6 +67,8 @@ public class ChatMessageController {
 
     @PutMapping
     ApiResponse<ChatMessageResponse> updateChatMessage(@RequestBody @Valid ChatMessageUpdateRequest request) {
+        String userId = SecurityUtils.getCurrentUserId();
+        chatApiRateLimitService.checkMessageUpdate(userId);
         return ApiResponse.<ChatMessageResponse>builder()
                 .result(chatMessageService.updateChatMessage(request))
                 .build();
@@ -63,6 +76,8 @@ public class ChatMessageController {
 
     @PutMapping("/mark-as-seen/{conversationId}")
     ApiResponse<Void> seenAt(@PathVariable String conversationId) {
+        String userId = SecurityUtils.getCurrentUserId();
+        chatApiRateLimitService.checkSeen(userId, conversationId);
         chatMessageService.seenAt(conversationId);
         return ApiResponse.<Void>builder()
                 .build();
@@ -70,6 +85,8 @@ public class ChatMessageController {
 
     @GetMapping("/unread-count")
     ApiResponse<UnreadCountResponse> getUnreadCount() {
+        String userId = SecurityUtils.getCurrentUserId();
+        chatApiRateLimitService.checkUnreadCount(userId);
         return ApiResponse.<UnreadCountResponse>builder()
                 .result(chatMessageService.getUnreadCount())
                 .build();

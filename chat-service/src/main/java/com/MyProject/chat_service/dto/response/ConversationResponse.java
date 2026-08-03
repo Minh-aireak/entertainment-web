@@ -21,15 +21,11 @@ public class ConversationResponse {
    Instant createdDate;
    Instant modifiedDate;
 
-   // Direct chat
    String participantsHash;
-   String directName;
-   String directAvatar;
 
-   // Group chat
-   String groupName;
+   String conversationName;
    String groupOwner;
-   String groupAvatar;
+   String conversationAvatar;
 
    String lastMessage;
    boolean deleted;

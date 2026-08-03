@@ -1,7 +1,7 @@
 package com.MyProject.chat_service.dto.response;
 
-import com.MyProject.chat_service.entity.MessageStatus;
-import com.MyProject.chat_service.entity.MessageType;
+import com.MyProject.chat_service.enums.MessageStatus;
+import com.MyProject.chat_service.enums.MessageType;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.*;
 import lombok.experimental.FieldDefaults;

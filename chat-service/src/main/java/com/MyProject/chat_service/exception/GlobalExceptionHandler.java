@@ -1,6 +1,9 @@
 package com.MyProject.chat_service.exception;
 
+import com.MyProject.chat_service.enums.ErrorCode;
 import com.MyProject.common.dto.response.ApiResponse;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import jakarta.validation.ConstraintViolation;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -48,5 +51,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(value = AccessDeniedException.class)
     public ResponseEntity<ApiResponse<java.lang.Object>> handlingAccessDeniedException(AccessDeniedException exception) {
         return ErrorCode.toResponseEntity(ErrorCode.UNAUTHORIZED);
+    }
+
+    @ExceptionHandler(value = RequestNotPermitted.class)
+    public ResponseEntity<ApiResponse<Object>> handlingRequestNotPermittedException() {
+        return ErrorCode.toResponseEntity(ErrorCode.RATE_LIMIT_EXCEEDED);
+    }
+
+    @ExceptionHandler(value = CallNotPermittedException.class)
+    public ResponseEntity<ApiResponse<Object>> handlingCallNotPermittedException() {
+        return ErrorCode.toResponseEntity(ErrorCode.SERVICE_UNAVAILABLE);
     }
 }

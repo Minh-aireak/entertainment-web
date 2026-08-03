@@ -9,6 +9,8 @@ import java.util.List;
 
 @Data
 @Builder
+@lombok.NoArgsConstructor
+@lombok.AllArgsConstructor
 public class MessageCreatedEvent {
     // Metadata
     private String eventId;

@@ -9,6 +9,8 @@ import org.springframework.stereotype.Repository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.util.List;
+
 @Repository
 public interface ConversationRepository extends MongoRepository<Conversation, String>, ConversationRepositoryCustom {
     @Query("{ '_id': ?0 }")
@@ -17,4 +19,6 @@ public interface ConversationRepository extends MongoRepository<Conversation, St
 
     @Query("{ 'userIds': ?0 }")
     Page<Conversation> findAllByUserId(String userId, Pageable pageable);
+
+    List<Conversation> findByUserIdsContaining(String userId);
 }

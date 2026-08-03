@@ -1,5 +1,7 @@
 package com.MyProject.chat_service.entity;
 
+import com.MyProject.chat_service.enums.MessageStatus;
+import com.MyProject.chat_service.enums.MessageType;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import org.springframework.data.annotation.CreatedDate;
@@ -16,8 +18,8 @@ import java.time.Instant;
         def = "{'conversationId': 1, 'createdDate': -1}"
 )
 @CompoundIndex(
-        name = "client_msg_id_idx",
-        def = "{'clientMessageId': 1}",
+        name = "client_msg_sender_conv_idx",
+        def = "{'senderId': 1, 'conversationId': 1, 'clientMessageId': 1}",
         unique = true,
         sparse = true
 )

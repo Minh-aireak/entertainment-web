@@ -1,5 +1,7 @@
 package com.MyProject.chat_service.controller;
 
+import com.MyProject.chat_service.service.ChatApiRateLimitService;
+import com.MyProject.common.security.SecurityUtils;
 import com.MyProject.common.dto.response.ApiResponse;
 import com.MyProject.common.dto.response.PageResponse;
 import com.MyProject.chat_service.dto.response.ConversationResponse;
@@ -17,11 +19,14 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ConversationController {
     ConversationService conversationService;
+    ChatApiRateLimitService chatApiRateLimitService;
 
     @PostMapping
     ApiResponse<ConversationResponse> createConversation(@RequestBody List<String> ids) {
+        String userId = SecurityUtils.getCurrentUserId();
+        chatApiRateLimitService.checkConversationWrite(userId);
         return ApiResponse.<ConversationResponse>builder()
-                .result(conversationService.createConversation(ids))
+                .result(conversationService.createConversationForApi(ids))
                 .build();
     }
 
@@ -29,6 +34,8 @@ public class ConversationController {
     ApiResponse<PageResponse<ConversationResponse>> searchConversations(@RequestParam String query,
                                                                          @RequestParam(defaultValue = "1") int page,
                                                                          @RequestParam(defaultValue = "10") int size) {
+        String userId = SecurityUtils.getCurrentUserId();
+        chatApiRateLimitService.checkConversationSearch(userId);
         return ApiResponse.<PageResponse<ConversationResponse>>builder()
                 .result(conversationService.searchConversations(query, page, size))
                 .build();
@@ -37,6 +44,8 @@ public class ConversationController {
     @GetMapping("/my-conversations")
     ApiResponse<PageResponse<ConversationResponse>> getMyConversations(@RequestParam(value = "page", defaultValue = "1") int page,
                                                                         @RequestParam(value = "size", defaultValue = "10") int size) {
+        String userId = SecurityUtils.getCurrentUserId();
+        chatApiRateLimitService.checkConversationRead(userId);
         return ApiResponse.<PageResponse<ConversationResponse>>builder()
                 .result(conversationService.getMyConversations(page, size))
                 .build();
