@@ -1,0 +1,440 @@
+package com.MyProject.film.film_service.service;
+
+import com.MyProject.film.film_service.dto.request.FilmRequest;
+import com.MyProject.film.film_service.dto.response.CommentResponse;
+import com.MyProject.film.film_service.dto.response.FilmAggregateResponse;
+import com.MyProject.film.film_service.dto.response.FilmDetailResponse;
+import com.MyProject.film.film_service.dto.response.FilmResponse;
+import com.MyProject.film.film_service.dto.response.FilmSummaryResponse;
+import com.MyProject.film.film_service.entity.*;
+import com.MyProject.film.film_service.enums.FilmStatus;
+import com.MyProject.film.film_service.mapper.FilmMapper;
+import com.MyProject.film.film_service.repository.elasticsearch.FilmElasticRepository;
+import com.MyProject.film.film_service.repository.mysql.*;
+import com.MyProject.film.film_service.document.FilmDoc;
+import com.MyProject.common.redis.RedisService;
+import com.MyProject.film.film_service.exception.AppException;
+import com.MyProject.film.film_service.enums.ErrorCode;
+import com.MyProject.common.security.SecurityUtils;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.MyProject.film.film_service.dto.request.RatingRequest;
+import com.MyProject.common.dto.response.PageResponse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+
+import com.MyProject.film.film_service.dto.event.RatingEvent;
+
+@Service
+@Slf4j
+@RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+public class FilmService {
+    FilmRepository filmRepository;
+    FilmMapper filmMapper;
+    RedisService redisService;
+    OutboxRepository outboxRepository;
+    ObjectMapper objectMapper;
+    RatingRepository ratingRepository;
+    EpisodeRepository episodeRepository;
+    DirectorRepository directorRepository;
+    ActorRepository actorRepository;
+    FilmCastRepository filmCastRepository;
+    FilmElasticRepository filmElasticRepository;
+    FilmFollowService filmFollowService;
+    CommentExternalService commentExternalService;
+
+    @Transactional
+    public FilmResponse createFilm(FilmRequest request) {
+        Film film = filmMapper.toFilm(request);
+        if (request.getStatus() != null) {
+            film.setStatus(request.getStatus());
+        }
+
+        if (request.getDirectorId() != null) {
+            Director director = directorRepository.findById(request.getDirectorId())
+                    .orElseThrow(() -> new AppException(ErrorCode.DIRECTOR_NOT_FOUND));
+            film.setDirector(director);
+        }
+
+        var filmSaved = filmRepository.save(film);
+
+        if (request.getCasts() != null && !request.getCasts().isEmpty()) {
+            List<FilmCast> casts = request.getCasts().stream().map(castReq -> {
+                Actor actor = actorRepository.findById(castReq.getActorId())
+                        .orElseThrow(() -> new AppException(ErrorCode.ACTOR_NOT_FOUND));
+                return FilmCast.builder()
+                        .film(filmSaved)
+                        .actor(actor)
+                        .characterName(castReq.getCharacterName())
+                        .displayOrder(castReq.getDisplayOrder())
+                        .build();
+            }).collect(Collectors.toList());
+            filmCastRepository.saveAll(casts);
+            filmSaved.setCasts(casts);
+        }
+
+        syncFilmToElasticsearch(filmSaved);
+        
+        FilmResponse response = filmMapper.toFilmResponse(filmSaved);
+        // Invalidate caches on creation
+        invalidateFilmCaches(filmSaved.getId());
+        
+        return response;
+    }
+
+    public PageResponse<FilmSummaryResponse> getPageFilms(int page, int size) {
+        String cacheKey = "film:latest:page:" + page + ":size:" + size;
+
+        // Cache only for the first two pages
+        if (page <= 2) {
+            try {
+                PageResponse<FilmSummaryResponse> cached = redisService.get(
+                        cacheKey,
+                        new TypeReference<PageResponse<FilmSummaryResponse>>() {}
+                );
+                if (cached != null) {
+                    log.info("Cache hit for films page: {}", page);
+                    return cached;
+                }
+            } catch (Exception e) {
+                log.warn("Failed to retrieve from cache for films page: {}", page, e);
+            }
+        }
+
+        Sort sort = Sort.by(Sort.Direction.DESC, "lastUpdate");
+        Pageable pageable = PageRequest.of(page - 1, size, sort);
+        Page<Film> pageData = filmRepository.findAll(pageable);
+
+        PageResponse<FilmSummaryResponse> response = PageResponse.<FilmSummaryResponse>builder()
+                .currentPage(page)
+                .pageSize(size)
+                .totalPages(pageData.getTotalPages())
+                .totalElement(pageData.getTotalElements())
+                .data(pageData.getContent().stream()
+                        .map(filmMapper::toFilmSummaryResponse)
+                        .collect(Collectors.toList()))
+                .build();
+
+        // Save to cache only for the first two pages
+        if (page <= 2) {
+            try {
+                redisService.setWithExpiration(cacheKey, response, 10, TimeUnit.MINUTES);
+                log.info("Cached films page: {}", page);
+            } catch (Exception e) {
+                log.warn("Failed to cache films page: {}", page, e);
+            }
+        }
+
+        return response;
+    }
+
+    public FilmAggregateResponse getAggregateFilms() {
+        String hotCacheKey = "film:hot:page:1:size:10";
+        String latestCacheKey = "film:latest:page:1:size:10";
+
+        PageResponse<FilmSummaryResponse> topHotFilms = null;
+        PageResponse<FilmSummaryResponse> latestFilms = null;
+
+        try {
+            topHotFilms = redisService.get(
+                    hotCacheKey,
+                    new TypeReference<PageResponse<FilmSummaryResponse>>() {}
+            );
+
+            latestFilms = redisService.get(
+                    latestCacheKey,
+                    new TypeReference<PageResponse<FilmSummaryResponse>>() {}
+            );
+
+        } catch (Exception e) {
+            log.warn("Failed to retrieve from cache in getAggregateFilms", e);
+        }
+
+        if (topHotFilms == null) {
+            // Fetch 10 hot films to split into 2 pages of 5
+            Pageable hotPageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "followCount"));
+            Page<Film> hotFilmsData = filmRepository.findAll(hotPageable);
+            
+            List<FilmSummaryResponse> allHotFilms = hotFilmsData.getContent().stream()
+                    .map(filmMapper::toFilmSummaryResponse)
+                    .collect(Collectors.toList());
+
+            topHotFilms = PageResponse.<FilmSummaryResponse>builder()
+                    .currentPage(1)
+                    .pageSize(10)
+                    .totalPages((int) Math.ceil(hotFilmsData.getTotalElements() / 5.0))
+                    .totalElement(hotFilmsData.getTotalElements())
+                    .data(allHotFilms)
+                    .build();
+            
+            try {
+                redisService.setWithExpiration(hotCacheKey, topHotFilms, 5, TimeUnit.MINUTES);
+            } catch (Exception e) {
+                log.warn("Failed to cache hot films", e);
+            }
+        }
+
+        if (latestFilms == null) {
+            Pageable latestPageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "lastUpdate"));
+            Page<Film> latestFilmsData = filmRepository.findAll(latestPageable);
+            
+            latestFilms = PageResponse.<FilmSummaryResponse>builder()
+                    .currentPage(1)
+                    .pageSize(10)
+                    .totalPages(latestFilmsData.getTotalPages())
+                    .totalElement(latestFilmsData.getTotalElements())
+                    .data(latestFilmsData.getContent().stream()
+                            .map(filmMapper::toFilmSummaryResponse)
+                            .collect(Collectors.toList()))
+                    .build();
+            
+            try {
+                redisService.setWithExpiration(latestCacheKey, latestFilms, 1, TimeUnit.HOURS);
+            } catch (Exception e) {
+                log.warn("Failed to cache latest films", e);
+            }
+        }
+
+        return FilmAggregateResponse.builder()
+                .topHotFilms(topHotFilms)
+                .latestFilms(latestFilms)
+                .build();
+    }
+
+    @Transactional
+    public void syncFilmToElasticsearch(Film film) {
+        FilmDoc filmDoc = FilmDoc.builder()
+                .id(film.getId())
+                .title(film.getTitle())
+                .thumbnailUrl(film.getThumbnailUrl())
+                .averageRating(film.getAverageRating())
+                .ratingCount(film.getRatingCount())
+                .followCount(film.getFollowCount())
+                .episodeCount(film.getEpisodeCount())
+                .season(film.getSeason())
+                .status(film.getStatus())
+                .lastUpdate(film.getLastUpdate())
+                .build();
+
+        try {
+            String payload = objectMapper.writeValueAsString(filmDoc);
+            Outbox outbox = Outbox.builder()
+                    .aggregateId(film.getId())
+                    .topic("film.sync")
+                    .payload(payload)
+                    .build();
+            outboxRepository.save(outbox);
+            log.info("Saved outbox record for film: {}", film.getId());
+        } catch (JsonProcessingException e) {
+            log.error("Failed to serialize film doc for outbox", e);
+            throw new RuntimeException("Failed to serialize film doc", e);
+        }
+    }
+
+    @Transactional
+    public Integer rateFilm(String filmId, RatingRequest request) {
+        String userId = SecurityUtils.getCurrentUserId();
+        Film film = filmRepository.findById(filmId)
+                .orElseThrow(() -> new AppException(ErrorCode.FILM_NOT_FOUND));
+
+        Optional<Rating> existingRating = ratingRepository.findByFilmAndUserId(film, userId);
+        int oldStars = existingRating.map(Rating::getStars).orElse(0);
+
+        // 1. Cập nhật bảng Rating ngay lập tức
+        if (existingRating.isPresent()) {
+            Rating rating = existingRating.get();
+            rating.setStars(request.getStars());
+            ratingRepository.save(rating);
+        } else {
+            ratingRepository.save(Rating.builder()
+                    .film(film)
+                    .userId(userId)
+                    .stars(request.getStars())
+                    .build());
+        }
+
+        // 2. Gửi event qua Outbox để cập nhật Film statistics (averageRating, ratingCount) qua Kafka
+        RatingEvent ratingEvent = RatingEvent.builder()
+                .eventId(UUID.randomUUID().toString())
+                .filmId(filmId)
+                .userId(userId)
+                .stars(request.getStars())
+                .oldStars(oldStars)
+                .build();
+
+        try {
+            String payload = objectMapper.writeValueAsString(ratingEvent);
+            Outbox outbox = Outbox.builder()
+                    .aggregateId(filmId)
+                    .topic("film.rating")
+                    .payload(payload)
+                    .build();
+            outboxRepository.save(outbox);
+            log.info("Saved outbox record for rating update: film={}, user={}", filmId, userId);
+        } catch (JsonProcessingException e) {
+            log.error("Failed to serialize rating event for outbox", e);
+            throw new RuntimeException("Failed to serialize rating event for outbox", e);
+        }
+
+        // 3. Invalidate cache
+        invalidateFilmCaches(filmId);
+
+        // 4. Trả về số sao đánh giá
+        return request.getStars();
+    }
+
+    private void invalidateFilmCaches(String filmId) {
+        try {
+            redisService.delete("film:detail:" + filmId);
+            redisService.deletePattern("film:comments:" + filmId + ":*");
+            redisService.deletePattern("film:latest:page:*");
+            redisService.deletePattern("film:hot:page:*");
+            redisService.deletePattern("film:now-playing:page:*");
+            log.info("Invalidated film caches for film: {}", filmId);
+        } catch (Exception e) {
+            log.warn("Failed to invalidate caches for film: {}", filmId, e);
+        }
+    }
+
+    public PageResponse<FilmSummaryResponse> getNowPlayingFilms(int page, int size) {
+        String cacheKey = "film:now-playing:page:" + page + ":size:" + size;
+
+        if (page <= 2) {
+            try {
+                PageResponse<FilmSummaryResponse> cached = redisService.get(
+                        cacheKey,
+                        new TypeReference<PageResponse<FilmSummaryResponse>>() {}
+                );
+                if (cached != null) {
+                    log.info("Cache hit for now playing films page: {}", page);
+                    return cached;
+                }
+            } catch (Exception e) {
+                log.warn("Failed to retrieve from cache for now playing films page: {}", page, e);
+            }
+        }
+
+        Sort sort = Sort.by(Sort.Direction.DESC, "followCount");
+        Pageable pageable = PageRequest.of(page - 1, size, sort);
+        Page<Film> pageData = filmRepository.findByStatus(FilmStatus.NOW_PLAYING, pageable);
+
+        PageResponse<FilmSummaryResponse> response = PageResponse.<FilmSummaryResponse>builder()
+                .currentPage(page)
+                .pageSize(size)
+                .totalPages(pageData.getTotalPages())
+                .totalElement(pageData.getTotalElements())
+                .data(pageData.getContent().stream()
+                        .map(filmMapper::toFilmSummaryResponse)
+                        .collect(Collectors.toList()))
+                .build();
+
+        if (page <= 2) {
+            try {
+                redisService.setWithExpiration(cacheKey, response, 10, TimeUnit.MINUTES);
+                log.info("Cached now playing films page: {}", page);
+            } catch (Exception e) {
+                log.warn("Failed to cache now playing films page: {}", page, e);
+            }
+        }
+
+        return response;
+    }
+
+    public List<FilmSummaryResponse> searchFilms(String title) {
+        return filmElasticRepository.findByTitleContaining(title).stream()
+                .map(doc -> FilmSummaryResponse.builder()
+                        .id(doc.getId())
+                        .title(doc.getTitle())
+                        .thumbnailUrl(doc.getThumbnailUrl())
+                        .season(doc.getSeason())
+                        .status(doc.getStatus())
+                        .ratingCount(doc.getRatingCount())
+                        .followCount(doc.getFollowCount())
+                        .episodeCount(doc.getEpisodeCount())
+                        .averageRating(doc.getAverageRating())
+                        .lastUpdate(doc.getLastUpdate())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    public FilmDetailResponse getFilm(String id) {
+        String filmCacheKey = "film:detail:" + id;
+        String commentsCacheKey = "film:comments:" + id + ":page:1";
+        
+        log.info("Fetching film detail for ID: {}", id);
+
+        // 1. Lấy FilmResponse (từ cache hoặc DB)
+        FilmResponse filmResponse = null;
+        try {
+            filmResponse = redisService.get(filmCacheKey, new TypeReference<FilmResponse>() {});
+        } catch (Exception e) {
+            log.warn("Failed to retrieve film basic info from cache", e);
+        }
+
+        if (filmResponse == null) {
+            log.info("Film basic cache miss for ID: {}. Fetching from DB...", id);
+            Film film = filmRepository.findById(id)
+                    .orElseThrow(() -> new AppException(ErrorCode.FILM_NOT_FOUND));
+            filmResponse = filmMapper.toFilmResponse(film);
+            try {
+                redisService.setWithExpiration(filmCacheKey, filmResponse, 1, TimeUnit.HOURS);
+            } catch (Exception e) {
+                log.warn("Failed to cache film basic info", e);
+            }
+        }
+
+        // 2. Lấy Comments (từ cache hoặc Service)
+        PageResponse<CommentResponse> comments = null;
+        try {
+            comments = redisService.get(commentsCacheKey, new TypeReference<PageResponse<CommentResponse>>() {});
+        } catch (Exception e) {
+            log.warn("Failed to retrieve comments from cache", e);
+        }
+
+        if (comments == null) {
+            try {
+                comments = commentExternalService.getComments(id, 1, 10)
+                        .handle((res, ex) -> ex == null ? res : null)
+                        .join();
+                
+                if (comments != null && comments.getData() != null && !comments.getData().isEmpty()) {
+                    redisService.setWithExpiration(commentsCacheKey, comments, 30, TimeUnit.MINUTES);
+                }
+            } catch (Exception e) {
+                log.error("Failed to fetch comments for film {}", id, e);
+            }
+        }
+
+        // 3. Lấy thông tin cá nhân hóa (không cache: follow, rating)
+        Integer userRating = 0;
+        String userId = SecurityUtils.getCurrentUserId();
+
+        boolean followed = filmFollowService.isFollowing(id);
+        Optional<Rating> rating = ratingRepository.findByFilmIdAndUserId(id, userId);
+        userRating = rating.map(Rating::getStars).orElse(0);
+
+        return FilmDetailResponse.builder()
+                .film(filmResponse)
+                .userRating(userRating)
+                .followed(followed)
+                .comments(comments)
+                .build();
+    }
+}

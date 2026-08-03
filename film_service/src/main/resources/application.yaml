@@ -1,0 +1,166 @@
+server:
+  port: 8090
+  servlet:
+    context-path: /films
+
+spring:
+  application:
+    name: film-service
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3307}/film-service?createDatabaseIfNotExist=true
+    username: ${MYSQL_ROOT_USERNAME:root}
+    password: ${MYSQL_ROOT_PASSWORD:REDACTED_LEGACY_CREDENTIAL}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD}
+      repositories:
+        enabled: false
+  elasticsearch:
+    uris: ${ELASTICSEARCH_URIS:http://localhost:9200}
+    username: ${ELASTICSEARCH_USERNAME:elastic}
+    password: ${ELASTICSEARCH_PASSWORD:changeme}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+    consumer:
+      group-id: film-service-group
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
+        spring.json.trusted.packages: "*"
+    listener:
+      ack-mode: manual_immediate
+
+jwt:
+ signerKey: ${JWT_SIGNER_KEY:uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0}
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        register-health-indicator: true
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        permitted-number-of-calls-in-half-open-state: 5
+        wait-duration-in-open-state: 10s
+        failure-rate-threshold: 50
+        automatic-transition-from-open-to-half-open-enabled: true
+        writable-stack-trace-enabled: false
+        ignore-exceptions:
+          - com.MyProject.film.film_service.exception.AppException
+          - io.github.resilience4j.ratelimiter.RequestNotPermitted
+      downstream:
+        register-health-indicator: true
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        permitted-number-of-calls-in-half-open-state: 3
+        wait-duration-in-open-state: 10s
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 60
+        slow-call-duration-threshold: 2s
+        automatic-transition-from-open-to-half-open-enabled: true
+        writable-stack-trace-enabled: false
+        ignore-exceptions:
+          - com.MyProject.film.film_service.exception.AppException
+          - io.github.resilience4j.ratelimiter.RequestNotPermitted
+    instances:
+      filmSearchApi:
+        base-config: default
+        wait-duration-in-open-state: 20s
+      commentService:
+        base-config: downstream
+  timelimiter:
+    configs:
+      default:
+        timeout-duration: 5s
+        cancel-running-future: true
+    instances:
+      commentService:
+        base-config: default
+  retry:
+    configs:
+      downstream:
+        max-attempts: 2
+        wait-duration: 300ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        retry-exceptions:
+          - feign.RetryableException
+          - java.io.IOException
+          - java.net.SocketTimeoutException
+          - java.util.concurrent.TimeoutException
+        ignore-exceptions:
+          - com.MyProject.film.film_service.exception.AppException
+          - io.github.resilience4j.ratelimiter.RequestNotPermitted
+          - io.github.resilience4j.circuitbreaker.CallNotPermittedException
+    instances:
+      commentService:
+        base-config: downstream
+  ratelimiter:
+    configs:
+      default:
+        timeout-duration: 0s
+    instances:
+      filmApi:
+        base-config: default
+        limit-for-period: 200
+        limit-refresh-period: 1s
+      commentService:
+        base-config: default
+        limit-for-period: 60
+        limit-refresh-period: 1s
+management:
+  health:
+    circuitbreakers:
+      enabled: true
+
+logging:
+  level:
+    io.github.resilience4j: DEBUG
+    org.springframework.cloud.openfeign: DEBUG
+
+app:
+  services:
+    comment:
+      url: ${COMMENT_SERVICE_URL:localhost:8091}
+  rate-limit:
+    film-rating:
+      limit-for-period: 30
+      limit-refresh-period: 60s
+    film-follow:
+      limit-for-period: 50
+      limit-refresh-period: 60s
+    read-films:
+      limit-for-period: 100
+      limit-refresh-period: 10s
+    search-films:
+      limit-for-period: 30
+      limit-refresh-period: 10s
+    read-film-detail:
+      limit-for-period: 100
+      limit-refresh-period: 10s
+    create-film:
+      limit-for-period: 10
+      limit-refresh-period: 60s
+    read-followed-films:
+      limit-for-period: 100
+      limit-refresh-period: 10s
