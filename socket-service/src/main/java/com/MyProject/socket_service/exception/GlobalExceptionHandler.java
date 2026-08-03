@@ -1,6 +1,6 @@
 package com.MyProject.socket_service.exception;
 
-import com.MyProject.socket_service.dto.response.ApiResponse;
+import com.MyProject.common.dto.response.ApiResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -12,8 +12,8 @@ import java.util.Objects;
 @ControllerAdvice
 public class GlobalExceptionHandler {
     @ExceptionHandler(value = AppException.class)
-    public ResponseEntity<ApiResponse<java.lang.Object>> handlingAppException(AppException exception) {
-        return ApiResponse.toResponseEntity(exception.getErrorCode());
+    public ResponseEntity<ApiResponse<Object>> handlingAppException(AppException exception) {
+        return ErrorCode.toResponseEntity(exception.getErrorCode());
     }
 
     @ExceptionHandler(value = MethodArgumentNotValidException.class)
@@ -32,6 +32,6 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(value = AccessDeniedException.class)
     public ResponseEntity<ApiResponse<java.lang.Object>> handlingAccessDeniedException() {
-        return ApiResponse.toResponseEntity(ErrorCode.UNAUTHORIZED);
+        return ErrorCode.toResponseEntity(ErrorCode.UNAUTHORIZED);
     }
 }

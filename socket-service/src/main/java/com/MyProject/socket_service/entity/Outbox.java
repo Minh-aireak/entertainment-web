@@ -3,27 +3,29 @@ package com.MyProject.socket_service.entity;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.mapping.Field;
 import org.springframework.data.mongodb.core.mapping.MongoId;
 
 import java.time.Instant;
 
-@Document(collection = "web-socket-session")
-@NoArgsConstructor
-@AllArgsConstructor
+@Document(collection = "outbox")
 @Getter
 @Setter
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class WebSocketSession {
+public class Outbox {
     @MongoId
     String id;
 
-    String socketSessionId;
+    @Field("aggregateId")
+    String aggregateId;
 
-    @Indexed
-    String userId;
+    String topic;
+
+    String payload;
 
     @CreatedDate
     Instant createdAt;
