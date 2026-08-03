@@ -1,7 +1,9 @@
-package com.MyProject.common.formatter;
+package com.MyProject.comment_service.configuration;
 
 import com.MyProject.common.exception.AppException;
 import com.MyProject.common.exception.ErrorCode;
+import org.springframework.stereotype.Component;
+
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
@@ -9,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Function;
 
+@Component
 public class DateTimeFormatter {
     Map<Long, Function<Instant, String>> strategyMap = new LinkedHashMap<>();
 

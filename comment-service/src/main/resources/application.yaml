@@ -1,0 +1,119 @@
+server:
+  port: 8089
+  tomcat:
+    redirect-context-root: false
+  servlet:
+    context-path: /comments
+
+spring:
+  application:
+    name: comment-service
+  data:
+    mongodb:
+      uri: mongodb://${MONGODB_ROOT_USERNAME:root}:${MONGODB_ROOT_PASSWORD:REDACTED_LEGACY_CREDENTIAL}@${MONGODB_HOST:localhost}:${MONGODB_PORT:27017}/comment-service?authSource=admin
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      connect-timeout: 5000
+      timeout: 5000
+      password: ${REDIS_PASSWORD:REDACTED_LEGACY_CREDENTIAL}
+
+app:
+  services:
+    profile:
+      url: ${PROFILE_SERVICE_URL:http://localhost:8081}
+  rate-limit:
+    comment-write:
+      limit-for-period: 30
+      limit-refresh-period: 60s
+    comment-read:
+      limit-for-period: 100
+      limit-refresh-period: 10s
+    comment-update:
+      limit-for-period: 20
+      limit-refresh-period: 60s
+    comment-delete:
+      limit-for-period: 20
+      limit-refresh-period: 60s
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        register-health-indicator: true
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        permitted-number-of-calls-in-half-open-state: 5
+        wait-duration-in-open-state: 10s
+        failure-rate-threshold: 50
+        automatic-transition-from-open-to-half-open-enabled: true
+        writable-stack-trace-enabled: false
+        ignore-exceptions:
+          - com.MyProject.comment_service.exception.AppException
+          - io.github.resilience4j.ratelimiter.RequestNotPermitted
+      downstream:
+        register-health-indicator: true
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        permitted-number-of-calls-in-half-open-state: 3
+        wait-duration-in-open-state: 10s
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 60
+        slow-call-duration-threshold: 2s
+        automatic-transition-from-open-to-half-open-enabled: true
+        writable-stack-trace-enabled: false
+        ignore-exceptions:
+          - com.MyProject.comment_service.exception.AppException
+          - io.github.resilience4j.ratelimiter.RequestNotPermitted
+    instances:
+      commentReadApi:
+        base-config: default
+      commentWriteApi:
+        base-config: default
+      profileService:
+        base-config: downstream
+  ratelimiter:
+    configs:
+      default:
+        timeout-duration: 0s
+    instances:
+      commentReadApi:
+        base-config: default
+        limit-for-period: 100
+        limit-refresh-period: 1s
+      commentWriteApi:
+        base-config: default
+        limit-for-period: 50
+        limit-refresh-period: 1s
+      profileService:
+        base-config: default
+        limit-for-period: 60
+        limit-refresh-period: 1s
+  retry:
+    configs:
+      downstream:
+        max-attempts: 2
+        wait-duration: 300ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        retry-exceptions:
+          - feign.RetryableException
+          - java.io.IOException
+          - java.net.SocketTimeoutException
+          - java.util.concurrent.TimeoutException
+        ignore-exceptions:
+          - com.MyProject.comment_service.exception.AppException
+          - io.github.resilience4j.ratelimiter.RequestNotPermitted
+          - io.github.resilience4j.circuitbreaker.CallNotPermittedException
+    instances:
+      profileService:
+        base-config: downstream
+management:
+  health:
+    circuitbreakers:
+      enabled: true
+
+jwt:
+  signerKey: ${JWT_SIGNER_KEY:uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0}
