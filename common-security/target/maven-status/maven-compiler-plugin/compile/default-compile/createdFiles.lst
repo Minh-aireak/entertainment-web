@@ -1,3 +1,5 @@
+com\MyProject\common\security\CookieBearerTokenResolver.class
 com\MyProject\common\security\CommonJwtAuthenticationEntryPoint.class
 com\MyProject\common\security\CommonJwtDecoder.class
+com\MyProject\common\security\SecurityUtils.class
 com\MyProject\common\security\CommonSecurityConfig.class
