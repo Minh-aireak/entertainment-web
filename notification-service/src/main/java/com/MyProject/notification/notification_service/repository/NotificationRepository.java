@@ -13,6 +13,6 @@ import java.time.LocalDateTime;
 @Repository
 public interface NotificationRepository extends MongoRepository<Notification, String>,
         NotificationRepositoryCustom {
-    @Query(value = "{ 'toUserIds': { $in: ?0 } }", sort = "{ 'createdAt': -1 }")
-    Page<Notification> findByToUserIdsInOrderByCreatedAtDesc(String userId, Pageable pageable);
+    @Query(value = "{ 'toUserIds': ?0 }", sort = "{ 'createdAt': -1 }")
+    Page<Notification> findByToUserIdsOrderByCreatedAtDesc(String userId, Pageable pageable);
 }

@@ -3,6 +3,8 @@ package com.MyProject.notification.notification_service.entity;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.MongoId;
@@ -17,17 +19,21 @@ import java.util.Map;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @Document(collection = "notifications")
+@CompoundIndexes({
+        @CompoundIndex(name = "toUserIds_idx", def = "{'toUserIds': 1}"),
+        @CompoundIndex(name = "toUserIds_createdAt_idx", def = "{'toUserIds': 1, 'createdAt': -1}")
+})
 public class Notification {
     @MongoId
     String id;
     TypeNotification type;
     String userIdSender;
 
-    @Indexed
     List<String> toUserIds;
 
     Map<String, LocalDateTime> recipientReadMap;
 
     @CreatedDate
+    @Indexed
     LocalDateTime createdAt;
 }

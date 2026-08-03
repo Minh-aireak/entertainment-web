@@ -2,10 +2,9 @@ package com.MyProject.notification.notification_service.service;
 
 import com.MyProject.notification.notification_service.dto.request.EmailRequest;
 import com.MyProject.notification.notification_service.dto.request.Sender;
-import com.MyProject.notification.notification_service.exception.AppException;
-import com.MyProject.notification.notification_service.exception.ErrorCode;
-import com.MyProject.notification.notification_service.repository.httpclient.EmailClient;
 import feign.FeignException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -19,7 +18,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class EmailService {
-    EmailClient emailClient;
+    EmailExternalService emailExternalService;
 
     @Value("${notification.email.brevo-apikey}")
     @NonFinal
@@ -33,6 +32,8 @@ public class EmailService {
     @NonFinal
     String senderEmail;
 
+    @CircuitBreaker(name = "brevoEmailService")
+    @Retry(name = "brevoEmailService")
     public void sendEmail(EmailRequest request){
         EmailRequest emailRequest = EmailRequest.builder()
                 .sender(Sender.builder()
@@ -45,15 +46,10 @@ public class EmailService {
                 .build();
         try {
             log.info("Sending email to: {}", request.getTo());
-            emailClient.sendEmail(apiKey, emailRequest);
+            emailExternalService.sendEmail(apiKey, emailRequest);
         } catch (FeignException exception){
             log.error("Feign error while sending email: Status={}, Content={}, Method={}, URL={}",
                 exception.status(), exception.contentUTF8(), exception.request().httpMethod(), exception.request().url());
-            throw new AppException(ErrorCode.CANNOT_SEND_EMAIL);
-        } catch (Exception e) {
-            log.error("Unexpected error while sending email: Class={}, Message={}", 
-                e.getClass().getName(), e.getMessage(), e);
-            throw new AppException(ErrorCode.CANNOT_SEND_EMAIL);
         }
     }
 }

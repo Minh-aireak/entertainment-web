@@ -17,7 +17,9 @@ public enum ErrorCode {
     UNAUTHORIZED(8202, "Forbidden!", HttpStatus.UNAUTHORIZED),
     CANNOT_SEND_EMAIL(8203, "Cannot send email!", HttpStatus.BAD_REQUEST),
     MAP_STRATEGY_EXCEPTION(8204, "Notification strategy got some problem!", HttpStatus.BAD_REQUEST),
-    BULK_USER_PROFILE(8205, "Bulk user profile service got some problem!", HttpStatus.BAD_REQUEST);
+    BULK_USER_PROFILE(8205, "Bulk user profile service got some problem!", HttpStatus.BAD_REQUEST),
+    RATE_LIMIT_EXCEEDED(8206, "Rate limit exceeded!", HttpStatus.TOO_MANY_REQUESTS),
+    SERVICE_UNAVAILABLE(8207, "Service unavailable!", HttpStatus.SERVICE_UNAVAILABLE);
 
     int code;
     String message;

@@ -3,6 +3,7 @@ package com.MyProject.notification.notification_service.entity;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 import org.springframework.data.mongodb.core.mapping.MongoId;
@@ -28,8 +29,6 @@ public class Outbox {
     Object payload;
 
     @CreatedDate
+    @Indexed
     Instant createdDate;
-
-    @Builder.Default
-    boolean processed = false;
 }

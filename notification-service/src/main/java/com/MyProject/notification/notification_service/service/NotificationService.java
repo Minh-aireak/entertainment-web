@@ -1,6 +1,5 @@
 package com.MyProject.notification.notification_service.service;
 
-import com.MyProject.common.dto.request.BulkUserProfileRequest;
 import com.MyProject.common.redis.RedisService;
 import com.MyProject.notification.notification_service.dto.event.NotificationEvent;
 import com.MyProject.notification.notification_service.dto.event.NotificationSocket;
@@ -8,13 +7,13 @@ import com.MyProject.notification.notification_service.dto.response.Notification
 import com.MyProject.common.dto.response.PageResponse;
 import com.MyProject.common.dto.response.UserProfileResponse;
 import com.MyProject.notification.notification_service.entity.Notification;
+import com.MyProject.notification.notification_service.entity.TypeNotification;
 import com.MyProject.notification.notification_service.exception.AppException;
 import com.MyProject.notification.notification_service.exception.ErrorCode;
 import com.MyProject.notification.notification_service.mapper.NotificationMapper;
 import com.MyProject.notification.notification_service.repository.NotificationRepository;
-import com.MyProject.notification.notification_service.repository.httpclient.ProfileClient;
-import com.MyProject.notification.notification_service.entity.Outbox;
-import com.MyProject.notification.notification_service.repository.OutboxRepository;
+import com.MyProject.common.security.SecurityUtils;
+import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -22,15 +21,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -40,17 +36,14 @@ import java.util.concurrent.TimeUnit;
 public class NotificationService {
     NotificationRepository notificationRepository;
     NotificationMapper notificationMapper;
-    ProfileClient profileClient;
-    OutboxRepository outboxRepository;
+    OutboxEventPublisher outboxEventPublisher;
+    NotificationProfileService notificationProfileService;
     RedisService redisService;
 
+    private static final String UNREAD_COUNT_KEY_PREFIX = "notification:unread-count:";
+
     private String getUserId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || authentication.getPrincipal() == null) {
-            throw new AppException(ErrorCode.UNAUTHORIZED);
-        }
-        Jwt jwt = ((JwtAuthenticationToken) authentication).getToken();
-        return jwt.getClaim("userId");
+        return SecurityUtils.getCurrentUserId();
     }
 
     private List<NotificationResponse> toNotificationResponses(List<Notification> notification,
@@ -60,12 +53,20 @@ public class NotificationService {
             NotificationResponse response = notificationMapper.toNotificationResponse(noti);
             UserProfileResponse sender = profileMaps.get(noti.getUserIdSender());
             response.setType(noti.getType().name());
-            response.setDisplayNameSender(sender.getDisplayName());
-            response.setAvatarSender(sender.getAvatar());
+            
+            // Set default values if sender is null
+            if (sender != null) {
+                response.setDisplayNameSender(sender.getDisplayName() != null ? sender.getDisplayName() : "Unknown User");
+                response.setAvatarSender(sender.getAvatar() != null ? sender.getAvatar() : "");
+            } else {
+                response.setDisplayNameSender("Unknown User");
+                response.setAvatarSender("");
+            }
+            
             Boolean isRead = noti.getRecipientReadMap().getOrDefault(currentUserId, null) != null;
             response.setRead(isRead);
             response.setMessage(noti.getType().getContent().replace("{sender}", response.getDisplayNameSender()));
-            response.setCreatedAt(noti.getCreatedAt().toString());
+            response.setCreatedAt(noti.getCreatedAt() != null ? noti.getCreatedAt().toString() : "");
             return response;
         }).toList();
     }
@@ -75,53 +76,14 @@ public class NotificationService {
         Pageable pageable = PageRequest.of(page - 1, size);
 
         Page<Notification> notificationsPage =
-                notificationRepository.findByToUserIdsInOrderByCreatedAtDesc(userId, pageable);
+                notificationRepository.findByToUserIdsOrderByCreatedAtDesc(userId, pageable);
 
         List<String> senderIds = notificationsPage.getContent().stream()
                 .map(Notification::getUserIdSender)
                 .distinct()
                 .toList();
 
-        // Check Redis
-        List<String> keys = senderIds.stream()
-                .map(id -> "profile:user:" + id)
-                .toList();
-
-        List<Object> cachedValues = redisService.multiGet(keys);
-
-        Map<String, UserProfileResponse> profilesMap = new HashMap<>();
-        List<String> missingUserIds = new ArrayList<>();
-
-        for (int i = 0; i < senderIds.size(); i++) {
-            Object cached = cachedValues.get(i);
-            if (Objects.isNull(cached)) {
-                missingUserIds.add(senderIds.get(i));
-            } else {
-                UserProfileResponse profile = (UserProfileResponse) cached;
-                profilesMap.put(profile.getUserId(), profile);
-            }
-        }
-
-        // Gọi API cho phần bị thiếu
-        if (!missingUserIds.isEmpty()) {
-            try {
-                Map<String, UserProfileResponse> fetchedProfiles =
-                        profileClient.getBulkUserProfiles(BulkUserProfileRequest.builder()
-                                        .userIds(new HashSet<>(missingUserIds))
-                                        .build())
-                                .getResult();
-
-                // Cache lại
-                fetchedProfiles.forEach((id, profile) ->
-                        redisService.setWithExpiration(
-                                "profile:user:" + id, profile, 1, TimeUnit.HOURS));
-
-                profilesMap.putAll(fetchedProfiles);
-            } catch (Exception e) {
-                log.error("Failed to fetch user profiles for notifications: {}", missingUserIds, e);
-                throw new AppException(ErrorCode.BULK_USER_PROFILE);
-            }
-        }
+        Map<String, UserProfileResponse> profilesMap = notificationProfileService.getProfiles(senderIds);
 
         return PageResponse.<NotificationResponse>builder()
                 .currentPage(page)
@@ -134,50 +96,89 @@ public class NotificationService {
 
     public Long getUnreadCount() {
         String userId = getUserId();
-        return notificationRepository.countUnreadByUserId(userId);
+        String key = UNREAD_COUNT_KEY_PREFIX + userId;
+        
+        // Try to get from Redis
+        try {
+            Long cachedCount = redisService.get(key, new TypeReference<Long>() {});
+            if (cachedCount != null) {
+                return cachedCount;
+            }
+        } catch (Exception e) {
+            log.error("Failed to get unread count from cache for userId: {}", userId, e);
+        }
+        
+        // If not in cache, fetch from MongoDB and cache it
+        Long unreadCount = notificationRepository.countUnreadByUserId(userId);
+        try {
+            redisService.setWithExpiration(key, unreadCount, 5, TimeUnit.MINUTES); // Cache for 5 minutes
+        } catch (Exception e) {
+            log.error("Failed to cache unread count for userId: {}", userId, e);
+        }
+        
+        return unreadCount;
     }
 
     public void markAllAsRead() {
         String userId = getUserId();
         notificationRepository.markAllAsRead(userId, LocalDateTime.now());
+        
+        // Invalidate cache
+        String key = UNREAD_COUNT_KEY_PREFIX + userId;
+        try {
+            redisService.delete(key);
+        } catch (Exception e) {
+            log.error("Failed to invalidate unread count cache for userId: {}", userId, e);
+        }
     }
 
     @Transactional
     public void createNotification(NotificationEvent event) {
-        Map<String, LocalDateTime> recipientReadMap = new HashMap<>();
+        TypeNotification typeNotification = TypeNotification.valueOf(event.getTypeNotification());
+        Map<String, LocalDateTime> recipientReadMap = new java.util.HashMap<>();
         event.getToUserIds().forEach(userId -> recipientReadMap.put(userId, null));
 
         Notification notification = Notification.builder()
-                .type(event.getTypeNotification())
+                .type(typeNotification)
                 .userIdSender(event.getUserIdSender())
+                .toUserIds(event.getToUserIds())
                 .recipientReadMap(recipientReadMap)
                 .build();
 
-        UserProfileResponse userProfileResponse =
-                (UserProfileResponse) redisService.get("profile:user:" + event.getUserIdSender());
-
-        if (Objects.isNull(userProfileResponse)) {
-            Map<String, UserProfileResponse> data = profileClient
-                    .getBulkUserProfiles(new BulkUserProfileRequest(Set.of(event.getUserIdSender()))).getResult();
-
-            userProfileResponse = data.get(event.getUserIdSender());
-            redisService.setWithExpiration("profile:user:" + event.getUserIdSender(), userProfileResponse, 1, TimeUnit.HOURS);
-        }
-
+        // Save notification first (in transaction)
         var notificationSaved = notificationRepository.save(notification);
 
+        // Try to get profile, but don't fail the transaction if it fails (use defaults)
+        String displayNameSender = "Unknown User";
+        String avatarSender = "";
+        try {
+            UserProfileResponse userProfileResponse = notificationProfileService.getProfile(event.getUserIdSender());
+            if (userProfileResponse != null) {
+                displayNameSender = userProfileResponse.getDisplayName() != null ? userProfileResponse.getDisplayName() : "Unknown User";
+                avatarSender = userProfileResponse.getAvatar() != null ? userProfileResponse.getAvatar() : "";
+            }
+        } catch (Exception e) {
+            log.error("Failed to get sender profile for notification: {}", event.getUserIdSender(), e);
+        }
+
         NotificationSocket notificationSocket = new NotificationSocket(
-                        userProfileResponse.getDisplayName(),
-                        userProfileResponse.getAvatar(),
-                        event.getTypeNotification().getTitle(),
-                        event.getTypeNotification().getContent(),
+                        displayNameSender,
+                        avatarSender,
+                        typeNotification.getTitle(),
+                        typeNotification.getContent().replace("{sender}", displayNameSender),
                         event.getToUserIds());
+
+        // Publish to outbox (in same transaction)
+        outboxEventPublisher.publish(notificationSaved.getId(), "notification", notificationSocket);
         
-        // Save to outbox instead of sending directly to Kafka
-        outboxRepository.save(Outbox.builder()
-                .aggregateId(notificationSaved.getId())
-                .topic("notification")
-                .payload(notificationSocket)
-                .build());
+        // Invalidate unread count cache for all recipients
+        event.getToUserIds().forEach(userId -> {
+            String key = UNREAD_COUNT_KEY_PREFIX + userId;
+            try {
+                redisService.delete(key);
+            } catch (Exception e) {
+                log.error("Failed to invalidate unread count cache for userId: {}", userId, e);
+            }
+        });
     }
 }

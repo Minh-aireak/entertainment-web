@@ -59,6 +59,11 @@ public enum TypeNotification {
     FILM_SHARE(
             "Film shared",
             "{sender} shared your film review"
+    ),
+
+    NEW_EPISODE(
+            "New Episode",
+            "The film {film} has released a new episode!"
     );
 
     private final String title;
