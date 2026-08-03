@@ -1,45 +1,40 @@
 package com.MyProject.post.post_service.service;
 
 import com.MyProject.common.dto.response.PageResponse;
-import com.MyProject.common.dto.ProfileUpdatedEvent;
-import com.MyProject.common.dto.response.UserProfileResponse;
-import com.MyProject.post.post_service.dto.response.StatusResponse;
-import com.MyProject.post.post_service.job.UpdatePostStatusJob;
-import com.MyProject.post.post_service.dto.request.DataWeatherRequest;
 import com.MyProject.post.post_service.dto.request.ScheduleRequest;
 import com.MyProject.post.post_service.dto.request.ScheduleUpdateRequest;
+import com.MyProject.post.post_service.dto.response.LikeResponse;
 import com.MyProject.post.post_service.dto.response.ScheduleResponse;
+import com.MyProject.post.post_service.dto.response.StatusResponse;
 import com.MyProject.post.post_service.entity.Post;
+import com.MyProject.post.post_service.entity.PostLike;
 import com.MyProject.post.post_service.entity.PostType;
 import com.MyProject.post.post_service.entity.TravelItinerary;
 import com.MyProject.post.post_service.exception.AppException;
 import com.MyProject.post.post_service.exception.ErrorCode;
 import com.MyProject.post.post_service.mapper.PostMapper;
+import com.MyProject.post.post_service.repository.PostElasticRepository;
+import com.MyProject.post.post_service.repository.PostLikeRepository;
 import com.MyProject.post.post_service.repository.PostRepository;
 import com.MyProject.post.post_service.repository.TravelItineraryRepository;
-import com.MyProject.post.post_service.repository.httpclient.ProfileClient;
-import com.MyProject.post.post_service.repository.httpclient.WeatherClient;
+import com.MyProject.post.post_service.service.DateTimeFormatter;
+import com.MyProject.common.security.SecurityUtils;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import org.quartz.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.util.Date;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -48,174 +43,81 @@ import java.util.UUID;
 public class PostService {
     PostRepository postRepository;
     TravelItineraryRepository travelItineraryRepository;
+    PostElasticRepository postElasticRepository;
+    PostLikeRepository postLikeRepository;
     PostMapper postMapper;
     DateTimeFormatter dateTimeFormatter;
-    ProfileClient client;
-    WeatherClient weatherClient;
-    Scheduler scheduler;
+    PostJobManagementService postJobManagementService;
+    PostCacheService postCacheService;
+    OutboxEventPublisher outboxEventPublisher;
 
-    private String getUserId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || authentication.getPrincipal() == null) {
-            throw new AppException(ErrorCode.UNAUTHENTICATED);
-        }
-        Jwt jwt = ((JwtAuthenticationToken) authentication).getToken();
-        return jwt.getClaim("userId");
-    }
+    private static final String STATUS_ONGOING = "On going";
+    private static final String STATUS_UPCOMING = "Up coming";
+    private static final String STATUS_COMPLETED = "Completed";
 
-    private String calculateStatus(LocalDateTime start, LocalDateTime end, LocalDateTime now){
-        String status = "On going";
-        if (start.isAfter(now)){
-            status = "Up coming";
+    private String calculateStatus(LocalDateTime start, LocalDateTime end, LocalDateTime now) {
+        String status = STATUS_ONGOING;
+        if (start.isAfter(now)) {
+            status = STATUS_UPCOMING;
         } else if (end.isBefore(now)) {
-            status = "Completed";
+            status = STATUS_COMPLETED;
         }
         return status;
     }
 
     private Post buildBasePost(ScheduleRequest request) {
-        String userId = getUserId();
-        UserProfileResponse info = client.getProfile(userId).getResult();
+        String userId = SecurityUtils.getCurrentUserId();
+        List<String> listJoins = request.getListUsersJoin();
+        if (listJoins == null) {
+            listJoins = new java.util.ArrayList<>();
+        }
+        listJoins.add(userId);
 
         return Post.builder()
                 .id(UUID.randomUUID().toString())
                 .userId(userId)
-                .displayName(info.getDisplayName())
-                .avatar(info.getAvatar())
                 .title(request.getTitle())
                 .content(request.getContent())
-                .createdDate(LocalDateTime.now())
                 .startTime(request.getStartTime())
                 .endTime(request.getEndTime())
+                .createdDate(LocalDateTime.now())
+                .modifiedDate(null)
                 .status(calculateStatus(request.getStartTime(), request.getEndTime(), LocalDateTime.now()))
                 .startJobKey(null)
                 .endJobKey(null)
-                .listUserJoin(List.of(userId))
+                .listUsersJoin(listJoins)
                 .build();
     }
 
-    private void scheduleStatusJobs(Post post) {
-        String postId = post.getId();
-
-        // ========== JOB 1: START (chuyển sang ONGOING) ==========
-        if (post.getStatus().equals("Up coming")) {
-            String startJobKey = "start-post-" + postId;
-
-            JobDetail startJob = JobBuilder.newJob(UpdatePostStatusJob.class)
-                    .withIdentity(startJobKey, "post-status-jobs")
-                    .withDescription("Start post: " + post.getTitle())
-                    .usingJobData("postId", postId)
-                    .usingJobData("action", "START")
-                    .storeDurably(false)
-                    .build();
-
-            Trigger startTrigger = TriggerBuilder.newTrigger()
-                    .withIdentity("trigger-" + startJobKey, "post-triggers")
-                    .startAt(Date.from(post.getStartTime().atZone(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant()))
-                    .forJob(startJob)
-                    .build();
-
-            try {
-                scheduler.scheduleJob(startJob, startTrigger);
-            } catch (SchedulerException e) {
-                throw new AppException(ErrorCode.SCHEDULER_EXCEPTION);
-            }
-
-            post.setStartJobKey(startJobKey);
-        }
-
-        // ========== JOB 2: END (chuyển sang COMPLETED) ==========
-        if (post.getStatus().equals("On going")) {
-            String endJobKey = "end-post-" + postId;
-
-            JobDetail endJob = JobBuilder.newJob(UpdatePostStatusJob.class)
-                    .withIdentity(endJobKey, "post-status-jobs")
-                    .withDescription("End post: " + post.getTitle())
-                    .usingJobData("postId", postId)
-                    .usingJobData("action", "END")
-                    .storeDurably(false)
-                    .build();
-
-            Trigger endTrigger = TriggerBuilder.newTrigger()
-                    .withIdentity("trigger-" + endJobKey, "post-triggers")
-                    .startAt(Date.from(post.getEndTime().atZone(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant()))
-                    .forJob(endJob)
-                    .build();
-
-            try {
-                scheduler.scheduleJob(endJob, endTrigger);
-            } catch (SchedulerException e) {
-                throw new AppException(ErrorCode.SCHEDULER_EXCEPTION);
-            }
-
-            post.setEndJobKey(endJobKey);
-        }
-
-        postRepository.save(post);
-    }
-
-    public void cancelPost(String postId) {
-        var post = postRepository.findById(postId)
-                .orElseThrow(() -> new AppException(ErrorCode.POST_NOT_FOUND));
-
-        // Xóa START job
-        if (post.getStartJobKey() != null) {
-            try {
-                scheduler.deleteJob(new JobKey(post.getStartJobKey(), "post-status-jobs")
-                );
-            } catch (SchedulerException e) {
-                throw new AppException(ErrorCode.DELETE_JOB);
-            }
-        }
-
-        // Xóa END job
-        if (post.getEndJobKey() != null) {
-            try {
-                scheduler.deleteJob(new JobKey(post.getEndJobKey(), "post-status-jobs")
-                );
-            } catch (SchedulerException e) {
-                throw new AppException(ErrorCode.DELETE_JOB);
-            }
-        }
-
-        post.setStartJobKey(null);
-        post.setEndJobKey(null);
-        postRepository.save(post);
-    }
-
     @Transactional
-    public ScheduleResponse createPost(ScheduleRequest request){
+    public ScheduleResponse createPost(ScheduleRequest request) {
+        String userId = SecurityUtils.getCurrentUserId();
         var basePost = buildBasePost(request);
-        if (request.getPostType().equals("BUSINESS_SCHEDULE")) {
+        if (request.getPostType().equals(PostType.BUSINESS_SCHEDULE.name())) {
             basePost.setPostType(PostType.BUSINESS_SCHEDULE);
             var savedPost = postRepository.save(basePost);
-            scheduleStatusJobs(savedPost);
-
+            postJobManagementService.scheduleStatusJobs(savedPost);
+            outboxEventPublisher.publish("post.sync", savedPost.getId(), postMapper.toPostDoc(savedPost));
+            postCacheService.invalidateAllUserPosts(userId);
             return postMapper.toScheduleResponse(savedPost);
         } else {
-            var weatherStartResponse = weatherClient.getDataWeather(DataWeatherRequest.builder()
-                            .lat(request.getLatStart())
-                            .lon(request.getLonStart())
-                            .build());
-            var weatherEndResponse = weatherClient.getDataWeather(DataWeatherRequest.builder()
-                    .lat(request.getLatStart())
-                    .lon(request.getLonEnd())
-                    .build());
-            TravelItinerary travelItinerary = TravelItinerary.fromPost(basePost)
-                    .postType(PostType.TRAVEL_ITINERARY)
-                    .startPosition(weatherStartResponse.getResult())
-                    .endPosition(weatherEndResponse.getResult())
-                    .build();
-            var savedItinerary = travelItineraryRepository.save(travelItinerary);
-            scheduleStatusJobs(savedItinerary);
-
-            return postMapper.toTravelItineraryResponse(savedItinerary);
+            var travelItinerary = TravelItinerary.fromPost(basePost).build();
+            var savedTravelItinerary = travelItineraryRepository.save(travelItinerary);
+            postJobManagementService.scheduleStatusJobs(savedTravelItinerary);
+            outboxEventPublisher.publish("post.sync", savedTravelItinerary.getId(), postMapper.toPostDoc(savedTravelItinerary));
+            postCacheService.invalidateAllUserPosts(userId);
+            return postMapper.toTravelItineraryResponse(savedTravelItinerary);
         }
     }
 
     @Transactional
-    public PageResponse<ScheduleResponse> getMyPosts(int page, int size, String type){
-        String userId = getUserId();
+    public PageResponse<ScheduleResponse> getMyPosts(int page, int size, String type) {
+        String userId = SecurityUtils.getCurrentUserId();
+
+        PageResponse<ScheduleResponse> cached = postCacheService.getCachedPosts(userId, type, page, size);
+        if (cached != null) {
+            return cached;
+        }
 
         Sort sort = Sort.by("createdDate").descending();
         Pageable pageable = PageRequest.of(page - 1, size, sort);
@@ -229,7 +131,7 @@ public class PostService {
 
         List<ScheduleResponse> postList = pageData.getContent().stream().map(post -> {
             ScheduleResponse response;
-            if (post instanceof TravelItinerary travelItinerary){
+            if (post instanceof TravelItinerary travelItinerary) {
                 response = postMapper.toTravelItineraryResponse(travelItinerary);
             } else {
                 response = postMapper.toScheduleResponse(post);
@@ -239,72 +141,109 @@ public class PostService {
             return response;
         }).toList();
 
-            return PageResponse.<ScheduleResponse>builder()
-                    .currentPage(page)
-                    .pageSize(size)
-                    .totalPages(pageData.getTotalPages())
-                    .totalElement(pageData.getTotalElements())
-                    .data(postList)
-                    .build();
+        List<String> postIds = postList.stream().map(ScheduleResponse::getId).toList();
+        if (!postIds.isEmpty()) {
+            Set<String> likedPostIds = postLikeRepository.findByPostIdInAndUserId(postIds, userId).stream()
+                    .map(PostLike::getPostId)
+                    .collect(Collectors.toSet());
+            postList.forEach(response -> response.setLiked(likedPostIds.contains(response.getId())));
+        }
+
+        PageResponse<ScheduleResponse> result = PageResponse.<ScheduleResponse>builder()
+                .currentPage(page)
+                .pageSize(size)
+                .totalPages(pageData.getTotalPages())
+                .totalElement(pageData.getTotalElements())
+                .data(postList)
+                .build();
+
+        postCacheService.cachePosts(userId, type, page, size, result);
+
+        return result;
     }
 
     @Transactional
-    public ScheduleResponse getMyPost(String id, String type){
+    public ScheduleResponse getMyPost(String id, String type) {
+        String userId = SecurityUtils.getCurrentUserId();
+        ScheduleResponse response;
         if (type.equals(PostType.BUSINESS_SCHEDULE.name())) {
             var schedule = postRepository.findById(id).orElseThrow(() ->
                     new AppException(ErrorCode.BUSINESS_SCHEDULE_NOT_EXISTED));
-
-            return postMapper.toScheduleResponse(schedule);
+            response = postMapper.toScheduleResponse(schedule);
         } else {
             var schedule = travelItineraryRepository.findById(id).orElseThrow(() ->
                     new AppException(ErrorCode.TRAVEL_ITINERARY_NOT_EXISTED));
-
-            return postMapper.toTravelItineraryResponse(schedule);
+            response = postMapper.toTravelItineraryResponse(schedule);
         }
+        response.setLiked(postLikeRepository.existsByPostIdAndUserId(id, userId));
+        return response;
     }
 
     @Transactional
-    public ScheduleResponse updatePost(String id, String type, ScheduleUpdateRequest request){
+    public LikeResponse toggleLike(String id, String type) {
+        String userId = SecurityUtils.getCurrentUserId();
+        Post post = postRepository.findById(id).orElseThrow(() ->
+                new AppException(type.equals(PostType.BUSINESS_SCHEDULE.name())
+                        ? ErrorCode.BUSINESS_SCHEDULE_NOT_EXISTED
+                        : ErrorCode.TRAVEL_ITINERARY_NOT_EXISTED));
 
-        cancelPost(id);
+        boolean alreadyLiked = postLikeRepository.existsByPostIdAndUserId(id, userId);
+        if (alreadyLiked) {
+            postLikeRepository.deleteByPostIdAndUserId(id, userId);
+            post.setLikeCount(Math.max(0, post.getLikeCount() - 1));
+        } else {
+            postLikeRepository.save(PostLike.builder()
+                    .id(UUID.randomUUID().toString())
+                    .postId(id)
+                    .userId(userId)
+                    .createdDate(LocalDateTime.now())
+                    .build());
+            post.setLikeCount(post.getLikeCount() + 1);
+        }
+        postRepository.save(post);
+        postCacheService.invalidateAllUserPosts(userId);
 
-        if (type.equals(PostType.BUSINESS_SCHEDULE.name())){
+        return LikeResponse.builder()
+                .liked(!alreadyLiked)
+                .likeCount(post.getLikeCount())
+                .build();
+    }
+
+    @Transactional
+    public ScheduleResponse updatePost(String id, String type, ScheduleUpdateRequest request) {
+        String userId = SecurityUtils.getCurrentUserId();
+        postJobManagementService.cancelPost(id);
+
+        if (type.equals(PostType.BUSINESS_SCHEDULE.name())) {
             var schedule = postRepository.findById(id).orElseThrow(() ->
                     new AppException(ErrorCode.BUSINESS_SCHEDULE_NOT_EXISTED));
-
             postMapper.updateBusinessSchedule(schedule, request);
             schedule.setStatus(calculateStatus(request.getStartTime(), request.getEndTime(), LocalDateTime.now()));
-            scheduleStatusJobs(schedule);
-
-            return postMapper.toScheduleResponse(postRepository.save(schedule));
+            schedule.setModifiedDate(LocalDateTime.now());
+            postJobManagementService.scheduleStatusJobs(schedule);
+            var saved = postRepository.save(schedule);
+            outboxEventPublisher.publish("post.sync", saved.getId(), postMapper.toPostDoc(saved));
+            postCacheService.invalidateAllUserPosts(userId);
+            return postMapper.toScheduleResponse(saved);
         } else {
             var schedule = travelItineraryRepository.findById(id).orElseThrow(() ->
                     new AppException(ErrorCode.TRAVEL_ITINERARY_NOT_EXISTED));
-            if (!request.getLatStart().isEmpty() && !request.getLonStart().isEmpty()) {
-                var dataWeatherChange = weatherClient.getDataWeather(DataWeatherRequest.builder()
-                        .lat(request.getLatStart())
-                        .lon(request.getLonStart())
-                        .build());
-                schedule.setStartPosition(dataWeatherChange.getResult());
-            }
-
-            if (!request.getLatEnd().isEmpty() && !request.getLonEnd().isEmpty()) {
-                var dataWeatherChange = weatherClient.getDataWeather(DataWeatherRequest.builder()
-                        .lat(request.getLatEnd())
-                        .lon(request.getLonEnd())
-                        .build());
-                schedule.setEndPosition(dataWeatherChange.getResult());
-            }
-            postMapper.updateTravelItinerary(schedule, request);
+            postMapper.updateBusinessSchedule(schedule, request);
             schedule.setStatus(calculateStatus(request.getStartTime(), request.getEndTime(), LocalDateTime.now()));
-            scheduleStatusJobs(schedule);
-
-            return postMapper.toTravelItineraryResponse(travelItineraryRepository.save(schedule));
+            schedule.setModifiedDate(LocalDateTime.now());
+            postJobManagementService.scheduleStatusJobs(schedule);
+            var saved = travelItineraryRepository.save(schedule);
+            outboxEventPublisher.publish("post.sync", saved.getId(), postMapper.toPostDoc(saved));
+            postCacheService.invalidateAllUserPosts(userId);
+            return postMapper.toTravelItineraryResponse(saved);
         }
     }
 
     @Transactional
-    public void deletePost(String id, String type){
+    public void deletePost(String id, String type) {
+        String userId = SecurityUtils.getCurrentUserId();
+        postJobManagementService.cancelPost(id);
+
         if (type.equals(PostType.BUSINESS_SCHEDULE.name())) {
             var businessSchedule = postRepository.findByIdType(id).orElseThrow(() ->
                     new AppException(ErrorCode.BUSINESS_SCHEDULE_NOT_EXISTED));
@@ -314,28 +253,38 @@ public class PostService {
                     new AppException(ErrorCode.TRAVEL_ITINERARY_NOT_EXISTED));
             travelItineraryRepository.delete(travelItinerary);
         }
-    }
 
-    public void updateUserProfile(ProfileUpdatedEvent profileUpdatedEvent) {
-        var businessPosts = postRepository.findAllByUserIdForUpdate(profileUpdatedEvent.getUserId());
-        businessPosts.forEach(post -> {
-            post.setDisplayName(profileUpdatedEvent.getDisplayName());
-            post.setAvatar(profileUpdatedEvent.getAvatar());
-            postRepository.save(post);
-        });
-
-        var travelPosts = travelItineraryRepository.findAllByUserIdForUpdate(profileUpdatedEvent.getUserId());
-        travelPosts.forEach(post -> {
-            post.setDisplayName(profileUpdatedEvent.getDisplayName());
-            post.setAvatar(profileUpdatedEvent.getAvatar());
-            travelItineraryRepository.save(post);
-        });
+        postCacheService.invalidateAllUserPosts(userId);
     }
 
     public StatusResponse getStatus() {
         return StatusResponse.builder()
-                .quantityOnGoing(postRepository.countByStatus("On going"))
-                .quantityUpComing(postRepository.countByStatus("Up coming"))
+                .quantityOnGoing(postRepository.countByStatus(STATUS_ONGOING))
+                .quantityUpComing(postRepository.countByStatus(STATUS_UPCOMING))
                 .build();
+    }
+
+    public PageResponse<ScheduleResponse> searchPosts(String query, int page, int size) {
+        Pageable pageable = PageRequest.of(page - 1, size);
+        var searchResult = postElasticRepository.searchByTitleOrContent(query, pageable);
+
+        return PageResponse.<ScheduleResponse>builder()
+                .currentPage(page)
+                .pageSize(size)
+                .totalPages(searchResult.getTotalPages())
+                .totalElement(searchResult.getTotalElements())
+                .data(searchResult.getContent().stream()
+                        .map(doc -> ScheduleResponse.builder()
+                                .id(doc.getId())
+                                .title(doc.getTitle())
+                                .content(doc.getContent())
+                                .postType(doc.getPostType())
+                                .build())
+                        .toList())
+                .build();
+    }
+
+    public Integer countByUserId() {
+        return postRepository.countByUserId(SecurityUtils.getCurrentUserId());
     }
 }

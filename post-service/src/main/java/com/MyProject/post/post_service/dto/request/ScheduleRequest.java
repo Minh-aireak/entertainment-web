@@ -4,6 +4,7 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 
 @Data
@@ -17,8 +18,5 @@ public class ScheduleRequest {
     String content;
     LocalDateTime startTime;
     LocalDateTime endTime;
-    String latStart;
-    String lonStart;
-    String latEnd;
-    String lonEnd;
+    List<String> listUsersJoin;
 }

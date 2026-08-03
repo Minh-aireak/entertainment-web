@@ -1,6 +1,8 @@
 package com.MyProject.post.post_service.exception;
 
-import com.MyProject.post.post_service.dto.response.ApiResponse;
+import com.MyProject.common.dto.response.ApiResponse;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import jakarta.validation.ConstraintViolation;
 import org.quartz.JobExecutionException;
 import org.quartz.SchedulerException;
@@ -19,11 +21,21 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(value = AppException.class)
     public ResponseEntity<ApiResponse<java.lang.Object>> handlingAppException(AppException exception) {
-        return ApiResponse.toResponseEntity(exception.getErrorCode());
+        return ErrorCode.toResponseEntity(exception.getErrorCode());
+    }
+
+    @ExceptionHandler(value = RequestNotPermitted.class)
+    public ResponseEntity<ApiResponse<java.lang.Object>> handlingRequestNotPermitted() {
+        return ErrorCode.toResponseEntity(ErrorCode.RATE_LIMIT_EXCEEDED);
+    }
+
+    @ExceptionHandler(value = CallNotPermittedException.class)
+    public ResponseEntity<ApiResponse<java.lang.Object>> handlingCallNotPermittedException() {
+        return ErrorCode.toResponseEntity(ErrorCode.SERVICE_UNAVAILABLE);
     }
 
     @ExceptionHandler(value = MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiResponse<java.lang.Object>> handlingMethodArgumentNotValidException(
+    public ResponseEntity<ApiResponse<Object>> handlingMethodArgumentNotValidException(
             MethodArgumentNotValidException exception) {
         Map<String, Object> attributes;
         String enumKey = Objects.requireNonNull(exception.getFieldError()).getDefaultMessage();
@@ -49,16 +61,16 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(value = AccessDeniedException.class)
     public ResponseEntity<ApiResponse<java.lang.Object>> handlingAccessDeniedException() {
-        return ApiResponse.toResponseEntity(ErrorCode.UNAUTHORIZED);
+        return ErrorCode.toResponseEntity(ErrorCode.UNAUTHORIZED);
     }
 
     @ExceptionHandler(value = JobExecutionException.class)
     public ResponseEntity<ApiResponse<java.lang.Object>> handlingJobExecutionException() {
-        return ApiResponse.toResponseEntity(ErrorCode.JOB_EXECUTION_FAILED);
+        return ErrorCode.toResponseEntity(ErrorCode.JOB_EXECUTION_FAILED);
     }
 
     @ExceptionHandler(value = SchedulerException.class)
     public ResponseEntity<ApiResponse<java.lang.Object>> handlingSchedulerException() {
-        return ApiResponse.toResponseEntity(ErrorCode.SCHEDULER_FAILED);
+        return ErrorCode.toResponseEntity(ErrorCode.SCHEDULER_FAILED);
     }
 }

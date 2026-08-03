@@ -4,6 +4,7 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
 import org.springframework.data.annotation.TypeAlias;
+import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.MongoId;
 
@@ -23,16 +24,17 @@ public class Post {
     String id;
     PostType postType;
 
+    @Indexed
     String userId;
-    String displayName;
-    String avatar;
     String title;
     String content;
     LocalDateTime startTime;
     LocalDateTime endTime;
     LocalDateTime createdDate;
+    LocalDateTime modifiedDate;
     String status;
     String startJobKey;
     String endJobKey;
-    List<String> listUserJoin;
+    List<String> listUsersJoin;
+    long likeCount;
 }

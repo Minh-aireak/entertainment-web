@@ -23,7 +23,8 @@ public class ScheduleResponse {
    LocalDateTime startTime;
    LocalDateTime endTime;
    String createdDate;
+   String modifiedDate;
    String status;
-   DataWeatherResponse startPosition;
-   DataWeatherResponse endPosition;
+   long likeCount;
+   boolean liked;
 }

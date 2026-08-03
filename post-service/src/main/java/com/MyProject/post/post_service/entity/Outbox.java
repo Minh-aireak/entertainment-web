@@ -1,0 +1,35 @@
+package com.MyProject.post.post_service.entity;
+
+import lombok.*;
+import lombok.experimental.FieldDefaults;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.mapping.Field;
+import org.springframework.data.mongodb.core.mapping.MongoId;
+
+import java.time.Instant;
+
+@Document(collection = "outbox")
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE)
+public class Outbox {
+    @MongoId
+    @Field("id")
+    String id;
+
+    @Field("aggregateId")
+    String aggregateId;
+
+    String eventId;
+
+    String topic;
+
+    String payload;
+
+    @CreatedDate
+    Instant createdDate;
+}

@@ -1,6 +1,6 @@
 package com.MyProject.post.post_service.configuration;
 
-import org.jspecify.annotations.NonNull;
+import org.springframework.lang.NonNull;
 import org.quartz.spi.TriggerFiredBundle;
 import org.springframework.beans.factory.config.AutowireCapableBeanFactory;
 import org.springframework.context.ApplicationContext;
@@ -9,7 +9,7 @@ import org.springframework.scheduling.quartz.SpringBeanJobFactory;
 
 /**
  * Factory này cho phép Quartz Jobs sử dụng @Autowired
- *
+ * <p>
  * GIẢI THÍCH:
  * - Mặc định Quartz tự tạo Job instances, không qua Spring
  * - Nên không thể @Autowired trong Job

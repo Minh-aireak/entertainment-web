@@ -1,7 +1,9 @@
 server:
   port: 8083
+  tomcat:
+    redirect-context-root: false
   servlet:
-    context-path: /post
+    context-path: /posts
 
 spring:
   autoconfigure:
@@ -11,14 +13,16 @@ spring:
     name: post-service
   data:
     mongodb:
-      uri: mongodb://${MONGODB_ROOT_USERNAME}:${MONGODB_ROOT_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/post-service?authSource=admin
+      uri: mongodb://${MONGODB_ROOT_USERNAME:root}:${MONGODB_ROOT_PASSWORD:REDACTED_LEGACY_CREDENTIAL}@${MONGODB_HOST:localhost}:${MONGODB_PORT:27017}/post-service?authSource=admin
     redis:
-      host: ${REDIS_HOST}
-      port: ${REDIS_PORT}
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
       connect-timeout: 5000
       timeout: 5000
+      repositories:
+        enabled: false
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -28,14 +32,21 @@ spring:
       group-id: post-group
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       properties:
-          spring.json.trusted.packages: "*"
+        spring.deserializer.value.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
+        spring.json.trusted.packages: "*"
+      enable-auto-commit: false
+    listener:
+      ack-mode: manual_immediate
+
+  elasticsearch:
+    uris: http://${ELASTICSEARCH_HOST:localhost}:${ELASTICSEARCH_PORT:9300}
 
   datasource:
-    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/quartz_db?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=Asia/Ho_Chi_Minh
-    username: ${MYSQL_ROOT_USERNAME}
-    password: ${MYSQL_ROOT_PASSWORD}
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/quartz_db?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=Asia/Ho_Chi_Minh
+    username: ${MYSQL_ROOT_USERNAME:root}
+    password: ${MYSQL_ROOT_PASSWORD:REDACTED_LEGACY_CREDENTIAL}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   quartz:
@@ -61,11 +72,69 @@ spring:
             threadPriority: 5
 
 jwt:
-  signerKey: ${JWT_SIGNER_KEY}
+  signerKey: ${JWT_SIGNER_KEY:uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0}
 
 app:
   services:
     profile:
-      url: "http://localhost:8081/profile"
-    weather:
-      url: "http://localhost:8085/weather"
+      url: ${PROFILE_SERVICE_URL:http://localhost:8081}/profiles
+  rate-limit:
+    post-write:
+      limit-for-period: 15
+      limit-refresh-period: 3s
+    post-update:
+      limit-for-period: 10
+      limit-refresh-period: 30s
+    post-delete:
+      limit-for-period: 10
+      limit-refresh-period: 30s
+    post-read:
+      limit-for-period: 50
+      limit-refresh-period: 5s
+    post-search:
+      limit-for-period: 8
+      limit-refresh-period: 10s
+    post-count:
+      limit-for-period: 30
+      limit-refresh-period: 10s
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        register-health-indicator: true
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        permitted-number-of-calls-in-half-open-state: 5
+        wait-duration-in-open-state: 10s
+        failure-rate-threshold: 50
+        automatic-transition-from-open-to-half-open-enabled: true
+        writable-stack-trace-enabled: false
+        ignore-exceptions:
+          - com.MyProject.post.post_service.exception.AppException
+          - io.github.resilience4j.ratelimiter.RequestNotPermitted
+    instances:
+      postSearchApi:
+        base-config: default
+        wait-duration-in-open-state: 20s
+  ratelimiter:
+    configs:
+      default:
+        timeout-duration: 0s
+  retry:
+    configs:
+      default:
+        max-attempts: 2
+        wait-duration: 300ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        ignore-exceptions:
+          - com.MyProject.post.post_service.exception.AppException
+          - io.github.resilience4j.ratelimiter.RequestNotPermitted
+          - io.github.resilience4j.circuitbreaker.CallNotPermittedException
+
+management:
+  health:
+    circuitbreakers:
+      enabled: true

@@ -20,9 +20,4 @@ public class ScheduleUpdateRequest {
 
     LocalDateTime startTime;
     LocalDateTime endTime;
-
-    String latStart;
-    String lonStart;
-    String latEnd;
-    String lonEnd;
 }

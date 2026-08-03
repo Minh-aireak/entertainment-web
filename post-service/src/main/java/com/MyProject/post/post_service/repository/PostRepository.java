@@ -25,4 +25,6 @@ public interface PostRepository extends MongoRepository<Post, String> {
     List<Post> findAllByUserIdForUpdate(String userId);
 
     int countByStatus(String status);
+
+    int countByUserId(String userId);
 }

@@ -1,11 +1,13 @@
 package com.MyProject.post.post_service.exception;
 
+import com.MyProject.common.dto.response.ApiResponse;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.experimental.FieldDefaults;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.http.ResponseEntity;
 
 @Getter
 @AllArgsConstructor
@@ -23,9 +25,22 @@ public enum ErrorCode {
     SCHEDULER_EXCEPTION(8310, "Scheduler exception!", HttpStatus.INTERNAL_SERVER_ERROR),
     DELETE_POST(8311, "Cannot cancel completed post!", HttpStatus.INTERNAL_SERVER_ERROR),
     DELETE_JOB(8312, "Delete job throw exception!", HttpStatus.INTERNAL_SERVER_ERROR),
-    ACTION_NOT_FOUND(8313, "Action not found!", HttpStatus.BAD_REQUEST);
+    ACTION_NOT_FOUND(8313, "Action not found!", HttpStatus.BAD_REQUEST),
+    RATE_LIMIT_EXCEEDED(8314, "Rate limit exceeded!", HttpStatus.TOO_MANY_REQUESTS),
+    SERVICE_UNAVAILABLE(8315, "Service unavailable!", HttpStatus.SERVICE_UNAVAILABLE);
 
     int code;
     String message;
     HttpStatusCode statusCode;
+
+    public static ApiResponse<java.lang.Object> of(ErrorCode errorCode) {
+        return ApiResponse.builder()
+                .code(errorCode.getCode())
+                .message(errorCode.getMessage())
+                .build();
+    }
+
+    public static ResponseEntity<ApiResponse<Object>> toResponseEntity(ErrorCode errorCode) {
+        return ResponseEntity.status(errorCode.getStatusCode()).body(of(errorCode));
+    }
 }
