@@ -1,23 +1,49 @@
 server:
   port: 8084
   servlet:
-    context-path: /file
+    context-path: /files
 
 spring:
   application:
     name: file-service
   data:
     mongodb:
-      uri: mongodb://${MONGODB_ROOT_USERNAME}:${MONGODB_ROOT_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/file-service?authSource=admin
+      uri: mongodb://${MONGODB_ROOT_USERNAME:root}:${MONGODB_ROOT_PASSWORD:REDACTED_LEGACY_CREDENTIAL}@${MONGODB_HOST:localhost}:${MONGODB_PORT:27017}/file-service?authSource=admin
   servlet:
     multipart:
-      max-file-size: ${MAX_FILE_SIZE}
-      max-request-size: ${MAX_REQUEST_SIZE}
+      max-file-size: ${MAX_FILE_SIZE:2GB}
+      max-request-size: ${MAX_REQUEST_SIZE:2100MB}
+      file-size-threshold: 2KB # Chuyển sang disk nếu > 2KB
 
 jwt:
-  signerKey: ${JWT_SIGNER_KEY}
+  signerKey: ${JWT_SIGNER_KEY:uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0}
 
-app:
-  file:
-    storage-dir: ${FILE_STORAGE_DIR}
-    download-prefix: ${FILE_DOWNLOAD_PREFIX}
+cloudinary:
+  cloud-name: ${CLOUDINARY_NAME:dhlqkqygg}
+  api-key: ${CLOUDINARY_API_KEY:589111187194195}
+  api-secret: ${CLOUDINARY_API_SECRET:s5JaqouoY6AKKdfqucqS8WhRJEY}
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      cloudinary:
+        register-health-indicator: true
+        sliding-window-size: 10
+        permitted-number-of-calls-in-half-open-state: 3
+        sliding-window-type: COUNT_BASED
+        minimum-number-of-calls: 5
+        wait-duration-in-open-state: 5s
+        failure-rate-threshold: 50
+        event-consumer-buffer-size: 10
+        ignore-exceptions:
+          - com.MyProject.file.file_service.exception.AppException
+  ratelimiter:
+    instances:
+      cloudinary:
+        limit-for-period: 50
+        limit-refresh-period: 1s
+        timeout-duration: 0s
+      file-api:
+        limit-for-period: 100
+        limit-refresh-period: 1s
+        timeout-duration: 0s

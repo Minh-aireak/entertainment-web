@@ -10,5 +10,13 @@ import lombok.experimental.FieldDefaults;
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class FileResponse {
+    String id;
     String url;
+    String type;
+    Long size;
+    Integer width;
+    Integer height;
+    Long duration;
+    String format;
+    String resolution;
 }

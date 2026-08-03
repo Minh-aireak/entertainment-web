@@ -1,6 +1,6 @@
 package com.MyProject.file.file_service.controller;
 
-import com.MyProject.file.file_service.dto.response.ApiResponse;
+import com.MyProject.common.dto.response.ApiResponse;
 import com.MyProject.file.file_service.dto.response.FileResponse;
 import com.MyProject.file.file_service.service.FileService;
 import lombok.AccessLevel;
@@ -20,10 +20,46 @@ public class FileController {
     FileService fileService;
 
     @PostMapping("/media/upload")
-    ApiResponse<FileResponse> uploadMedia(@RequestParam("file") MultipartFile multipartFile) throws IOException {
+    ApiResponse<FileResponse> upload(@RequestParam("file") MultipartFile multipartFile) {
         return ApiResponse.<FileResponse>builder()
                 .result(fileService.uploadFile(multipartFile))
                 .message("Upload succeeded!")
+                .build();
+    }
+
+    @PostMapping("/media/upload/init")
+    ApiResponse<String> initChunkedUpload() {
+        return ApiResponse.<String>builder()
+                .result(fileService.initChunkedUpload())
+                .build();
+    }
+
+    @PostMapping("/media/upload/chunk")
+    ApiResponse<Void> uploadChunk(
+            @RequestParam("uploadId") String uploadId,
+            @RequestParam("chunkIndex") Integer chunkIndex,
+            @RequestParam("file") MultipartFile file) {
+        fileService.uploadChunk(uploadId, chunkIndex, file);
+        return ApiResponse.<Void>builder()
+                .message("Chunk " + chunkIndex + " uploaded")
+                .build();
+    }
+
+    @PostMapping("/media/upload/complete")
+    ApiResponse<FileResponse> completeChunkedUpload(
+            @RequestParam("uploadId") String uploadId,
+            @RequestParam("fileName") String fileName,
+            @RequestParam("contentType") String contentType) {
+        return ApiResponse.<FileResponse>builder()
+                .result(fileService.completeChunkedUpload(uploadId, fileName, contentType))
+                .message("Upload complete!")
+                .build();
+    }
+
+    @GetMapping("/media/info/{fileId}")
+    ApiResponse<FileResponse> getFileInfo(@PathVariable String fileId) {
+        return ApiResponse.<FileResponse>builder()
+                .result(fileService.getFileInfo(fileId))
                 .build();
     }
 

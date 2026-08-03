@@ -1,5 +1,6 @@
 package com.MyProject.file.file_service.exception;
 
+import com.MyProject.file.file_service.enums.ErrorCode;
 import lombok.Getter;
 
 @Getter
