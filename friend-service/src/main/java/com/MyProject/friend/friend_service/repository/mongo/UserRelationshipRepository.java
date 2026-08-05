@@ -10,11 +10,14 @@ import org.springframework.data.mongodb.repository.Update;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.util.List;
 
 @Repository
 public interface UserRelationshipRepository extends MongoRepository<UserRelationship, String> {
 
     Optional<UserRelationship> findByHashFriend(String hashFriend);
+
+    boolean existsByHashFriend(String hashFriend);
 
     void deleteByHashFriend(String hashFriend);
 
@@ -28,11 +31,20 @@ public interface UserRelationshipRepository extends MongoRepository<UserRelation
             Pageable pageable
     );
 
+    @Query(value = "{ '$and': [ " +
+            "{ '$or': [ { 'senderId': ?0 }, { 'receiverId': ?0 } ] }, " +
+            "{ 'relationshipStatus': ?1 } " +
+            "] }", fields = "{ 'senderId': 1, 'receiverId': 1 }")
+    List<UserRelationship> findRelationshipsForSuggestions(
+            String userId,
+            RelationshipStatus relationshipStatus
+    );
+
     @Query("{ 'hashFriend': ?0 }")
     @Update("{ '$set': { 'relationshipStatus': ?1 } }")
     void updateRelationshipStatus(String hashFriend, RelationshipStatus status);
 
-    @Query("""
+    @Query(value = """
         {
           $and: [
             { relationshipStatus: ?1 },
@@ -44,6 +56,6 @@ public interface UserRelationshipRepository extends MongoRepository<UserRelation
             }
           ]
         }
-        """)
-    Integer countMyFriends(String userId, RelationshipStatus status);
+        """, count = true)
+    long countMyFriends(String userId, RelationshipStatus status);
 }

@@ -197,9 +197,17 @@ public class ChatMessageService {
             }
         }
 
+        // 3. If replying, the target message must exist in the same conversation
+        ChatMessage replyTarget = null;
+        if (request.getReplyToMessageId() != null && !request.getReplyToMessageId().isBlank()) {
+            replyTarget = chatMessageRepository.findById(request.getReplyToMessageId())
+                    .filter(m -> m.getConversationId().equals(request.getConversationId()))
+                    .orElseThrow(() -> new AppException(ErrorCode.REPLY_TARGET_NOT_FOUND));
+        }
+
         // 3. Prepare message content and validate input (No DB change yet)
         var chatMessage = handleMessageContent(userId, request, request.getClientMessageId());
-        
+
         // 3. ATOMIC UPDATE: Increment sequence and update last message in ONE DB call
         Conversation conversation = conversationRepository.incrementSeqAndUpdateLastMessage(
                 request.getConversationId(), 
@@ -233,6 +241,9 @@ public class ChatMessageService {
             throw duplicateKeyException;
         }
         var response = chatMessageMapper.toChatMessageResponse(savedMessage);
+        if (replyTarget != null) {
+            applyReplyPreview(response, replyTarget, enrichProfiles(Set.of(replyTarget.getSenderId())));
+        }
 
         // 5. Save to Outbox for CDC to elasticsearch
         publishMessageEvent("chat.message.created", response);
@@ -250,6 +261,7 @@ public class ChatMessageService {
                         .typeNotification("NEW_CHAT")
                         .userIdSender(response.getSenderId())
                         .toUserIds(otherUserIds)
+                        .conversationId(request.getConversationId())
                         .build());
 
         // 7. Update sender seen (Pointer management)
@@ -276,30 +288,39 @@ public class ChatMessageService {
         Pageable pageable = PageRequest.of(page - 1, size, sort);
         Page<ChatMessage> pageData = chatMessageRepository.findByConversationId(conversationId, pageable);
 
-        // 1. Collect unique senderIds
+        // 1. Batch-fetch reply targets for messages that are replies
+        Map<String, ChatMessage> replyTargets = fetchReplyTargets(pageData.getContent());
+
+        // 2. Collect unique senderIds (message senders + reply target senders)
         Set<String> senderIds = pageData.getContent().stream()
                 .map(ChatMessage::getSenderId)
                 .collect(Collectors.toSet());
+        replyTargets.values().forEach(target -> senderIds.add(target.getSenderId()));
 
-        // 2. Enrich profiles (Bulk)
+        // 3. Enrich profiles (Bulk)
         Map<String, UserProfileResponse> profileMap = enrichProfiles(senderIds);
 
-        // 3. Map to response with profile info
+        // 4. Map to response with profile info
         List<ChatMessageResponse> chatMessageResponseList = pageData.getContent().stream()
                 .map(a -> {
                     var response = chatMessageMapper.toChatMessageResponse(a);
                     if (response.getMessageType() == MessageType.DELETED_FOR_EVERYONE)
                         response.setContent(MessageType.DELETED_FOR_EVERYONE.getDefaultContent());
-                    
+
                     response.setMe(a.getSenderId().equals(userId));
-                    
+
                     // Fill profile info from map
                     UserProfileResponse profile = profileMap.get(a.getSenderId());
                     if (profile != null) {
                         response.setSenderName(profile.getDisplayName());
                         response.setSenderAvatar(profile.getAvatar());
                     }
-                    
+
+                    ChatMessage replyTarget = replyTargets.get(a.getReplyToMessageId());
+                    if (replyTarget != null) {
+                        applyReplyPreview(response, replyTarget, profileMap);
+                    }
+
                     return response;
                 })
                 .toList();
@@ -365,6 +386,40 @@ public class ChatMessageService {
         return result;
     }
 
+    private Map<String, ChatMessage> fetchReplyTargets(Collection<ChatMessage> messages) {
+        Set<String> replyIds = messages.stream()
+                .map(ChatMessage::getReplyToMessageId)
+                .filter(id -> id != null && !id.isBlank())
+                .collect(Collectors.toSet());
+
+        if (replyIds.isEmpty()) return Collections.emptyMap();
+
+        return chatMessageRepository.findAllById(replyIds).stream()
+                .collect(Collectors.toMap(ChatMessage::getId, m -> m));
+    }
+
+    private void applyReplyPreview(ChatMessageResponse response, ChatMessage replyTarget, Map<String, UserProfileResponse> profileMap) {
+        response.setReplyToSenderId(replyTarget.getSenderId());
+        response.setReplyToMessageType(replyTarget.getMessageType());
+        response.setReplyToContent(
+                replyTarget.getMessageType() == MessageType.TEXT
+                        ? replyTarget.getContent()
+                        : replyTarget.getMessageType().getDefaultContent());
+
+        UserProfileResponse profile = profileMap.get(replyTarget.getSenderId());
+        if (profile != null) {
+            response.setReplyToSenderName(profile.getDisplayName());
+        }
+    }
+
+    private void enrichReplyPreview(ChatMessageResponse response, ChatMessage message) {
+        String replyId = message.getReplyToMessageId();
+        if (replyId == null || replyId.isBlank()) return;
+
+        chatMessageRepository.findById(replyId).ifPresent(target ->
+                applyReplyPreview(response, target, enrichProfiles(Set.of(target.getSenderId()))));
+    }
+
     private void updateLastMessageCache(String conversationId, String contentResponse) {
 
         String key = getLastMessageCacheKey(conversationId);
@@ -411,6 +466,7 @@ public class ChatMessageService {
         // 2. Prepare response for event
         var response = chatMessageMapper.toChatMessageResponse(chatMessage);
         response.setContent(MessageType.DELETED_FOR_EVERYONE.getDefaultContent());
+        enrichReplyPreview(response, chatMessage);
 
         // 3. Save to Outbox for CDC (Sync to ES and notify other users)
         publishMessageEvent("chat.message.deleted", response);
@@ -457,6 +513,7 @@ public class ChatMessageService {
         chatMessage.setContent(request.getContent());
         var saved = chatMessageRepository.save(chatMessage);
         var response = chatMessageMapper.toChatMessageResponse(saved);
+        enrichReplyPreview(response, saved);
 
         // 2. Save to Outbox for CDC (Sync to ES and notify other users)
         publishMessageEvent("chat.message.updated", response);
@@ -595,15 +652,26 @@ public class ChatMessageService {
         Pageable pageable = PageRequest.of(page - 1, size, Sort.by("createdAt").descending());
         var searchResult = chatMessageElasticRepository.searchMessages(conversationId, query, pageable);
 
-        // 1. Collect unique senderIds
+        // 1. Batch-fetch reply targets (search index doesn't carry the quoted preview, only the id)
+        Set<String> replyIds = searchResult.getContent().stream()
+                .map(ChatMessageDoc::getReplyToMessageId)
+                .filter(id -> id != null && !id.isBlank())
+                .collect(Collectors.toSet());
+        Map<String, ChatMessage> replyTargets = replyIds.isEmpty()
+                ? Collections.emptyMap()
+                : chatMessageRepository.findAllById(replyIds).stream()
+                        .collect(Collectors.toMap(ChatMessage::getId, m -> m));
+
+        // 2. Collect unique senderIds (message senders + reply target senders)
         Set<String> senderIds = searchResult.getContent().stream()
                 .map(ChatMessageDoc::getSenderId)
                 .collect(Collectors.toSet());
+        replyTargets.values().forEach(target -> senderIds.add(target.getSenderId()));
 
-        // 2. Enrich profiles (Bulk: Redis check -> Service fallback -> Warm cache)
+        // 3. Enrich profiles (Bulk: Redis check -> Service fallback -> Warm cache)
         Map<String, UserProfileResponse> profileMap = enrichProfiles(senderIds);
 
-        // 3. Map to response with profile info
+        // 4. Map to response with profile info
         List<ChatMessageResponse> data = searchResult.getContent().stream()
                 .map(doc -> {
                     var response = ChatMessageResponse.builder()
@@ -628,7 +696,12 @@ public class ChatMessageService {
                         response.setSenderName(profile.getDisplayName());
                         response.setSenderAvatar(profile.getAvatar());
                     }
-                    
+
+                    ChatMessage replyTarget = replyTargets.get(doc.getReplyToMessageId());
+                    if (replyTarget != null) {
+                        applyReplyPreview(response, replyTarget, profileMap);
+                    }
+
                     return response;
                 })
                 .toList();

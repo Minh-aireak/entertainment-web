@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 
 import { notificationService } from '../api/notificationService';
+import { REALTIME_NOTIFICATION_EVENT } from '../contexts/WebSocketContext';
 import type { NotificationResponse, PageResponse } from '../models';
 import { formatRelativeTime } from '../utils/time';
 
@@ -53,6 +54,12 @@ const NotificationsPage: React.FC = () => {
 
   useEffect(() => {
     fetchNotifications();
+  }, [fetchNotifications]);
+
+  useEffect(() => {
+    const refreshNotifications = () => fetchNotifications();
+    window.addEventListener(REALTIME_NOTIFICATION_EVENT, refreshNotifications);
+    return () => window.removeEventListener(REALTIME_NOTIFICATION_EVENT, refreshNotifications);
   }, [fetchNotifications]);
 
   const handleMarkAllRead = async () => {

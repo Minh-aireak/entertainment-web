@@ -13,6 +13,7 @@ import java.time.LocalDateTime;
 public class NotificationUI {
     String displayNameSender;
     String avatarSender;
+    String type;
     String title;
     String content;
 }

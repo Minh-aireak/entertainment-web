@@ -27,7 +27,6 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 import com.MyProject.identity.identity_service.dto.request.UserCreationRequest;
 import com.MyProject.identity.identity_service.dto.request.ChangePasswordRequest;
-import com.MyProject.identity.identity_service.dto.response.PermissionResponse;
 import com.MyProject.identity.identity_service.dto.response.RoleResponse;
 import com.MyProject.identity.identity_service.dto.response.UserResponse;
 import com.MyProject.identity.identity_service.service.UserService;
@@ -73,12 +72,9 @@ class UserControllerTest {
                 .newPassword("1801062010")
                 .build();
 
-        PermissionResponse addFriend = new PermissionResponse("ADD_FRIEND", "Add new friend");
-
         RoleResponse roleResponse = RoleResponse.builder()
                 .name("USER")
                 .description("User role")
-                .permissions(Set.of(addFriend))
                 .build();
 
         userResponse = UserResponse.builder()
@@ -113,9 +109,7 @@ class UserControllerTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("result.username").value("aireak"))
                 .andExpect(MockMvcResultMatchers.jsonPath("result.email").value("aireak@gmail.com"))
                 .andExpect(MockMvcResultMatchers.jsonPath("result.roles[0].name").value("USER"))
-                .andExpect(MockMvcResultMatchers.jsonPath("result.roles[0].description").value("User role"))
-                .andExpect(MockMvcResultMatchers.jsonPath("result.roles[0].permissions[0].name").value("ADD_FRIEND"))
-                .andExpect(MockMvcResultMatchers.jsonPath("result.roles[0].permissions[0].description").value("Add new friend"));
+                .andExpect(MockMvcResultMatchers.jsonPath("result.roles[0].description").value("User role"));
 
         verify(userService, times(1)).createUser(creationRequest);
     }
@@ -304,9 +298,7 @@ class UserControllerTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("result[0].username").value("aireak"))
                 .andExpect(MockMvcResultMatchers.jsonPath("result[0].email").value("aireak@gmail.com"))
                 .andExpect(MockMvcResultMatchers.jsonPath("result[0].roles[0].name").value("USER"))
-                .andExpect(MockMvcResultMatchers.jsonPath("result[0].roles[0].description").value("User role"))
-                .andExpect(MockMvcResultMatchers.jsonPath("result[0].roles[0].permissions[0].name").value("ADD_FRIEND"))
-                .andExpect(MockMvcResultMatchers.jsonPath("result[0].roles[0].permissions[0].description").value("Add new friend"));
+                .andExpect(MockMvcResultMatchers.jsonPath("result[0].roles[0].description").value("User role"));
 
         verify(userService, times(1)).getAllUsers();
     }

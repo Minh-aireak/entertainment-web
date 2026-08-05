@@ -39,10 +39,16 @@ export interface ChatMessage {
   seq: number;
   attachmentFileUrl?: string;
   replyToMessageId?: string;
+  replyToSenderId?: string;
+  replyToSenderName?: string;
+  replyToContent?: string;
+  replyToMessageType?: MessageType;
   clientMessageId?: string;
   createdDate: string;
   modifiedDate?: string;
   messageStatus: MessageStatus;
+  senderName?: string;
+  senderAvatar?: string;
 }
 
 export interface ConversationParticipant {
@@ -353,12 +359,6 @@ export interface User {
 export interface Role {
   name: string;
   description: string;
-  permissions: Permission[];
-}
-
-export interface Permission {
-  name: string;
-  description: string;
 }
 
 export interface TokenRequest {
@@ -478,21 +478,9 @@ export interface ExchangeTokenRequest {
 export interface RoleCreationRequest {
   name: string;
   description: string;
-  permissions: string[];
 }
 
 export interface RoleUpdateRequest {
-  name: string;
-  description: string;
-  permissions: string[];
-}
-
-export interface PermissionCreationRequest {
-  name: string;
-  description: string;
-}
-
-export interface PermissionUpdateRequest {
   name: string;
   description: string;
 }
@@ -502,6 +490,7 @@ export interface UserResponse {
   username: string;
   email: string;
   roles: RoleResponse[];
+  active: boolean;
 }
 
 export interface AuthenticationResponse {
@@ -534,12 +523,6 @@ export interface OutboundUserResponse {
 export interface RoleResponse {
   name: string;
   description: string;
-  permissions: PermissionResponse[];
-}
-
-export interface PermissionResponse {
-  name: string;
-  description: string;
 }
 
 export interface ChatMessageResponse {
@@ -551,6 +534,10 @@ export interface ChatMessageResponse {
   seq: number;
   attachmentFileUrl: string;
   replyToMessageId: string;
+  replyToSenderId?: string;
+  replyToSenderName?: string;
+  replyToContent?: string;
+  replyToMessageType?: MessageType;
   createdDate: string;
   modifiedDate: string;
   messageStatus: MessageStatus;
@@ -751,9 +738,7 @@ export type MessageType =
   | 'IMAGE'
   | 'AUDIO'
   | 'VIDEO'
-  | 'FILE'
-  | 'STICKER'
-  | 'POST';
+  | 'FILE';
 
 export type TypeNotification =
   | 'NEW_CHAT'

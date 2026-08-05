@@ -14,8 +14,10 @@ import {
 } from '@mui/material';
 import { Search, PersonRemove, Chat, Person, PersonAdd, Cancel } from '@mui/icons-material';
 import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 import { friendService } from '../api/friendService';
-import { profileService } from '../api/profileService';
+import { REALTIME_FRIENDSHIP_EVENT } from '../contexts/WebSocketContext';
+import { useConfirmDialog } from '../contexts/ConfirmDialogContext';
 import type { UserRelationshipResponse, FriendRequestResponse, UserProfileResponse } from '../models';
 
 interface FriendUI {
@@ -26,6 +28,8 @@ interface FriendUI {
 }
 
 const FriendsPage: React.FC = React.memo(() => {
+  const navigate = useNavigate();
+  const confirmDialog = useConfirmDialog();
   const [tabValue, setTabValue] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -41,7 +45,7 @@ const FriendsPage: React.FC = React.memo(() => {
       const results = await Promise.allSettled([
         friendService.getMyFriends(1, 10),
         friendService.getMyFriendRequests(1, 10),
-        profileService.getAllProfiles(1, 20),
+        friendService.getFriendSuggestions(1, 8),
       ]);
 
       // Handle Friends
@@ -96,6 +100,12 @@ const FriendsPage: React.FC = React.memo(() => {
     fetchAllFriendData();
   }, [fetchAllFriendData]);
 
+  useEffect(() => {
+    const refreshFriendData = () => fetchAllFriendData();
+    window.addEventListener(REALTIME_FRIENDSHIP_EVENT, refreshFriendData);
+    return () => window.removeEventListener(REALTIME_FRIENDSHIP_EVENT, refreshFriendData);
+  }, [fetchAllFriendData]);
+
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
   };
@@ -107,7 +117,7 @@ const FriendsPage: React.FC = React.memo(() => {
     else if (tabValue === 2) data = receivedRequests;
     else if (tabValue === 3) data = sentRequests;
 
-    return data.filter(f => 
+    return data.filter(f =>
       f.fullName.toLowerCase().includes(searchQuery.toLowerCase())
     );
   };
@@ -154,17 +164,26 @@ const FriendsPage: React.FC = React.memo(() => {
   };
 
   const handleRemoveFriend = async (id: string) => {
-    if (window.confirm('Bạn có chắc chắn muốn hủy kết bạn?')) {
-      try {
-        const res = await friendService.updateRelationshipStatus(id, 'UNFRIEND');
-        if (res.code === 1000) {
-          toast.success('Đã hủy kết bạn');
-          setFriends(prev => prev.filter(f => f.id !== id));
-        }
-      } catch (error) {
-        toast.error('Thao tác thất bại');
+    const confirmed = await confirmDialog({
+      title: 'Hủy kết bạn',
+      message: 'Bạn có chắc chắn muốn hủy kết bạn?',
+      confirmText: 'Hủy kết bạn',
+    });
+    if (!confirmed) return;
+
+    try {
+      const res = await friendService.updateRelationshipStatus(id, 'UNFRIEND');
+      if (res.code === 1000) {
+        toast.success('Đã hủy kết bạn');
+        setFriends(prev => prev.filter(f => f.id !== id));
       }
+    } catch (error) {
+      toast.error('Thao tác thất bại');
     }
+  };
+
+  const handleMessageFriend = (id: string) => {
+    navigate('/social/chat', { state: { openWithUserId: id } });
   };
 
   const filteredData = getFilteredData();
@@ -245,7 +264,7 @@ const FriendsPage: React.FC = React.memo(() => {
                   <Box sx={{ mt: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
                     {item.status === 'FRIEND' && (
                       <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Button fullWidth variant="contained" startIcon={<Chat />} size="small">Nhắn tin</Button>
+                        <Button fullWidth variant="contained" startIcon={<Chat />} onClick={() => handleMessageFriend(item.id)} size="small">Nhắn tin</Button>
                         <Button variant="outlined" color="error" onClick={() => handleRemoveFriend(item.id)} size="small">
                           <PersonRemove fontSize="small" />
                         </Button>

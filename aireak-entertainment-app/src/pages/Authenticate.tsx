@@ -33,11 +33,26 @@ const Authenticate: React.FC = () => {
           const profileRes = await profileService.getMyProfile();
           if (profileRes.code === 1000) {
             const profile = profileRes.result;
+
+            // Lấy roles thật từ identity-service (giống Login.tsx) để admin
+            // không bị mất quyền quản trị khi đăng nhập qua Google.
+            let roles: { name: string; description: string }[] = [
+              { name: 'USER', description: 'Default user role' },
+            ];
+            try {
+              const myInfoResponse = await identityService.getMyInfo();
+              if (myInfoResponse.code === 1000 && myInfoResponse.result) {
+                roles = myInfoResponse.result.roles;
+              }
+            } catch (roleError) {
+              console.debug('Could not load roles after Google login:', roleError);
+            }
+
             const user = {
               id: profile.userId,
               username: profile.username,
               email: profile.email,
-              roles: [{ name: 'USER', description: 'Default user role', permissions: [] }],
+              roles,
             };
             dispatch(loginSuccess({ user }));
           } else {

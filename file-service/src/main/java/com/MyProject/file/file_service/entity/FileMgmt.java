@@ -27,7 +27,7 @@ import java.time.Instant;
 public abstract class FileMgmt {
 
     @MongoId
-    String id;   // publicId từ Cloudinary
+    String id;   // B2/S3 object key
 
     String ownerId;
     String contentType;

@@ -380,9 +380,6 @@ services:
       - .env
     environment:
       - SPRING_DATA_MONGODB_URI=mongodb://${MONGODB_ROOT_USERNAME}:${MONGODB_ROOT_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/file-service?authSource=admin
-      - CLOUDINARY_NAME=${CLOUDINARY_NAME}
-      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
-      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
       - JWT_SIGNER_KEY=${JWT_SIGNER_KEY}
       - TZ=${TZ}
     depends_on:
@@ -409,7 +406,7 @@ services:
       - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD}
       - SPRING_DATA_REDIS_PORT=${REDIS_PORT}
       - SPRING_ELASTICSEARCH_URIS=http://${ELASTICSEARCH_HOST}:${ELASTICSEARCH_PORT}
-      - PROFILES_SERVICE_URL=${PROFILE_SERVICE_URL}/profiles
+      - PROFILES_SERVICE_URL=${PROFILE_SERVICE_URL}
       - JWT_SIGNER_KEY=${JWT_SIGNER_KEY}
       - TZ=${TZ}
     depends_on:
@@ -516,6 +513,7 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_API_BASE_URL: http://localhost:8888/api/v1
+        VITE_SOCKET_URL: ws://localhost:8888/api/v1/sockets/ws
     container_name: web-app
     ports:
       - '5173:80'

@@ -41,10 +41,6 @@ public class IdentityApiRateLimitService {
         enforce("role-management:" + userId, properties.getRoleManagement());
     }
 
-    public void checkPermissionManagement(String userId) {
-        enforce("permission-management:" + userId, properties.getPermissionManagement());
-    }
-
     public void checkLogin(String username) {
         enforce("login:" + username, properties.getLogin());
     }

@@ -53,20 +53,23 @@ const Login: React.FC = () => {
       }
 
       // Tokens are HttpOnly cookies, so hydrate the authenticated user from the API.
-      const profileResponse = await profileService.getMyProfile();
+      const [profileResponse, myInfoResponse] = await Promise.all([
+        profileService.getMyProfile(),
+        identityService.getMyInfo(),
+      ]);
       if (profileResponse.code !== 1000 || !profileResponse.result) {
         throw new Error(profileResponse.message || 'Unable to load user profile');
       }
       const profile = profileResponse.result;
+      const roles = myInfoResponse.code === 1000 && myInfoResponse.result
+        ? myInfoResponse.result.roles
+        : [{ name: "USER", description: "Default user role" }];
       const user = {
-        id: "1", // placeholder
-        username: formData.username,
-        email: "",
-        roles: [{ name: "USER", description: "Default user role", permissions: [] }],
+        id: profile.userId,
+        username: profile.username,
+        email: profile.email,
+        roles,
       };
-      user.id = profile.userId;
-      user.username = profile.username;
-      user.email = profile.email;
       dispatch(loginSuccess({ user }));
       toast.success("Đăng nhập thành công!");
       navigate("/social");

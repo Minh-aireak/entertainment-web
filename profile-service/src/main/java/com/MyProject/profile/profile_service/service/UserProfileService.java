@@ -1,6 +1,7 @@
 package com.MyProject.profile.profile_service.service;
 
 import com.MyProject.common.dto.request.BulkUserProfileRequest;
+import com.MyProject.common.dto.request.ProfileSuggestionRequest;
 import com.MyProject.common.dto.response.PageResponse;
 import com.MyProject.common.dto.response.UserProfileResponse;
 import com.MyProject.common.redis.RedisService;
@@ -139,6 +140,48 @@ public class UserProfileService {
         return response;
     }
 
+    @Transactional(rollbackFor = Exception.class)
+    public UserProfileResponse updateAvatar(String avatar){
+        String userId = SecurityUtils.getCurrentUserId();
+        UserProfile profile = userProfileRepository.findById(userId)
+                .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
+
+        String oldAvatar = profile.getAvatar();
+        if (Objects.equals(oldAvatar, avatar)) {
+            return userProfileMapper.toUserProfileResponse(profile);
+        }
+
+        String cacheKey = getProfileKey(userId);
+
+        profile.setAvatar(avatar);
+        UserProfile savedProfile = userProfileRepository.save(profile);
+
+        UserProfileResponse response = userProfileMapper.toUserProfileResponse(savedProfile);
+        redisService.setWithExpiration(cacheKey, response, 1, TimeUnit.HOURS);
+
+        String eventId = java.util.UUID.randomUUID().toString();
+        String version = "1.0";
+
+        ProfileSearchUpdatedEvent searchEvent = ProfileSearchUpdatedEvent.builder()
+                .eventId(eventId)
+                .userId(savedProfile.getUserId())
+                .avatar(savedProfile.getAvatar())
+                .displayName(savedProfile.getDisplayName())
+                .username(savedProfile.getUsername())
+                .version(version)
+                .build();
+        saveToOutbox(savedProfile.getUserId(), "search.sync", searchEvent);
+
+        ProfileSocketUpdatedEvent socketEvent = ProfileSocketUpdatedEvent.builder()
+                .eventId(eventId)
+                .userId(savedProfile.getUserId())
+                .version(version)
+                .build();
+        saveToOutbox(savedProfile.getUserId(), "socket.events", socketEvent);
+
+        return response;
+    }
+
     public UserProfileResponse getMyProfile(){
         String userId = SecurityUtils.getCurrentUserId();
         UserProfile profile = userProfileRepository.findById(userId)
@@ -178,6 +221,27 @@ public class UserProfileService {
                 .totalPages(pageData.getTotalPages())
                 .totalElement(pageData.getTotalElements())
                 .data(userProfileResponses)
+                .build();
+    }
+
+    public PageResponse<UserProfileResponse> getSuggestionProfiles(ProfileSuggestionRequest request) {
+        Sort sort = Sort.by("joinDate").ascending();
+        Pageable pageable = PageRequest.of(request.getPage(), request.getSize(), sort);
+        Page<UserProfile> pageData = userProfileRepository.findByUserIdNotIn(
+                request.getExcludedUserIds(),
+                pageable
+        );
+
+        List<UserProfileResponse> responses = pageData.getContent().stream()
+                .map(userProfileMapper::toUserProfileResponse)
+                .toList();
+
+        return PageResponse.<UserProfileResponse>builder()
+                .currentPage(request.getPage())
+                .pageSize(request.getSize())
+                .totalPages(pageData.getTotalPages())
+                .totalElement(pageData.getTotalElements())
+                .data(responses)
                 .build();
     }
 

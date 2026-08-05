@@ -38,6 +38,7 @@ import { filmService } from '../../api/filmService';
 import type { EpisodeResponse, FilmDetailResponse, FilmStatus } from '../../models';
 import toast from 'react-hot-toast';
 import CommentSection from '../../components/Comment/CommentSection';
+import VideoPlayer from '../../components/Film/VideoPlayer';
 
 const FilmDetail: React.FC = () => {
   const { t } = useTranslation();
@@ -395,7 +396,11 @@ const FilmDetail: React.FC = () => {
         </Box>
         <DialogContent sx={{ p: 0, bgcolor: '#000' }}>
           {selectedEpisode && (
-            <Box component="video" src={selectedEpisode.videoUrl} controls autoPlay sx={{ width: '100%', maxHeight: '75vh', display: 'block' }} />
+            <VideoPlayer
+              key={selectedEpisode.id}
+              src={selectedEpisode.videoUrl}
+              style={{ width: '100%', maxHeight: '75vh', display: 'block' }}
+            />
           )}
         </DialogContent>
       </Dialog>

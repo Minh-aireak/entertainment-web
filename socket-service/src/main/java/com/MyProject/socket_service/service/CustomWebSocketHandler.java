@@ -50,6 +50,8 @@ public class CustomWebSocketHandler extends TextWebSocketHandler {
     // roomId -> Set<org.springframework.web.socket.WebSocketSession>
     Map<String, Set<org.springframework.web.socket.WebSocketSession>> roomSessions = new ConcurrentHashMap<>();
 
+    private static final String PRESENCE_KEY_PREFIX = "presence:active-chat:";
+
     @Override
     public void afterConnectionEstablished(org.springframework.web.socket.WebSocketSession session) throws Exception {
         try {
@@ -168,6 +170,7 @@ public class CustomWebSocketHandler extends TextWebSocketHandler {
                         roomSessions.remove(roomId);
                     }
                 }
+                decrementPresence(userId, roomId);
             });
         }
 
@@ -212,6 +215,10 @@ public class CustomWebSocketHandler extends TextWebSocketHandler {
     public void joinRoom(org.springframework.web.socket.WebSocketSession session, String roomId) {
         roomSessions.computeIfAbsent(roomId, k -> ConcurrentHashMap.newKeySet()).add(session);
         sessionRooms.computeIfAbsent(session.getId(), k -> ConcurrentHashMap.newKeySet()).add(roomId);
+
+        String userId = sessionToUser.get(session.getId());
+        incrementPresence(userId, roomId);
+
         log.info("Session {} joined room {}", session.getId(), roomId);
     }
 
@@ -227,7 +234,32 @@ public class CustomWebSocketHandler extends TextWebSocketHandler {
         if (rooms != null) {
             rooms.remove(roomId);
         }
+
+        String userId = sessionToUser.get(session.getId());
+        decrementPresence(userId, roomId);
+
         log.info("Session {} left room {}", session.getId(), roomId);
+    }
+
+    private void incrementPresence(String userId, String roomId) {
+        if (userId == null) return;
+        try {
+            redisService.hashIncrementAndGet(PRESENCE_KEY_PREFIX + userId, roomId, 1);
+        } catch (Exception e) {
+            log.error("Failed to increment presence for user {} in room {}", userId, roomId, e);
+        }
+    }
+
+    private void decrementPresence(String userId, String roomId) {
+        if (userId == null) return;
+        try {
+            Long remaining = redisService.hashIncrementAndGet(PRESENCE_KEY_PREFIX + userId, roomId, -1);
+            if (remaining != null && remaining <= 0) {
+                redisService.hashDelete(PRESENCE_KEY_PREFIX + userId, roomId);
+            }
+        } catch (Exception e) {
+            log.error("Failed to decrement presence for user {} in room {}", userId, roomId, e);
+        }
     }
 
     public boolean isUserInRoom(String userId, String roomId) {

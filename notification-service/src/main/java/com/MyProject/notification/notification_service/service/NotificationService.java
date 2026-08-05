@@ -41,6 +41,9 @@ public class NotificationService {
     RedisService redisService;
 
     private static final String UNREAD_COUNT_KEY_PREFIX = "notification:unread-count:";
+    private static final String PRESENCE_KEY_PREFIX = "presence:active-chat:";
+    private static final String CHAT_NOTIF_OPEN_KEY_PREFIX = "chat-notif-open:";
+    private static final long CHAT_NOTIF_POINTER_TTL_HOURS = 24;
 
     private String getUserId() {
         return SecurityUtils.getCurrentUserId();
@@ -65,7 +68,7 @@ public class NotificationService {
             
             Boolean isRead = noti.getRecipientReadMap().getOrDefault(currentUserId, null) != null;
             response.setRead(isRead);
-            response.setMessage(noti.getType().getContent().replace("{sender}", response.getDisplayNameSender()));
+            response.setMessage(buildContent(noti.getType(), response.getDisplayNameSender(), noti.getCount()));
             response.setCreatedAt(noti.getCreatedAt() != null ? noti.getCreatedAt().toString() : "");
             return response;
         }).toList();
@@ -135,6 +138,12 @@ public class NotificationService {
     @Transactional
     public void createNotification(NotificationEvent event) {
         TypeNotification typeNotification = TypeNotification.valueOf(event.getTypeNotification());
+
+        if (typeNotification == TypeNotification.NEW_CHAT && event.getConversationId() != null) {
+            handleChatNotification(event, typeNotification);
+            return;
+        }
+
         Map<String, LocalDateTime> recipientReadMap = new java.util.HashMap<>();
         event.getToUserIds().forEach(userId -> recipientReadMap.put(userId, null));
 
@@ -164,6 +173,7 @@ public class NotificationService {
         NotificationSocket notificationSocket = new NotificationSocket(
                         displayNameSender,
                         avatarSender,
+                        typeNotification.name(),
                         typeNotification.getTitle(),
                         typeNotification.getContent().replace("{sender}", displayNameSender),
                         event.getToUserIds());
@@ -180,5 +190,130 @@ public class NotificationService {
                 log.error("Failed to invalidate unread count cache for userId: {}", userId, e);
             }
         });
+    }
+
+    private void handleChatNotification(NotificationEvent event, TypeNotification typeNotification) {
+        String senderId = event.getUserIdSender();
+        String conversationId = event.getConversationId();
+
+        String displayNameSender = "Unknown User";
+        String avatarSender = "";
+        try {
+            UserProfileResponse userProfileResponse = notificationProfileService.getProfile(senderId);
+            if (userProfileResponse != null) {
+                displayNameSender = userProfileResponse.getDisplayName() != null ? userProfileResponse.getDisplayName() : "Unknown User";
+                avatarSender = userProfileResponse.getAvatar() != null ? userProfileResponse.getAvatar() : "";
+            }
+        } catch (Exception e) {
+            log.error("Failed to get sender profile for chat notification: {}", senderId, e);
+        }
+
+        for (String recipientId : event.getToUserIds()) {
+            if (isUserActiveInAnyChat(recipientId)) {
+                // Already covered by the realtime chat.messages -> update-conversation-list pipeline.
+                continue;
+            }
+
+            Notification notification = upsertChatNotification(recipientId, senderId, conversationId, typeNotification);
+
+            NotificationSocket notificationSocket = new NotificationSocket(
+                    displayNameSender,
+                    avatarSender,
+                    typeNotification.name(),
+                    typeNotification.getTitle(),
+                    buildContent(typeNotification, displayNameSender, notification.getCount()),
+                    List.of(recipientId));
+
+            outboxEventPublisher.publish(notification.getId(), "notification", notificationSocket);
+
+            String key = UNREAD_COUNT_KEY_PREFIX + recipientId;
+            try {
+                redisService.delete(key);
+            } catch (Exception e) {
+                log.error("Failed to invalidate unread count cache for userId: {}", recipientId, e);
+            }
+        }
+    }
+
+    private boolean isUserActiveInAnyChat(String userId) {
+        try {
+            Map<Object, Object> activeConversations = redisService.hashGetAll(PRESENCE_KEY_PREFIX + userId);
+            return activeConversations != null && !activeConversations.isEmpty();
+        } catch (Exception e) {
+            log.error("Failed to read chat presence for userId: {}", userId, e);
+            return false;
+        }
+    }
+
+    private Notification upsertChatNotification(String recipientId, String senderId, String conversationId, TypeNotification type) {
+        String pointerKey = chatNotifOpenKey(recipientId, conversationId);
+        String existingId = redisService.getAsString(pointerKey);
+
+        if (existingId != null) {
+            Notification existing = notificationRepository.findById(existingId).orElse(null);
+            boolean stillOpenForSameSender = existing != null
+                    && existing.getRecipientReadMap().getOrDefault(recipientId, null) == null
+                    && senderId.equals(existing.getUserIdSender());
+
+            if (stillOpenForSameSender) {
+                existing.setCount((existing.getCount() == null ? 1 : existing.getCount()) + 1);
+                existing.setCreatedAt(LocalDateTime.now());
+                Notification saved = notificationRepository.save(existing);
+                redisService.setWithExpiration(pointerKey, saved.getId(), CHAT_NOTIF_POINTER_TTL_HOURS, TimeUnit.HOURS);
+                return saved;
+            }
+        }
+
+        Map<String, LocalDateTime> recipientReadMap = new java.util.HashMap<>();
+        recipientReadMap.put(recipientId, null);
+
+        Notification created = Notification.builder()
+                .type(type)
+                .userIdSender(senderId)
+                .toUserIds(List.of(recipientId))
+                .recipientReadMap(recipientReadMap)
+                .conversationId(conversationId)
+                .count(1)
+                .build();
+
+        Notification saved = notificationRepository.save(created);
+        redisService.setWithExpiration(pointerKey, saved.getId(), CHAT_NOTIF_POINTER_TTL_HOURS, TimeUnit.HOURS);
+        return saved;
+    }
+
+    // Clears the aggregation pointer so the next message starts a fresh notification instead of appending to a read one.
+    public void markChatConversationRead(String userId, String conversationId) {
+        String pointerKey = chatNotifOpenKey(userId, conversationId);
+        String notificationId = redisService.getAsString(pointerKey);
+        if (notificationId == null) {
+            return;
+        }
+
+        notificationRepository.findById(notificationId).ifPresent(notification -> {
+            if (notification.getRecipientReadMap().getOrDefault(userId, null) == null) {
+                notification.getRecipientReadMap().put(userId, LocalDateTime.now());
+                notificationRepository.save(notification);
+
+                String key = UNREAD_COUNT_KEY_PREFIX + userId;
+                try {
+                    redisService.delete(key);
+                } catch (Exception e) {
+                    log.error("Failed to invalidate unread count cache for userId: {}", userId, e);
+                }
+            }
+        });
+
+        redisService.delete(pointerKey);
+    }
+
+    private String chatNotifOpenKey(String recipientId, String conversationId) {
+        return CHAT_NOTIF_OPEN_KEY_PREFIX + recipientId + ":" + conversationId;
+    }
+
+    private String buildContent(TypeNotification type, String displayNameSender, Integer count) {
+        if (type == TypeNotification.NEW_CHAT && count != null && count > 1) {
+            return displayNameSender + " đã gửi " + count + " tin nhắn mới";
+        }
+        return type.getContent().replace("{sender}", displayNameSender);
     }
 }

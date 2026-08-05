@@ -20,6 +20,10 @@ public final class GatewayRequestClassifier {
             "/api/v1/sockets/**"
     };
 
+    private static final String[] AUTHENTICATED_GET_PATTERNS = {
+            "/api/v1/films/follows/my"
+    };
+
     private GatewayRequestClassifier() {
     }
 
@@ -27,6 +31,14 @@ public final class GatewayRequestClassifier {
         for (String pattern : PUBLIC_PATTERNS) {
             if (PATH_MATCHER.match(pattern, path)) {
                 return true;
+            }
+        }
+
+        if (HttpMethod.GET.equals(method)) {
+            for (String pattern : AUTHENTICATED_GET_PATTERNS) {
+                if (PATH_MATCHER.match(pattern, path)) {
+                    return false;
+                }
             }
         }
 

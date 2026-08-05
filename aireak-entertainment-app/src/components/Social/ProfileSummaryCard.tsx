@@ -24,8 +24,9 @@ const ProfileSummaryCard: React.FC<ProfileSummaryCardProps> = React.memo(({ summ
       sx={{
         p: 3,
         borderRadius: 3,
-        bgcolor: '#141414',
-        border: '1px solid rgba(255, 255, 255, 0.06)',
+        bgcolor: 'background.paper',
+        border: '1px solid',
+        borderColor: 'divider',
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
@@ -43,6 +44,7 @@ const ProfileSummaryCard: React.FC<ProfileSummaryCardProps> = React.memo(({ summ
         <>
           <Avatar
             src={summary?.avatar}
+            slotProps={{ img: { loading: 'lazy' } }}
             sx={{
               width: 88,
               height: 88,

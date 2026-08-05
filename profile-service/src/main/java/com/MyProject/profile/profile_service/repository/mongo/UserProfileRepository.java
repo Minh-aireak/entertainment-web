@@ -6,9 +6,13 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Set;
+
 @Repository
 public interface UserProfileRepository extends MongoRepository<UserProfile, String> {
     Page<UserProfile> findAllByDisplayName(String displayName, Pageable pageable);
 
     Page<UserProfile> findByUserIdNot(String userId, Pageable pageable);
+
+    Page<UserProfile> findByUserIdNotIn(Set<String> userIds, Pageable pageable);
 }

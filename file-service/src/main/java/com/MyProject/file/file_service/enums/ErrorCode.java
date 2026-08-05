@@ -22,7 +22,8 @@ public enum ErrorCode {
     INVALID_FILE_TYPE(8407, "Invalid file type!", HttpStatus.BAD_REQUEST),
     FILE_TOO_LARGE(8408, "File too large!", HttpStatus.BAD_REQUEST),
     RATE_LIMIT_EXCEEDED(8409, "Rate limit exceeded!", HttpStatus.TOO_MANY_REQUESTS),
-    SERVICE_UNAVAILABLE(8410, "Service unavailable!", HttpStatus.SERVICE_UNAVAILABLE);
+    SERVICE_UNAVAILABLE(8410, "Service unavailable!", HttpStatus.SERVICE_UNAVAILABLE),
+    UPLOAD_SESSION_NOT_FOUND(8411, "Upload session not found or expired!", HttpStatus.BAD_REQUEST);
 
     int code;
     String message;

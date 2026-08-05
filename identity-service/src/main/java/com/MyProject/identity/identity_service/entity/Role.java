@@ -1,7 +1,5 @@
 package com.MyProject.identity.identity_service.entity;
 
-import java.util.Set;
-
 import jakarta.persistence.*;
 
 import lombok.*;
@@ -19,7 +17,4 @@ public class Role {
     String name;
 
     String description;
-
-    @ManyToMany
-    Set<Permission> permissions;
 }

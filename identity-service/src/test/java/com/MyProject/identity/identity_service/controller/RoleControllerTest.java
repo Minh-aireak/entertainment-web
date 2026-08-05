@@ -3,7 +3,6 @@ package com.MyProject.identity.identity_service.controller;
 import static org.mockito.Mockito.*;
 
 import java.util.List;
-import java.util.Set;
 
 import com.MyProject.identity.identity_service.configuration.CustomJwtDecoder;
 import com.MyProject.identity.identity_service.configuration.JwtAuthenticationEntryPoint;
@@ -24,7 +23,6 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.MyProject.identity.identity_service.dto.request.RoleCreationRequest;
 import com.MyProject.identity.identity_service.dto.request.RoleUpdateRequest;
-import com.MyProject.identity.identity_service.dto.response.PermissionResponse;
 import com.MyProject.identity.identity_service.dto.response.RoleResponse;
 import com.MyProject.identity.identity_service.exception.AppException;
 import com.MyProject.identity.identity_service.exception.ErrorCode;
@@ -52,32 +50,25 @@ class RoleControllerTest {
     RoleUpdateRequest updateRequest;
     RoleResponse roleResponse;
     ObjectMapper objectMapper;
-    PermissionResponse permission2;
     String nameRoleForDelete;
 
     @BeforeEach
     void initData() {
         objectMapper = new ObjectMapper();
 
-        PermissionResponse permission1 = new PermissionResponse("TEST_PERMISSION1", "Permission1 for test");
-        permission2 = new PermissionResponse("TEST_PERMISSION2", "Permission2 for test");
-
         creationRequest = RoleCreationRequest.builder()
                 .name("TEST_ROLE")
                 .description("Role for test")
-                .permissions(Set.of("TEST_PERMISSION1"))
                 .build();
 
         updateRequest = RoleUpdateRequest.builder()
                 .name("TEST_ROLE")
                 .description("Role for test updated")
-                .permissions(Set.of("TEST_PERMISSION2"))
                 .build();
 
         roleResponse = RoleResponse.builder()
                 .name("TEST_ROLE")
                 .description("Role for test")
-                .permissions(Set.of(permission1))
                 .build();
 
         nameRoleForDelete = "TEST_ROLE";
@@ -96,11 +87,7 @@ class RoleControllerTest {
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(1000))
                 .andExpect(MockMvcResultMatchers.jsonPath("result.name").value("TEST_ROLE"))
-                .andExpect(MockMvcResultMatchers.jsonPath("result.description").value("Role for test"))
-                .andExpect(MockMvcResultMatchers.jsonPath("result.permissions[0].name")
-                        .value("TEST_PERMISSION1"))
-                .andExpect(MockMvcResultMatchers.jsonPath("result.permissions[0].description")
-                        .value("Permission1 for test"));
+                .andExpect(MockMvcResultMatchers.jsonPath("result.description").value("Role for test"));
 
         verify(roleService, times(1)).createRole(creationRequest);
     }
@@ -153,28 +140,10 @@ class RoleControllerTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void createRole_permissionNotExisted() throws Exception {
-        String content = objectMapper.writeValueAsString(creationRequest);
-
-        when(roleService.createRole(creationRequest)).thenThrow(new AppException(ErrorCode.PERMISSION_NOT_EXISTED));
-
-        mockMvc.perform(MockMvcRequestBuilders.post("/roles")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(MockMvcResultMatchers.status().isNotFound())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8009))
-                .andExpect(MockMvcResultMatchers.jsonPath("message").value("Permission not found!"));
-
-        verify(roleService, times(1)).createRole(creationRequest);
-    }
-
-    @Test
-    @WithMockUser(roles = "ADMIN")
     void updateRole_success() throws Exception {
         String content = objectMapper.writeValueAsString(updateRequest);
 
         roleResponse.setDescription("Role for test updated");
-        roleResponse.setPermissions(Set.of(permission2));
 
         when(roleService.updateRole(updateRequest)).thenReturn(roleResponse);
 
@@ -184,11 +153,7 @@ class RoleControllerTest {
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(1000))
                 .andExpect(MockMvcResultMatchers.jsonPath("result.name").value("TEST_ROLE"))
-                .andExpect(MockMvcResultMatchers.jsonPath("result.description").value("Role for test updated"))
-                .andExpect(MockMvcResultMatchers.jsonPath("result.permissions[0].name")
-                        .value("TEST_PERMISSION2"))
-                .andExpect(MockMvcResultMatchers.jsonPath("result.permissions[0].description")
-                        .value("Permission2 for test"));
+                .andExpect(MockMvcResultMatchers.jsonPath("result.description").value("Role for test updated"));
 
         verify(roleService, times(1)).updateRole(updateRequest);
     }
@@ -296,11 +261,7 @@ class RoleControllerTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(1000))
                 .andExpect(MockMvcResultMatchers.jsonPath("result[0].name").value("TEST_ROLE"))
                 .andExpect(
-                        MockMvcResultMatchers.jsonPath("result[0].description").value("Role for test"))
-                .andExpect(MockMvcResultMatchers.jsonPath("result[0].permissions[0].name")
-                        .value("TEST_PERMISSION1"))
-                .andExpect(MockMvcResultMatchers.jsonPath("result[0].permissions[0].description")
-                        .value("Permission1 for test"));
+                        MockMvcResultMatchers.jsonPath("result[0].description").value("Role for test"));
 
         verify(roleService, times(1)).getAllRoles();
     }

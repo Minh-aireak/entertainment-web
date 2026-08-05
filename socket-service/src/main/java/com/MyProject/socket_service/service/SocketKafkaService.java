@@ -246,6 +246,7 @@ public class SocketKafkaService {
                         NotificationUI.builder()
                                 .displayNameSender(event.displayNameSender())
                                 .avatarSender(event.avatarSender())
+                                .type(event.type())
                                 .title(event.title())
                                 .content(event.content())
                                 .build()

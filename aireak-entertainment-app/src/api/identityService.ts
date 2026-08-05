@@ -8,9 +8,6 @@ import type {
   RoleCreationRequest,
   RoleUpdateRequest,
   RoleResponse,
-  PermissionCreationRequest,
-  PermissionUpdateRequest,
-  PermissionResponse,
   ChangePasswordRequest,
   ForgotPasswordRequest,
   ResetPasswordRequest,
@@ -48,27 +45,6 @@ export const identityService = {
     return response.data;
   },
 
-  // Permissions
-  createPermission: async (data: PermissionCreationRequest) => {
-    const response = await axiosInstance.post<ApiResponse<PermissionResponse>>('/identities/permissions', data);
-    return response.data;
-  },
-
-  getPermissions: async () => {
-    const response = await axiosInstance.get<ApiResponse<PermissionResponse[]>>('/identities/permissions');
-    return response.data;
-  },
-
-  updatePermission: async (data: PermissionUpdateRequest) => {
-    const response = await axiosInstance.put<ApiResponse<PermissionResponse>>(`/identities/permissions/`, data);
-    return response.data;
-  },  
-
-  deletePermission: async (permissionName: string) => {
-    const response = await axiosInstance.delete<ApiResponse<void>>(`/identities/permissions/${permissionName}`);
-    return response.data;
-  },
-
   // Roles
   createRole: async (data: RoleCreationRequest) => {
     const response = await axiosInstance.post<ApiResponse<RoleResponse>>('/identities/roles', data);
@@ -98,6 +74,11 @@ export const identityService = {
 
   changePassword: async (data: ChangePasswordRequest) => {
     const response = await axiosInstance.post<ApiResponse<void>>('/identities/users/password', data);
+    return response.data;
+  },
+
+  getMyInfo: async () => {
+    const response = await axiosInstance.get<ApiResponse<UserResponse>>('/identities/users/my-info');
     return response.data;
   },
 

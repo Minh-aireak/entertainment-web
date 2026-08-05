@@ -1,6 +1,7 @@
 package com.MyProject.chat_service.service;
 
 import com.MyProject.chat_service.document.ConversationDoc;
+import com.MyProject.chat_service.dto.request.ConversationUpdateRequest;
 import com.MyProject.chat_service.dto.response.ConversationResponse;
 import com.MyProject.chat_service.dto.response.ParticipantResponse;
 import com.MyProject.chat_service.entity.*;
@@ -621,6 +622,41 @@ public class ConversationService {
                 .totalElement(conversationPage.getTotalElements())
                 .data(data)
                 .build();
+    }
+
+    @Transactional
+    public ConversationResponse updateGroupConversation(String conversationId, ConversationUpdateRequest request) {
+        String userId = getUserId();
+
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND));
+
+        if (!(conversation instanceof ConversationGroup group)) {
+            throw new AppException(ErrorCode.TYPE_CONVERSATION_ERROR);
+        }
+
+        if (!group.getUserIds().contains(userId)) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+
+        if (request.getConversationName() != null && !request.getConversationName().isBlank()) {
+            group.setGroupName(request.getConversationName().trim());
+        }
+        if (request.getConversationAvatar() != null && !request.getConversationAvatar().isBlank()) {
+            group.setGroupAvatar(request.getConversationAvatar().trim());
+        }
+
+        ConversationGroup saved = conversationGroupRepository.save(group);
+
+        Map<String, UserProfileResponse> profileMap = fetchProfiles(new HashSet<>(saved.getUserIds()));
+        saveToOutbox(saved.getId(), "conversation.sync", buildConversationDoc(saved, profileMap));
+
+        ConversationResponse response = toConversationResponse(saved);
+        enrichParticipants(response, saved.getUserIds(), profileMap);
+        response.setConversationName(saved.getGroupName());
+        response.setConversationAvatar(saved.getGroupAvatar());
+        response.setGroupOwner(saved.getGroupOwner());
+        return response;
     }
 
     private String generateParticipantsHash(List<String> ids) {

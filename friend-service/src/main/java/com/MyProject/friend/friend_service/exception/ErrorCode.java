@@ -25,7 +25,9 @@ public enum ErrorCode {
     FRIEND_REQUEST_ALREADY_PROCESSED(8711, "Friend request already processed!", HttpStatus.BAD_REQUEST),
     INVALID_STATUS(8712, "Invalid status!", HttpStatus.BAD_REQUEST),
     RATE_LIMIT_EXCEEDED(8713, "Too many requests to downstream service. Please try again later!", HttpStatus.TOO_MANY_REQUESTS),
-    SERVICE_UNAVAILABLE(8714, "Service unavailable! Please try again later!", HttpStatus.SERVICE_UNAVAILABLE);
+    SERVICE_UNAVAILABLE(8714, "Service unavailable! Please try again later!", HttpStatus.SERVICE_UNAVAILABLE),
+    CANNOT_SEND_REQUEST_TO_SELF(8715, "Cannot send a friend request to yourself!", HttpStatus.BAD_REQUEST),
+    ALREADY_FRIEND(8716, "Users are already friends!", HttpStatus.BAD_REQUEST);
 
     int code;
     String message;

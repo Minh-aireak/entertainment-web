@@ -27,3 +27,6 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+
+### Local secrets (never commit real credentials) ###
+/.env

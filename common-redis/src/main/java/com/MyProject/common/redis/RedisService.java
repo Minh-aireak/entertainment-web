@@ -227,6 +227,10 @@ public class RedisService {
         redisTemplate.opsForHash().increment(key, field, delta);
     }
 
+    public Long hashIncrementAndGet(String key, String field, long delta) {
+        return redisTemplate.opsForHash().increment(key, field, delta);
+    }
+
     public java.util.Map<Object, Object> hashGetAll(String key) {
         return redisTemplate.opsForHash().entries(key);
     }

@@ -15,7 +15,6 @@ import {
   Button,
   Divider,
   Tooltip,
-  Avatar,
   Badge,
 } from '@mui/material';
 import {
@@ -28,12 +27,10 @@ import {
   Home,
   Message,
   Group,
-  Person,
   Explore,
   TrendingUp,
   Bookmark,
-  Notifications,
-  Logout as LogoutIcon,
+  AdminPanelSettings,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useSelector, useDispatch } from 'react-redux';
@@ -44,12 +41,21 @@ import { chatService } from '../../api/chatService';
 import { friendService } from '../../api/friendService';
 import { notificationService } from '../../api/notificationService';
 import { filmService } from '../../api/filmService';
+import NotificationMenu from './NotificationMenu';
+import AccountMenu from './AccountMenu';
 
 const NAVBAR_HEIGHT = 64;
 const SIDEBAR_EXPANDED_WIDTH = 300;
 const SIDEBAR_COLLAPSED_WIDTH = 80;
 const ACCENT_GREEN = '#00A84E';
-const ACCENT_RED = '#FF5252';
+
+// Single source of truth for the collapse/expand timing so every animated
+// element (container width, item padding, text fade) moves in lockstep.
+// Mismatched durations were the cause of the icons/text jittering mid-toggle.
+const SIDEBAR_TRANSITION_MS = 240;
+const SIDEBAR_EASING = 'ease-in-out';
+const sidebarTransition = (...props: string[]) =>
+  props.map((prop) => `${prop} ${SIDEBAR_TRANSITION_MS}ms ${SIDEBAR_EASING}`).join(', ');
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -65,7 +71,7 @@ const pillButtonSx = {
   textTransform: 'none' as const,
   boxShadow: 'none',
   transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-  '&:hover': { 
+  '&:hover': {
     boxShadow: '0 4px 12px rgba(0, 168, 78, 0.2)',
     transform: 'translateY(-1px)',
   },
@@ -99,7 +105,6 @@ const socialMenuItems = [
   { id: 'home', label: 'Trang chủ', icon: Home, path: '/social' },
   { id: 'messages', label: 'Nhắn tin', icon: Message, path: '/social/chat', badgeKey: 'messages' },
   { id: 'friends', label: 'Bạn bè', icon: Group, path: '/social/friends', badgeKey: 'friendRequests' },
-  { id: 'profile', label: 'Trang cá nhân', icon: Person, path: '/social/profile' },
 ] satisfies SidebarMenuItem[];
 
 const entertainmentMenuItems = [
@@ -108,44 +113,54 @@ const entertainmentMenuItems = [
   { id: 'watchlist', label: 'Thư viện của tôi', icon: Bookmark, path: '/film/library', badgeKey: 'watchlist' },
 ] satisfies SidebarMenuItem[];
 
-const onlineMenuItems = [
-  { id: 'notifications', label: 'Thông báo', icon: Notifications, path: '/social/notifications', badgeKey: 'notifications' },
+const adminMenuItems = [
+  { id: 'admin', label: 'Quản trị hệ thống', icon: AdminPanelSettings, path: '/admin' },
 ] satisfies SidebarMenuItem[];
 
 const listItemSx = (selected: boolean, isCollapsed: boolean, isLast?: boolean) => ({
-  borderRadius: isCollapsed ? '16px' : '16px',
+  borderRadius: '16px',
   mb: isLast ? 0 : 0.75,
   mx: isCollapsed ? 'auto' : 2,
   width: isCollapsed ? 52 : 'auto',
-  height: isCollapsed ? 52 : 52,
+  height: 52,
   py: 0,
   px: isCollapsed ? 0 : 1.75,
   display: 'flex',
   alignItems: 'center',
   justifyContent: isCollapsed ? 'center' : 'flex-start',
-  transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+  overflow: 'hidden',
+  // Only layout-affecting props that actually change are transitioned, all on
+  // the shared SIDEBAR_TRANSITION_MS/EASING so this never desyncs from the
+  // container's own width transition.
+  transition: sidebarTransition('width', 'margin', 'padding', 'background-color', 'color'),
   bgcolor: selected ? ACCENT_GREEN : 'transparent',
   opacity: selected ? 1 : 0.9,
   color: selected ? '#fff' : 'rgba(255,255,255,0.8)',
   position: 'relative' as const,
-  '& .MuiListItemIcon-root': { 
+  '& .MuiListItemIcon-root': {
     color: selected ? '#fff' : 'rgba(255,255,255,0.6)',
     minWidth: isCollapsed ? 0 : 44,
+    flexShrink: 0,
     display: 'flex',
     justifyContent: 'center',
     marginRight: isCollapsed ? 0 : 1,
-    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+    transition: sidebarTransition('min-width', 'margin-right', 'color'),
   },
   '& .MuiListItemText-root': {
     margin: 0,
+    // Fixed width + animated maxWidth (both numeric) instead of width:'auto',
+    // which CSS cannot interpolate and was causing the text to snap instead
+    // of fade, colliding visually with the icon while it was still moving.
+    width: '100%',
+    maxWidth: isCollapsed ? 0 : 180,
     opacity: isCollapsed ? 0 : 1,
-    width: isCollapsed ? 0 : 'auto',
-    visibility: isCollapsed ? 'hidden' : 'visible',
     overflow: 'hidden',
+    whiteSpace: 'nowrap',
     ml: isCollapsed ? 0 : 0.5,
-    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+    pointerEvents: isCollapsed ? 'none' : 'auto',
+    transition: sidebarTransition('opacity', 'max-width', 'margin-left'),
   },
-  '& .MuiListItemText-primary': { 
+  '& .MuiListItemText-primary': {
     color: 'inherit',
     fontWeight: selected ? 700 : 500,
     fontSize: '0.95rem',
@@ -160,6 +175,206 @@ const listItemSx = (selected: boolean, isCollapsed: boolean, isLast?: boolean) =
   },
 });
 
+const isMenuItemActive = (pathname: string, path: string) => {
+  if (path === '/social' || path === '/film') return pathname === path;
+  return pathname === path || pathname.startsWith(`${path}/`);
+};
+
+interface SidebarPanelProps {
+  isMobile: boolean;
+  isCollapsed: boolean;
+  counts: SidebarCounts;
+  pathname: string;
+  isAdmin: boolean;
+  onToggleCollapse: () => void;
+  onNavigate: () => void;
+}
+
+// Memoized so the sidebar only re-renders when its own props actually change
+// (collapse state, active route, badge counts) — not on every MainLayout
+// re-render caused by unrelated state like theme toggling or the account menu.
+const SidebarPanel = React.memo(function SidebarPanel({
+  isMobile,
+  isCollapsed: collapsedProp,
+  counts,
+  pathname,
+  isAdmin,
+  onToggleCollapse,
+  onNavigate,
+}: SidebarPanelProps) {
+  const isCollapsed = !isMobile && collapsedProp;
+  const sidebarWidth = isMobile ? SIDEBAR_EXPANDED_WIDTH : (isCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH);
+
+  const renderMenuSection = (title: string, items: SidebarMenuItem[], badgeColor: 'error' | 'primary', sectionPy: number) => (
+    <Box sx={{ px: isCollapsed ? 1 : 2, py: sectionPy, transition: sidebarTransition('padding') }}>
+      <Typography sx={{
+        px: isCollapsed ? 0 : 2,
+        mb: isCollapsed ? 0 : 1.5,
+        fontSize: '0.7rem',
+        fontWeight: 700,
+        color: 'rgba(255,255,255,0.5)',
+        letterSpacing: '0.12em',
+        textTransform: 'uppercase' as const,
+        opacity: isCollapsed ? 0 : 1,
+        maxHeight: isCollapsed ? 0 : 24,
+        overflow: 'hidden',
+        transition: sidebarTransition('opacity', 'max-height', 'margin-bottom'),
+      }}>
+        {title}
+      </Typography>
+      <List sx={{ px: 0, py: 0 }}>
+        {items.map((item, idx) => {
+          const selected = isMenuItemActive(pathname, item.path);
+          const Icon = item.icon;
+          const isLast = idx === items.length - 1;
+          const badgeValue = item.badgeKey ? counts[item.badgeKey] : 0;
+          return (
+            <Tooltip key={item.id} title={isCollapsed ? item.label : ""} placement="right">
+              <ListItem disablePadding sx={{ mb: isLast ? 0 : 0.5 }}>
+                <ListItemButton
+                  component={Link}
+                  to={item.path}
+                  selected={selected}
+                  onClick={() => isMobile && onNavigate()}
+                  sx={listItemSx(selected, isCollapsed, isLast)}
+                >
+                  <ListItemIcon>
+                    <Badge badgeContent={badgeValue} color={badgeColor} max={99} invisible={!isCollapsed || badgeValue === 0}>
+                      <Icon fontSize="medium" />
+                    </Badge>
+                  </ListItemIcon>
+                  <ListItemText primary={item.label} />
+                  {badgeValue > 0 && !isCollapsed && (
+                    <Box sx={{
+                      minWidth: 22,
+                      height: 22,
+                      px: 0.75,
+                      borderRadius: 11,
+                      bgcolor: badgeColor === 'error' ? 'error.main' : 'rgba(255,255,255,0.18)',
+                      color: '#fff',
+                      fontSize: '0.7rem',
+                      fontWeight: 800,
+                      display: 'grid',
+                      placeItems: 'center',
+                    }}>
+                      {badgeValue > 99 ? '99+' : badgeValue}
+                    </Box>
+                  )}
+                </ListItemButton>
+              </ListItem>
+            </Tooltip>
+          );
+        })}
+      </List>
+    </Box>
+  );
+
+  return (
+    <Box
+      className="sidebar-container"
+      sx={{
+        width: sidebarWidth,
+        flexShrink: 0,
+        background: '#121212',
+        borderRight: '1px solid rgba(255,255,255,0.06)',
+        height: '100%',
+        transition: sidebarTransition('width'),
+        willChange: 'width',
+        contain: 'layout style',
+        position: 'relative',
+        boxShadow: '8px 0 24px rgba(0,0,0,0.15)',
+        zIndex: 10,
+      }}
+    >
+      {/* Clips the collapsing text/icons during the width transition. Kept separate from the
+          outer container so the toggle button below (which pokes out past the right edge) isn't
+          clipped along with it — it used to be, leaving only a sliver of the button clickable. */}
+      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+        {/* Sidebar Header */}
+        <Box sx={{ px: isCollapsed ? 1.5 : 3, py: 3, display: 'flex', alignItems: 'center', gap: 2, transition: sidebarTransition('padding') }}>
+          <Box
+            sx={{
+              width: 48,
+              height: 48,
+              borderRadius: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'linear-gradient(135deg, #00A84E 0%, #00c75c 100%)',
+              boxShadow: '0 4px 14px rgba(0, 168, 78, 0.3)',
+              flexShrink: 0
+            }}
+          >
+            <Movie sx={{ color: '#fff', fontSize: 24 }} />
+          </Box>
+          <Box sx={{
+            opacity: isCollapsed ? 0 : 1,
+            width: '100%',
+            maxWidth: isCollapsed ? 0 : 200,
+            overflow: 'hidden',
+            whiteSpace: 'nowrap',
+            transition: sidebarTransition('opacity', 'max-width', 'margin-left'),
+            ml: isCollapsed ? 0 : 0.5
+          }}>
+            <Typography sx={{ fontWeight: 800, fontSize: '1.15rem', color: '#fff', letterSpacing: '-0.02em' }}>
+              AIREAK
+            </Typography>
+            <Typography sx={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', mt: 0.2 }}>
+              Entertainment Hub
+            </Typography>
+          </Box>
+        </Box>
+
+        <Divider sx={{ mx: isCollapsed ? 2 : 3, borderColor: 'rgba(255,255,255,0.06)', transition: sidebarTransition('margin') }} />
+
+        {renderMenuSection('MẠNG XÃ HỘI', socialMenuItems, 'error', 2)}
+        {renderMenuSection('GIẢI TRÍ', entertainmentMenuItems, 'primary', 1)}
+        {isAdmin && renderMenuSection('QUẢN TRỊ', adminMenuItems, 'primary', 1)}
+
+        <Box sx={{ flexGrow: 1 }} />
+      </Box>
+
+      {/* Sidebar Toggle Button on Right Edge — a full circle straddling the border, sized as a
+          real touch target (40px) instead of the sliver it used to be. */}
+      {!isMobile && (
+        <Tooltip title={isCollapsed ? 'Mở rộng menu' : 'Thu gọn menu'} placement="right">
+          <IconButton
+            onClick={onToggleCollapse}
+            aria-label={isCollapsed ? 'Mở rộng menu' : 'Thu gọn menu'}
+            sx={{
+              position: 'absolute',
+              right: 0,
+              top: '50%',
+              transform: 'translate(50%, -50%)',
+              width: 40,
+              height: 40,
+              borderRadius: '50%',
+              bgcolor: '#1E1E1E',
+              border: '1px solid rgba(255,255,255,0.12)',
+              color: 'rgba(255,255,255,0.75)',
+              zIndex: 20,
+              boxShadow: '0 2px 10px rgba(0,0,0,0.45)',
+              transition: `${sidebarTransition('background-color', 'color', 'border-color', 'box-shadow')}, transform 150ms ${SIDEBAR_EASING}`,
+              '&:hover': {
+                bgcolor: ACCENT_GREEN,
+                borderColor: ACCENT_GREEN,
+                color: '#fff',
+                boxShadow: '0 4px 16px rgba(0,168,78,0.45)',
+                transform: 'translate(50%, -50%) scale(1.08)',
+              },
+              '&:active': {
+                transform: 'translate(50%, -50%) scale(0.94)',
+              },
+            }}
+          >
+            {isCollapsed ? <ChevronRight fontSize="medium" /> : <ChevronLeft fontSize="medium" />}
+          </IconButton>
+        </Tooltip>
+      )}
+    </Box>
+  );
+});
+
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -172,6 +387,19 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [sidebarCounts, setSidebarCounts] = useState<SidebarCounts>(EMPTY_SIDEBAR_COUNTS);
+
+  const isAdmin = user?.roles.some((role) => role.name === 'ADMIN') ?? false;
+
+  const displayName = profileData?.displayName || user?.username || 'User';
+  const avatar = profileData?.avatar || '';
+  const email = profileData?.email || user?.email || 'user@aireak.com';
+
+  const handleNotificationsMarkedRead = useCallback(() => {
+    setSidebarCounts((currentCounts) => ({
+      ...currentCounts,
+      notifications: 0,
+    }));
+  }, []);
 
   const refreshSidebarCounts = useCallback(async () => {
     if (!isAuthenticated) {
@@ -225,342 +453,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     }
   };
 
-  const featureSidebar = (isMobile: boolean = false) => {
-    const isCollapsed = !isMobile && isSidebarCollapsed;
-    const sidebarWidth = isMobile ? SIDEBAR_EXPANDED_WIDTH : (isCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH);
+  const handleToggleSidebarCollapse = useCallback(() => {
+    setIsSidebarCollapsed((prev) => !prev);
+  }, []);
 
-    const displayName = profileData?.displayName || user?.username || 'User';
-    const avatar = profileData?.avatar || '';
-    const initial = displayName.charAt(0).toUpperCase();
-
-    // Check if a menu item is active
-    const isMenuItemActive = (path: string) => {
-      if (path === '/social' || path === '/film') return location.pathname === path;
-      return location.pathname === path || location.pathname.startsWith(`${path}/`);
-    };
-
-    return (
-      <Box
-        className="sidebar-container"
-        sx={{
-          width: sidebarWidth,
-          flexShrink: 0,
-          background: '#121212',
-          borderRight: '1px solid rgba(255,255,255,0.06)',
-          display: 'flex',
-          flexDirection: 'column',
-          height: '100%',
-          transition: 'width 0.35s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.35s ease',
-          overflow: 'hidden',
-          position: 'relative',
-          boxShadow: '8px 0 24px rgba(0,0,0,0.15)',
-          zIndex: 10,
-        }}
-      >
-        {/* Sidebar Header */}
-        <Box sx={{ px: isCollapsed ? 1.5 : 3, py: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Box 
-            sx={{ 
-              width: 48, 
-              height: 48, 
-              borderRadius: '16px', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              background: 'linear-gradient(135deg, #00A84E 0%, #00c75c 100%)',
-              boxShadow: '0 4px 14px rgba(0, 168, 78, 0.3)',
-              flexShrink: 0
-            }}
-          >
-            <Movie sx={{ color: '#fff', fontSize: 24 }} />
-          </Box>
-          <Box sx={{ 
-            opacity: isCollapsed ? 0 : 1, 
-            width: isCollapsed ? 0 : 'auto', 
-            overflow: 'hidden',
-            transition: 'all 0.3s ease',
-            ml: isCollapsed ? 0 : 0.5
-          }}>
-            <Typography sx={{ fontWeight: 800, fontSize: '1.15rem', color: '#fff', letterSpacing: '-0.02em' }}>
-              AIREAK
-            </Typography>
-            <Typography sx={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', mt: 0.2 }}>
-              Entertainment Hub
-            </Typography>
-          </Box>
-        </Box>
-
-        <Divider sx={{ mx: isCollapsed ? 2 : 3, borderColor: 'rgba(255,255,255,0.06)' }} />
-
-        {/* MẠNG XÃ HỘI Section */}
-        <Box sx={{ px: isCollapsed ? 1 : 2, py: 2 }}>
-          <Typography sx={{ 
-            px: isCollapsed ? 0 : 2, 
-            mb: 1.5, 
-            fontSize: '0.7rem', 
-            fontWeight: 700, 
-            color: 'rgba(255,255,255,0.5)', 
-            letterSpacing: '0.12em', 
-            textTransform: 'uppercase' as const,
-            opacity: isCollapsed ? 0 : 1,
-            height: isCollapsed ? 0 : 'auto',
-            overflow: 'hidden',
-            transition: 'all 0.3s ease'
-          }}>
-            MẠNG XÃ HỘI
-          </Typography>
-          <List sx={{ px: 0, py: 0 }}>
-            {socialMenuItems.map((item, idx) => {
-              const selected = isMenuItemActive(item.path);
-              const Icon = item.icon;
-              const isLast = idx === socialMenuItems.length - 1;
-              const badgeValue = item.badgeKey ? sidebarCounts[item.badgeKey] : 0;
-              return (
-                <Tooltip key={item.id} title={isCollapsed ? item.label : ""} placement="right">
-                  <ListItem disablePadding sx={{ mb: isLast ? 0 : 0.5 }}>
-                    <ListItemButton
-                      component={Link}
-                      to={item.path}
-                      selected={selected}
-                      onClick={() => isMobile && setMobileOpen(false)}
-                      sx={listItemSx(selected, isCollapsed, isLast)}
-                    >
-                      <ListItemIcon>
-                        <Badge badgeContent={badgeValue} color="error" max={99} invisible={!isCollapsed || badgeValue === 0}>
-                          <Icon fontSize="medium" />
-                        </Badge>
-                      </ListItemIcon>
-                      <ListItemText primary={item.label} />
-                      {badgeValue > 0 && !isCollapsed && (
-                        <Box sx={{ minWidth: 22, height: 22, px: 0.75, borderRadius: 11, bgcolor: 'error.main', color: '#fff', fontSize: '0.7rem', fontWeight: 800, display: 'grid', placeItems: 'center' }}>
-                          {badgeValue > 99 ? '99+' : badgeValue}
-                        </Box>
-                      )}
-                    </ListItemButton>
-                  </ListItem>
-                </Tooltip>
-              );
-            })}
-          </List>
-        </Box>
-
-        {/* GIẢI TRÍ Section */}
-        <Box sx={{ px: isCollapsed ? 1 : 2, py: 1 }}>
-          <Typography sx={{ 
-            px: isCollapsed ? 0 : 2, 
-            mb: 1.5, 
-            fontSize: '0.7rem', 
-            fontWeight: 700, 
-            color: 'rgba(255,255,255,0.5)', 
-            letterSpacing: '0.12em', 
-            textTransform: 'uppercase' as const,
-            opacity: isCollapsed ? 0 : 1,
-            height: isCollapsed ? 0 : 'auto',
-            overflow: 'hidden',
-            transition: 'all 0.3s ease'
-          }}>
-            GIẢI TRÍ
-          </Typography>
-          <List sx={{ px: 0, py: 0 }}>
-            {entertainmentMenuItems.map((item, idx) => {
-              const selected = isMenuItemActive(item.path);
-              const Icon = item.icon;
-              const isLast = idx === entertainmentMenuItems.length - 1;
-              const badgeValue = item.badgeKey ? sidebarCounts[item.badgeKey] : 0;
-              return (
-                <Tooltip key={item.id} title={isCollapsed ? item.label : ""} placement="right">
-                  <ListItem disablePadding sx={{ mb: isLast ? 0 : 0.5 }}>
-                    <ListItemButton
-                      component={Link}
-                      to={item.path}
-                      selected={selected}
-                      onClick={() => isMobile && setMobileOpen(false)}
-                      sx={listItemSx(selected, isCollapsed, isLast)}
-                    >
-                      <ListItemIcon>
-                        <Badge badgeContent={badgeValue} color="primary" max={99} invisible={!isCollapsed || badgeValue === 0}>
-                          <Icon fontSize="medium" />
-                        </Badge>
-                      </ListItemIcon>
-                      <ListItemText primary={item.label} />
-                      {badgeValue > 0 && !isCollapsed && (
-                        <Box sx={{ minWidth: 22, height: 22, px: 0.75, borderRadius: 11, bgcolor: 'rgba(255,255,255,0.18)', color: '#fff', fontSize: '0.7rem', fontWeight: 800, display: 'grid', placeItems: 'center' }}>
-                          {badgeValue > 99 ? '99+' : badgeValue}
-                        </Box>
-                      )}
-                    </ListItemButton>
-                  </ListItem>
-                </Tooltip>
-              );
-            })}
-          </List>
-        </Box>
-
-        <Box sx={{ flexGrow: 1 }} />
-
-        <Divider sx={{ mx: isCollapsed ? 2 : 3, borderColor: 'rgba(255,255,255,0.06)' }} />
-
-        {/* Updates Section */}
-        <Box sx={{ px: isCollapsed ? 1 : 2, py: 2 }}>
-          <Typography sx={{ 
-            px: isCollapsed ? 0 : 2, 
-            mb: 1.5, 
-            fontSize: '0.7rem', 
-            fontWeight: 700, 
-            color: 'rgba(255,255,255,0.5)', 
-            letterSpacing: '0.12em', 
-            textTransform: 'uppercase' as const,
-            opacity: isCollapsed ? 0 : 1,
-            height: isCollapsed ? 0 : 'auto',
-            overflow: 'hidden',
-            transition: 'all 0.3s ease'
-          }}>
-            CẬP NHẬT
-          </Typography>
-          <List sx={{ px: 0, py: 0 }}>
-            {onlineMenuItems.map((item, idx) => {
-              const selected = isMenuItemActive(item.path);
-              const Icon = item.icon;
-              const isLast = idx === onlineMenuItems.length - 1;
-              const badgeValue = item.badgeKey ? sidebarCounts[item.badgeKey] : 0;
-              return (
-                <Tooltip key={item.id} title={isCollapsed ? item.label : ""} placement="right">
-                  <ListItem disablePadding sx={{ mb: isLast ? 0 : 0.5 }}>
-                    <ListItemButton
-                      component={Link}
-                      to={item.path}
-                      selected={selected}
-                      onClick={() => isMobile && setMobileOpen(false)}
-                      sx={listItemSx(selected, isCollapsed, isLast)}
-                    >
-                      <ListItemIcon>
-                        <Badge badgeContent={badgeValue} color="error" max={99} invisible={!isCollapsed || badgeValue === 0}>
-                          <Icon fontSize="medium" />
-                        </Badge>
-                      </ListItemIcon>
-                      <ListItemText primary={item.label} />
-                      {badgeValue > 0 && !isCollapsed && (
-                        <Box sx={{ minWidth: 22, height: 22, px: 0.75, borderRadius: 11, bgcolor: 'error.main', color: '#fff', fontSize: '0.7rem', fontWeight: 800, display: 'grid', placeItems: 'center' }}>
-                          {badgeValue > 99 ? '99+' : badgeValue}
-                        </Box>
-                      )}
-                    </ListItemButton>
-                  </ListItem>
-                </Tooltip>
-              );
-            })}
-          </List>
-
-          {/* User Profile & Logout */}
-          {isAuthenticated && (
-            <Box sx={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: isCollapsed ? 0 : 2, 
-              mt: 1.5,
-              px: isCollapsed ? 0 : 1.5,
-              py: isCollapsed ? 0 : 1,
-              borderRadius: '16px',
-              border: '1px solid rgba(255,255,255,0.06)',
-              transition: 'all 0.3s ease'
-            }}>
-              <Avatar 
-                src={avatar}
-                sx={{ 
-                  width: isCollapsed ? 44 : 44, 
-                  height: isCollapsed ? 44 : 44, 
-                  flexShrink: 0,
-                  borderRadius: '14px',
-                  background: 'linear-gradient(135deg, #00A84E 0%, #006b31 100%)',
-                  fontWeight: 700,
-                  fontSize: '1.1rem',
-                  color: '#fff',
-                  position: 'relative',
-                  '&::after': {
-                    content: '""',
-                    position: 'absolute',
-                    bottom: 2,
-                    right: 2,
-                    width: 12,
-                    height: 12,
-                    bgcolor: '#4caf50',
-                    borderRadius: '50%',
-                    border: '2px solid #121212'
-                  }
-                }}
-              >
-                {initial}
-              </Avatar>
-              <Box sx={{ 
-                flex: 1, 
-                minWidth: 0, 
-                opacity: isCollapsed ? 0 : 1, 
-                width: isCollapsed ? 0 : 'auto', 
-                overflow: 'hidden',
-                transition: 'all 0.3s ease'
-              }}>
-                <Typography sx={{ fontSize: '0.95rem', fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                  {displayName}
-                </Typography>
-                <Typography sx={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.5)', mt: 0.2 }}>
-                  {profileData?.email || user?.email || 'user@aireak.com'}
-                </Typography>
-              </Box>
-              {!isCollapsed && (
-                <Tooltip title={t('logout') || "Đăng xuất"} placement="top">
-                  <IconButton 
-                    onClick={handleLogout} 
-                    sx={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: '12px',
-                      color: 'rgba(255,255,255,0.6)',
-                      transition: 'all 0.25s ease',
-                      '&:hover': { 
-                        bgcolor: 'rgba(255, 82, 82, 0.15)',
-                        color: ACCENT_RED,
-                      },
-                    }}
-                  >
-                    <LogoutIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              )}
-            </Box>
-          )}
-        </Box>
-
-        {/* Sidebar Toggle Button on Right Edge */}
-        {!isMobile && (
-          <IconButton
-            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            sx={{
-              position: 'absolute',
-              right: 0,
-              top: '50%',
-              transform: 'translateY(-50%) translateX(50%)',
-              width: 32,
-              height: 56,
-              borderRadius: '0 12px 12px 0',
-              bgcolor: '#121212',
-              borderRight: '1px solid rgba(255,255,255,0.06)',
-              borderTop: '1px solid rgba(255,255,255,0.06)',
-              borderBottom: '1px solid rgba(255,255,255,0.06)',
-              color: 'rgba(255,255,255,0.6)',
-              zIndex: 20,
-              transition: 'all 0.25s ease',
-              '&:hover': { 
-                bgcolor: '#1e1e1e',
-                color: '#fff',
-              },
-            }}
-          >
-            {isSidebarCollapsed ? <ChevronRight fontSize="small" /> : <ChevronLeft fontSize="small" />}
-          </IconButton>
-        )}
-      </Box>
-    );
-  };
+  const handleMobileNavigate = useCallback(() => {
+    setMobileOpen(false);
+  }, []);
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', display: 'flex', flexDirection: 'column' }}>
@@ -638,20 +537,34 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 </Button>
               </Box>
             ) : (
-              <Tooltip title={themeMode === 'dark' ? t('lightMode') || "Chế độ sáng" : t('darkMode') || "Chế độ tối"}>
-                <IconButton 
-                  onClick={() => dispatch(toggleThemeMode())}
-                  sx={{ 
-                    color: 'text.secondary',
-                    width: 44,
-                    height: 44,
-                    borderRadius: '12px',
-                    '&:hover': { bgcolor: 'rgba(0,168,78,0.08)' }
-                  }}
-                >
-                  {themeMode === 'dark' ? <ThemeIcon fontSize="medium" /> : <DarkModeIcon fontSize="medium" />}
-                </IconButton>
-              </Tooltip>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <NotificationMenu
+                  unreadCount={sidebarCounts.notifications}
+                  active={location.pathname.startsWith('/social/notifications')}
+                  onMarkedAllRead={handleNotificationsMarkedRead}
+                />
+                <Tooltip title={themeMode === 'dark' ? t('lightMode') || "Chế độ sáng" : t('darkMode') || "Chế độ tối"}>
+                  <IconButton
+                    onClick={() => dispatch(toggleThemeMode())}
+                    sx={{
+                      color: 'text.secondary',
+                      width: 44,
+                      height: 44,
+                      borderRadius: '12px',
+                      '&:hover': { bgcolor: 'rgba(0,168,78,0.08)' }
+                    }}
+                  >
+                    {themeMode === 'dark' ? <ThemeIcon fontSize="medium" /> : <DarkModeIcon fontSize="medium" />}
+                  </IconButton>
+                </Tooltip>
+                <AccountMenu
+                  displayName={displayName}
+                  email={email}
+                  avatar={avatar}
+                  active={location.pathname.startsWith('/social/profile')}
+                  onLogout={handleLogout}
+                />
+              </Box>
             )}
           </Box>
         </Toolbar>
@@ -668,7 +581,15 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             height: `calc(100vh - ${NAVBAR_HEIGHT}px)`,
           }}
         >
-          {featureSidebar(false)}
+          <SidebarPanel
+            isMobile={false}
+            isCollapsed={isSidebarCollapsed}
+            counts={sidebarCounts}
+            pathname={location.pathname}
+            isAdmin={isAdmin}
+            onToggleCollapse={handleToggleSidebarCollapse}
+            onNavigate={handleMobileNavigate}
+          />
         </Box>
 
         <Drawer
@@ -685,7 +606,15 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             },
           }}
         >
-          {featureSidebar(true)}
+          <SidebarPanel
+            isMobile={true}
+            isCollapsed={isSidebarCollapsed}
+            counts={sidebarCounts}
+            pathname={location.pathname}
+            isAdmin={isAdmin}
+            onToggleCollapse={handleToggleSidebarCollapse}
+            onNavigate={handleMobileNavigate}
+          />
         </Drawer>
 
         <Box

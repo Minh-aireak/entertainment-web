@@ -1,85 +1,98 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import {
-  Avatar,
-  Box,
-  Button,
-  CircularProgress,
-  IconButton,
-  Paper,
-  Skeleton,
-  TextField,
-  Typography,
-} from '@mui/material';
-import { Favorite, FavoriteBorder, Send } from '@mui/icons-material';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Box, Card, CircularProgress, Skeleton, Typography } from '@mui/material';
 import { useSelector } from 'react-redux';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 
 import { postService } from '../../api/postService';
 import { type RootState } from '../../store';
-import type { ScheduleResponse } from '../../models';
-import CommentSection from '../Comment/CommentSection';
+import { REALTIME_NOTIFICATION_EVENT } from '../../contexts/WebSocketContext';
+import { useInfiniteScroll } from '../../hooks/useInfiniteScroll';
+import PostComposer from './PostComposer';
+import PostCard from './PostCard';
+import type { Post } from './types';
 
 const POST_TYPE = 'BUSINESS_SCHEDULE';
 const PAGE_SIZE = 10;
+
+// Post like/comment counts have no dedicated push event on the backend today —
+// only a generic "notification" socket message fires for these actions. When one
+// of these types arrives we do a light, debounced re-sync of the visible feed's
+// counts instead of guessing which post changed.
+const REALTIME_SYNC_TYPES = new Set(['SOCIAL_LIKE', 'SOCIAL_COMMENT', 'LIKE_POST', 'COMMENT_POST']);
+const REALTIME_SYNC_DEBOUNCE_MS = 1200;
+
+const FeedSkeleton: React.FC = () => (
+  <Box className="flex flex-col gap-4">
+    {[0, 1].map((i) => (
+      <Card key={i} elevation={0} sx={{ p: 2.5, borderRadius: 3 }}>
+        <Box className="flex items-center gap-2" sx={{ mb: 2 }}>
+          <Skeleton variant="circular" width={40} height={40} />
+          <Box sx={{ flex: 1 }}>
+            <Skeleton variant="text" width="30%" />
+            <Skeleton variant="text" width="20%" />
+          </Box>
+        </Box>
+        <Skeleton variant="text" width="90%" />
+        <Skeleton variant="text" width="70%" />
+      </Card>
+    ))}
+  </Box>
+);
 
 const PostFeed: React.FC = () => {
   const { t } = useTranslation();
   const profileData = useSelector((state: RootState) => state.profile.profileData);
 
-  const [posts, setPosts] = useState<ScheduleResponse[]>([]);
+  const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [posting, setPosting] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
   const [likingIds, setLikingIds] = useState<Set<string>>(new Set());
 
-  const fetchPosts = useCallback(async () => {
-    setLoading(true);
+  const fetchPosts = useCallback(async (pageNum: number) => {
+    if (pageNum === 1) setLoading(true);
+    else setLoadingMore(true);
+
     try {
-      const res = await postService.getPosts(1, PAGE_SIZE, POST_TYPE);
+      const res = await postService.getPosts(pageNum, PAGE_SIZE, POST_TYPE);
       if (res.data.code === 1000) {
-        setPosts(res.data.result?.data ?? []);
+        const pageData = res.data.result;
+        setPosts((prev) => (pageNum === 1 ? pageData?.data ?? [] : [...prev, ...(pageData?.data ?? [])]));
+        setHasMore(pageNum < (pageData?.totalPages ?? 0));
       }
     } catch (error) {
       console.error('Failed to fetch posts:', error);
+      if (pageNum > 1) toast.error(t('postsLoadMoreFailed'));
     } finally {
-      setLoading(false);
+      if (pageNum === 1) setLoading(false);
+      else setLoadingMore(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
-    fetchPosts();
+    fetchPosts(1);
   }, [fetchPosts]);
 
-  const handleCreatePost = useCallback(async () => {
-    if (!content.trim()) return;
-    setPosting(true);
-    try {
-      const now = new Date();
-      const farFuture = new Date(now.getFullYear() + 10, now.getMonth(), now.getDate());
-      const res = await postService.createPost({
-        postType: POST_TYPE,
-        title: title.trim() || t('untitledPost'),
-        content: content.trim(),
-        startTime: now.toISOString(),
-        endTime: farFuture.toISOString(),
-      });
-      if (res.data.code === 1000) {
-        setTitle('');
-        setContent('');
-        toast.success(t('postCreated'));
-        fetchPosts();
-      }
-    } catch (error) {
-      console.error('Failed to create post:', error);
-      toast.error(t('postCreateFailed'));
-    } finally {
-      setPosting(false);
-    }
-  }, [content, title, t, fetchPosts]);
+  const handleLoadMore = useCallback(() => {
+    if (loadingMore || loading || !hasMore) return;
+    const nextPage = page + 1;
+    setPage(nextPage);
+    fetchPosts(nextPage);
+  }, [page, hasMore, loading, loadingMore, fetchPosts]);
 
-  const handleToggleLike = useCallback(async (post: ScheduleResponse) => {
+  const sentinelRef = useInfiniteScroll({
+    hasMore,
+    loading: loading || loadingMore,
+    onLoadMore: handleLoadMore,
+  });
+
+  const handlePostCreated = useCallback((post: Post) => {
+    setPosts((prev) => [post, ...prev]);
+  }, []);
+
+  const handleToggleLike = useCallback(async (post: Post) => {
     if (likingIds.has(post.id)) return;
     setLikingIds((prev) => new Set(prev).add(post.id));
 
@@ -114,134 +127,74 @@ const PostFeed: React.FC = () => {
     }
   }, [likingIds, t]);
 
+  // Soft realtime sync: merge fresh like/comment counts into whatever is already
+  // on screen, matched by id. Never reorders or injects posts we didn't already load.
+  const syncVisibleCounts = useCallback(async () => {
+    try {
+      const res = await postService.getPosts(1, PAGE_SIZE, POST_TYPE);
+      if (res.data.code !== 1000) return;
+      const freshById = new Map((res.data.result?.data ?? []).map((p) => [p.id, p]));
+      setPosts((prev) =>
+        prev.map((p) => {
+          const fresh = freshById.get(p.id);
+          return fresh ? { ...p, likeCount: fresh.likeCount, liked: fresh.liked } : p;
+        })
+      );
+    } catch (error) {
+      console.error('Failed to sync realtime post counts:', error);
+    }
+  }, []);
+
+  const syncDebounceRef = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    const handleRealtimeNotification = (event: Event) => {
+      const detail = (event as CustomEvent<{ type?: string }>).detail;
+      if (!detail?.type || !REALTIME_SYNC_TYPES.has(detail.type)) return;
+      window.clearTimeout(syncDebounceRef.current);
+      syncDebounceRef.current = window.setTimeout(syncVisibleCounts, REALTIME_SYNC_DEBOUNCE_MS);
+    };
+
+    window.addEventListener(REALTIME_NOTIFICATION_EVENT, handleRealtimeNotification);
+    return () => {
+      window.removeEventListener(REALTIME_NOTIFICATION_EVENT, handleRealtimeNotification);
+      window.clearTimeout(syncDebounceRef.current);
+    };
+  }, [syncVisibleCounts]);
+
   return (
     <Box>
-      <Paper
-        elevation={0}
-        sx={{
-          p: 2.5,
-          mb: 2,
-          borderRadius: 3,
-          bgcolor: '#141414',
-          border: '1px solid rgba(255, 255, 255, 0.06)',
-        }}
-      >
-        <Box sx={{ display: 'flex', gap: 1.5 }}>
-          <Avatar src={profileData?.avatar} sx={{ bgcolor: 'primary.main' }}>
-            {profileData?.displayName?.[0]?.toUpperCase()}
-          </Avatar>
-          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
-            <TextField
-              size="small"
-              placeholder={t('postTitlePlaceholder')}
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              fullWidth
-            />
-            <TextField
-              size="small"
-              placeholder={t('postContentPlaceholder')}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              multiline
-              minRows={2}
-              fullWidth
-            />
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <Button
-                variant="contained"
-                endIcon={<Send fontSize="small" />}
-                disabled={!content.trim() || posting}
-                onClick={handleCreatePost}
-              >
-                {t('postSubmit')}
-              </Button>
-            </Box>
-          </Box>
-        </Box>
-      </Paper>
+      <PostComposer
+        avatar={profileData?.avatar}
+        displayName={profileData?.displayName || profileData?.username}
+        onPostCreated={handlePostCreated}
+      />
 
       {loading ? (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {[0, 1].map((i) => (
-            <Paper
-              key={i}
-              elevation={0}
-              sx={{ p: 2.5, borderRadius: 3, bgcolor: '#141414', border: '1px solid rgba(255, 255, 255, 0.06)' }}
-            >
-              <Skeleton variant="text" width="30%" />
-              <Skeleton variant="text" width="90%" />
-              <Skeleton variant="text" width="70%" />
-            </Paper>
-          ))}
-        </Box>
+        <FeedSkeleton />
       ) : posts.length === 0 ? (
-        <Paper
-          elevation={0}
-          sx={{
-            p: 4,
-            textAlign: 'center',
-            borderRadius: 3,
-            bgcolor: '#141414',
-            border: '1px solid rgba(255, 255, 255, 0.06)',
-          }}
-        >
+        <Card elevation={0} sx={{ p: 4, textAlign: 'center', borderRadius: 3 }}>
           <Typography color="text.secondary">{t('noPostsYet')}</Typography>
-        </Paper>
+        </Card>
       ) : (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <Box className="flex flex-col gap-4">
           {posts.map((post) => (
-            <Paper
+            <PostCard
               key={post.id}
-              elevation={0}
-              sx={{ p: 2.5, borderRadius: 3, bgcolor: '#141414', border: '1px solid rgba(255, 255, 255, 0.06)' }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
-                <Avatar src={profileData?.avatar} sx={{ bgcolor: 'primary.main' }}>
-                  {profileData?.displayName?.[0]?.toUpperCase()}
-                </Avatar>
-                <Box sx={{ minWidth: 0 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }} noWrap>
-                    {profileData?.displayName || profileData?.username}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {post.createdDate}
-                  </Typography>
-                </Box>
-              </Box>
-
-              {post.title && (
-                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5 }}>
-                  {post.title}
-                </Typography>
-              )}
-              <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', mb: 1.5 }}>
-                {post.content}
-              </Typography>
-
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <IconButton
-                  size="small"
-                  color={post.liked ? 'error' : 'default'}
-                  onClick={() => handleToggleLike(post)}
-                  disabled={likingIds.has(post.id)}
-                >
-                  {likingIds.has(post.id) ? (
-                    <CircularProgress size={18} />
-                  ) : post.liked ? (
-                    <Favorite fontSize="small" />
-                  ) : (
-                    <FavoriteBorder fontSize="small" />
-                  )}
-                </IconButton>
-                <Typography variant="body2" color="text.secondary">
-                  {post.likeCount}
-                </Typography>
-              </Box>
-
-              <CommentSection sourceId={post.id} />
-            </Paper>
+              post={post}
+              liking={likingIds.has(post.id)}
+              onToggleLike={handleToggleLike}
+            />
           ))}
+
+          <Box ref={sentinelRef} className="flex items-center justify-center" sx={{ py: 2, minHeight: 40 }}>
+            {loadingMore && <CircularProgress size={22} />}
+            {!hasMore && !loadingMore && (
+              <Typography variant="caption" color="text.secondary">
+                {t('endOfFeed')}
+              </Typography>
+            )}
+          </Box>
         </Box>
       )}
     </Box>

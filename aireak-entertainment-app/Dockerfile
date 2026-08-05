@@ -8,7 +8,9 @@ RUN npm ci
 COPY . .
 
 ARG VITE_API_BASE_URL=http://localhost:8888/api/v1
+ARG VITE_SOCKET_URL=ws://localhost:8888/api/v1/sockets/ws
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV VITE_SOCKET_URL=$VITE_SOCKET_URL
 
 RUN npm run build
 

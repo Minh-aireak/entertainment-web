@@ -1,7 +1,9 @@
 package com.MyProject.friend.friend_service.repository.httpclient;
 
 import com.MyProject.common.dto.request.BulkUserProfileRequest;
+import com.MyProject.common.dto.request.ProfileSuggestionRequest;
 import com.MyProject.common.dto.response.ApiResponse;
+import com.MyProject.common.dto.response.PageResponse;
 import com.MyProject.common.dto.response.UserProfileResponse;
 import com.MyProject.friend.friend_service.configuration.AuthenticationRequestInterceptor;
 import org.springframework.cloud.openfeign.FeignClient;
@@ -16,4 +18,8 @@ public interface ProfileClient {
 
     @PostMapping(value = "/profiles/internal/bulk-user-profiles")
     ApiResponse<Map<String, UserProfileResponse>> getBulkUserProfiles(@RequestBody BulkUserProfileRequest request);
+
+    @PostMapping(value = "/profiles/internal/suggestions")
+    ApiResponse<PageResponse<UserProfileResponse>> getSuggestionProfiles(
+            @RequestBody ProfileSuggestionRequest request);
 }

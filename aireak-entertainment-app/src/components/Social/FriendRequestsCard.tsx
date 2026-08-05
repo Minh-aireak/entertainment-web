@@ -20,7 +20,7 @@ const FriendRequestsCard: React.FC<FriendRequestsCardProps> = React.memo(
     return (
       <Paper
         elevation={0}
-        sx={{ p: 3, borderRadius: 3, bgcolor: '#141414', border: '1px solid rgba(255, 255, 255, 0.06)', height: '100%' }}
+        sx={{ p: 3, borderRadius: 3, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', height: '100%' }}
       >
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -51,7 +51,7 @@ const FriendRequestsCard: React.FC<FriendRequestsCardProps> = React.memo(
           <Stack spacing={1}>
             {requests.map((req) => (
               <Box key={req.senderId} sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                <Avatar src={req.avatar} sx={{ width: 40, height: 40 }}>
+                <Avatar src={req.avatar} slotProps={{ img: { loading: 'lazy' } }} sx={{ width: 40, height: 40 }}>
                   {req.displayName?.[0]?.toUpperCase()}
                 </Avatar>
                 <Typography variant="body2" noWrap sx={{ flex: 1, fontWeight: 600 }}>
@@ -67,7 +67,7 @@ const FriendRequestsCard: React.FC<FriendRequestsCardProps> = React.memo(
                 <IconButton
                   size="small"
                   onClick={() => onDecline(req.senderId)}
-                  sx={{ bgcolor: 'rgba(255,255,255,0.08)', '&:hover': { bgcolor: 'rgba(255,255,255,0.16)' } }}
+                  sx={{ bgcolor: 'action.hover', '&:hover': { bgcolor: 'action.selected' } }}
                 >
                   <Close fontSize="small" />
                 </IconButton>

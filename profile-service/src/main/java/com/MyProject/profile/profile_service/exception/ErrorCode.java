@@ -23,7 +23,8 @@ public enum ErrorCode {
     DISPLAY_NAME_NOT_BLANK(8108, "Display name cannot be blank!", HttpStatus.BAD_REQUEST),
     INVALID_PHONE_NUMBER(8109, "Phone number invalid!", HttpStatus.BAD_REQUEST ),
     EMAIL_INVALID(8110, "Email invalid!", HttpStatus.BAD_REQUEST),
-    RATE_LIMIT_EXCEEDED(8111, "Too many requests! Please try again later!", HttpStatus.TOO_MANY_REQUESTS);
+    RATE_LIMIT_EXCEEDED(8111, "Too many requests! Please try again later!", HttpStatus.TOO_MANY_REQUESTS),
+    AVATAR_NOT_BLANK(8112, "Avatar cannot be blank!", HttpStatus.BAD_REQUEST);
 
     int code;
     String message;

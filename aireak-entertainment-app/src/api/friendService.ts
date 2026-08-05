@@ -1,5 +1,5 @@
 import axiosInstance from './axiosInstance';
-import type { ApiResponse, PageResponse, UserRelationshipResponse, FriendRequestStatus, RelationshipStatus, FriendRequestResponse } from '../models';
+import type { ApiResponse, PageResponse, UserRelationshipResponse, FriendRequestStatus, RelationshipStatus, FriendRequestResponse, UserProfileResponse } from '../models';
 
 export const friendService = {
   sendFriendRequest: async (toUserId: string) => {
@@ -16,7 +16,17 @@ export const friendService = {
     });
     return response.data;
   },
-  
+
+  getFriendSuggestions: async (page: number = 1, size: number = 8) => {
+    const response = await axiosInstance.get<ApiResponse<PageResponse<UserProfileResponse>>>('/friends/suggestions', {
+      params: {
+        page,
+        size,
+      },
+    });
+    return response.data;
+  },
+
   searchFriends: async (displayName: string, page: number = 1, size: number = 10) => {
     const response = await axiosInstance.get<ApiResponse<PageResponse<UserRelationshipResponse>>>('/friends/search', {
       params: {
@@ -50,5 +60,5 @@ export const friendService = {
       },
     });
     return response.data;
-  },  
+  },
 };

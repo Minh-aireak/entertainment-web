@@ -2,6 +2,7 @@ package com.MyProject.friend.friend_service.controller;
 
 import com.MyProject.common.dto.response.ApiResponse;
 import com.MyProject.common.dto.response.PageResponse;
+import com.MyProject.common.dto.response.UserProfileResponse;
 import com.MyProject.friend.friend_service.dto.response.FriendRequestResponse;
 import com.MyProject.friend.friend_service.dto.response.UserRelationshipResponse;
 import com.MyProject.friend.friend_service.entity.FriendRequestStatus;
@@ -41,6 +42,18 @@ public class FriendController {
         friendApiRateLimitService.checkReadFriends(userId);
         return ApiResponse.<PageResponse<UserRelationshipResponse>>builder()
                 .result(friendService.getListFriend(page, size))
+                .build();
+    }
+
+    @GetMapping("/suggestions")
+    @RateLimiter(name = "friendApi")
+    ApiResponse<PageResponse<UserProfileResponse>> getFriendSuggestions(
+            @RequestParam(value = "page", defaultValue = "1") int page,
+            @RequestParam(value = "size", defaultValue = "10") int size) {
+        String userId = SecurityUtils.getCurrentUserId();
+        friendApiRateLimitService.checkReadFriends(userId);
+        return ApiResponse.<PageResponse<UserProfileResponse>>builder()
+                .result(friendService.getFriendSuggestions(page, size))
                 .build();
     }
 

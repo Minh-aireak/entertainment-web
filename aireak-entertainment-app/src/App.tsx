@@ -6,10 +6,14 @@ import { Toaster } from 'react-hot-toast';
 import { store, type RootState, logout, setUser } from './store';
 import { getTheme } from './theme';
 import { profileService } from './api/profileService';
+import { identityService } from './api/identityService';
+import type { Role } from './models';
 import { useEffect } from 'react';
 
 import MainLayout from './components/Layout/MainLayout';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
+import { WebSocketProvider } from './contexts/WebSocketContext';
+import { ConfirmDialogProvider } from './contexts/ConfirmDialogContext';
 
 import SocialHome from './pages/SocialHome';
 import TravelHome from './pages/TravelHome';
@@ -47,11 +51,21 @@ function AppContent() {
         const response = await profileService.getMyProfile();
         if (!cancelled && response.code === 1000 && response.result) {
           const profile = response.result;
+          let roles: Role[] = [{ name: 'USER', description: 'Default user role' }];
+          try {
+            const myInfoResponse = await identityService.getMyInfo();
+            if (myInfoResponse.code === 1000 && myInfoResponse.result) {
+              roles = myInfoResponse.result.roles;
+            }
+          } catch (roleError) {
+            console.debug('Could not load roles for restored session:', roleError);
+          }
+          if (cancelled) return;
           dispatch(setUser({
             id: profile.userId,
             username: profile.username,
             email: profile.email,
-            roles: [{ name: 'USER', description: 'Default user role', permissions: [] }],
+            roles,
           }));
           return;
         }
@@ -115,7 +129,9 @@ function AppContent() {
           }}
         />
         <Router>
-          <Routes>
+          <WebSocketProvider>
+          <ConfirmDialogProvider>
+            <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -266,8 +282,10 @@ function AppContent() {
               }
             />
 
-            <Route path="*" element={<Navigate to="/social" replace />} />
-          </Routes>
+              <Route path="*" element={<Navigate to="/social" replace />} />
+            </Routes>
+          </ConfirmDialogProvider>
+          </WebSocketProvider>
         </Router>
       </ThemeProvider>
   );

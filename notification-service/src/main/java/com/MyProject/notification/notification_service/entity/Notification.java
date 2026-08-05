@@ -33,6 +33,11 @@ public class Notification {
 
     Map<String, LocalDateTime> recipientReadMap;
 
+    String conversationId;
+
+    @Builder.Default
+    Integer count = 1;
+
     @CreatedDate
     @Indexed
     LocalDateTime createdAt;

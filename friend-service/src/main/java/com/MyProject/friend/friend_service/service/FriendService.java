@@ -53,8 +53,16 @@ public class FriendService {
     @Transactional
     public void sendFriendRequest(String toUserId) {
         String senderUserId = SecurityUtils.getCurrentUserId();
+        if (senderUserId.equals(toUserId)) {
+            throw new AppException(ErrorCode.CANNOT_SEND_REQUEST_TO_SELF);
+        }
+
         List<String> listSorted = Stream.of(senderUserId, toUserId).sorted().toList();
         String hashFriendRequest = generateHash(listSorted);
+
+        if (userRelationshipRepository.existsByHashFriend(hashFriendRequest)) {
+            throw new AppException(ErrorCode.ALREADY_FRIEND);
+        }
 
         friendRequestRepository.findByHashFriendRequest(hashFriendRequest)
                 .ifPresent(request -> {
@@ -128,8 +136,8 @@ public class FriendService {
         NotificationEvent notificationEvent = NotificationEvent.builder()
                 .eventId(UUID.randomUUID().toString())
                 .typeNotification("FRIEND_ACCEPTED")
-                .userIdSender(current.getSenderId())
-                .toUserIds(List.of(current.getReceiverId()))
+                .userIdSender(current.getReceiverId())
+                .toUserIds(List.of(current.getSenderId()))
                 .build();
 
         outboxEventPublisher.publish(
@@ -204,6 +212,41 @@ public class FriendService {
                 .totalPages(friendsPerPage.getTotalPages())
                 .totalElement(friendsPerPage.getTotalElements())
                 .data(responses)
+                .build();
+    }
+
+    public PageResponse<UserProfileResponse> getFriendSuggestions(int page, int size) {
+        String currentUserId = SecurityUtils.getCurrentUserId();
+        Set<String> excludedUserIds = new HashSet<>();
+        excludedUserIds.add(currentUserId);
+
+        userRelationshipRepository.findRelationshipsForSuggestions(
+                        currentUserId,
+                        RelationshipStatus.FRIEND
+                ).stream()
+                .map(relationship -> relationship.getSenderId().equals(currentUserId)
+                        ? relationship.getReceiverId()
+                        : relationship.getSenderId())
+                .forEach(excludedUserIds::add);
+
+        friendRequestRepository.findRequestsForSuggestions(
+                        currentUserId,
+                        FriendRequestStatus.PENDING
+                ).stream()
+                .map(request -> request.getSenderId().equals(currentUserId)
+                        ? request.getReceiverId()
+                        : request.getSenderId())
+                .forEach(excludedUserIds::add);
+
+        PageResponse<UserProfileResponse> suggestions = friendProfileExternalService
+                .getSuggestionProfiles(excludedUserIds, page - 1, size);
+
+        return PageResponse.<UserProfileResponse>builder()
+                .currentPage(page)
+                .pageSize(size)
+                .totalPages(suggestions.getTotalPages())
+                .totalElement(suggestions.getTotalElement())
+                .data(suggestions.getData())
                 .build();
     }
 
@@ -369,7 +412,10 @@ public class FriendService {
     }
 
     public int countMyFriends() {
-        Integer count = userRelationshipRepository.countMyFriends(SecurityUtils.getCurrentUserId(), RelationshipStatus.FRIEND);
-        return count != null ? count : 0;
+        long count = userRelationshipRepository.countMyFriends(
+                SecurityUtils.getCurrentUserId(),
+                RelationshipStatus.FRIEND
+        );
+        return Math.toIntExact(count);
     }
 }

@@ -89,12 +89,12 @@ export const filmService = {
   },
 
   createFilm: async (request: FilmRequest): Promise<ApiResponse<FilmResponse>> => {
-    const response = await axiosInstance.post(`${FILM_BASE_URL}`, request);
+    const response = await axiosInstance.post(`${FILM_BASE_URL}/`, request);
     return response.data;
   },
   
   getPageFilms: async (page: number, size: number): Promise<ApiResponse<PageResponse<FilmSummaryResponse>>> => {
-    const response = await axiosInstance.get(FILM_BASE_URL, { params: { page, size } });
+    const response = await axiosInstance.get(`${FILM_BASE_URL}/`, { params: { page, size } });
     return response.data;
   },
 

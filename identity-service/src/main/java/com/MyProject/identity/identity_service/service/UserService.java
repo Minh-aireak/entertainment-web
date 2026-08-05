@@ -5,6 +5,7 @@ import java.util.*;
 
 import com.MyProject.identity.identity_service.dto.event.UserRegisteredEvent;
 import com.MyProject.common.dto.response.PageResponse;
+import com.MyProject.common.security.SecurityUtils;
 import com.MyProject.identity.identity_service.dto.request.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -92,6 +93,13 @@ public class UserService {
         
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
+    }
+
+    @Transactional(readOnly = true)
+    public UserResponse getMyInfo() {
+        User user = userRepository.findById(SecurityUtils.getCurrentUserId())
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+        return userMapper.toUserResponse(user);
     }
 
     @Transactional(rollbackFor = Exception.class)

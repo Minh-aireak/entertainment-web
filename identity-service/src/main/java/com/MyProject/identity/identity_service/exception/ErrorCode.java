@@ -21,8 +21,6 @@ public enum ErrorCode {
     ROLE_INVALID(8005, "Role creation request cannot be null", HttpStatus.BAD_REQUEST),
     ROLE_EXISTED(8006, "Role existed!", HttpStatus.BAD_REQUEST),
     ROLE_NOT_EXISTED(8007, "Role not existed!", HttpStatus.NOT_FOUND),
-    PERMISSION_EXISTED(8008, "Permission existed!", HttpStatus.BAD_REQUEST),
-    PERMISSION_NOT_EXISTED(8009, "Permission not found!", HttpStatus.NOT_FOUND),
     PASSWORD_INCORRECT(8010, "Password incorrect!", HttpStatus.BAD_REQUEST),
     UNAUTHENTICATED(8011, "Unauthenticated!", HttpStatus.UNAUTHORIZED),
     UNAUTHORIZED(8012, "You don't have permission!", HttpStatus.FORBIDDEN),

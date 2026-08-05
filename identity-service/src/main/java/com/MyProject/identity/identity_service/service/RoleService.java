@@ -1,6 +1,5 @@
 package com.MyProject.identity.identity_service.service;
 
-import java.util.HashSet;
 import java.util.List;
 
 import com.MyProject.identity.identity_service.repository.UserRepository;
@@ -14,7 +13,6 @@ import com.MyProject.identity.identity_service.entity.Role;
 import com.MyProject.identity.identity_service.exception.AppException;
 import com.MyProject.identity.identity_service.exception.ErrorCode;
 import com.MyProject.identity.identity_service.mapper.RoleMapper;
-import com.MyProject.identity.identity_service.repository.PermissionRepository;
 import com.MyProject.identity.identity_service.repository.RoleRepository;
 
 import lombok.AccessLevel;
@@ -27,7 +25,6 @@ import lombok.experimental.FieldDefaults;
 public class RoleService {
     RoleRepository roleRepository;
     RoleMapper roleMapper;
-    PermissionRepository permissionRepository;
     UserRepository userRepository;
 
     @Transactional(rollbackFor = Exception.class)
@@ -36,25 +33,12 @@ public class RoleService {
 
         var role = roleMapper.toRole(request);
 
-        var permissions = new HashSet<>(permissionRepository.findAllById(request.getPermissions()));
-
-        if (request.getPermissions().size() != permissions.size()) {
-            throw new AppException(ErrorCode.PERMISSION_NOT_EXISTED);
-        }
-
-        role.setPermissions(permissions);
-
         return roleMapper.toRoleResponse(roleRepository.save(role));
     }
 
     @Transactional(rollbackFor = Exception.class)
     public RoleResponse updateRole(RoleUpdateRequest request) {
         Role role = roleRepository.findByName(request.getName()).orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_EXISTED));
-
-        if (request.getPermissions() != null) {
-            var permissions = new HashSet<>(permissionRepository.findAllById(request.getPermissions()));
-            role.setPermissions(permissions);
-        }
         roleMapper.update(role, request);
 
         return roleMapper.toRoleResponse(roleRepository.save(role));

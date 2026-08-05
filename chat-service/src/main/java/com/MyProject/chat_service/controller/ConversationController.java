@@ -4,6 +4,7 @@ import com.MyProject.chat_service.service.ChatApiRateLimitService;
 import com.MyProject.common.security.SecurityUtils;
 import com.MyProject.common.dto.response.ApiResponse;
 import com.MyProject.common.dto.response.PageResponse;
+import com.MyProject.chat_service.dto.request.ConversationUpdateRequest;
 import com.MyProject.chat_service.dto.response.ConversationResponse;
 import com.MyProject.chat_service.service.ConversationService;
 import lombok.AccessLevel;
@@ -48,6 +49,16 @@ public class ConversationController {
         chatApiRateLimitService.checkConversationRead(userId);
         return ApiResponse.<PageResponse<ConversationResponse>>builder()
                 .result(conversationService.getMyConversations(page, size))
+                .build();
+    }
+
+    @PutMapping("/{conversationId}")
+    ApiResponse<ConversationResponse> updateConversation(@PathVariable String conversationId,
+                                                           @RequestBody ConversationUpdateRequest request) {
+        String userId = SecurityUtils.getCurrentUserId();
+        chatApiRateLimitService.checkConversationWrite(userId);
+        return ApiResponse.<ConversationResponse>builder()
+                .result(conversationService.updateGroupConversation(conversationId, request))
                 .build();
     }
 }

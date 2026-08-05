@@ -18,7 +18,7 @@ const FriendsPreviewCard: React.FC<FriendsPreviewCardProps> = React.memo(({ frie
   return (
     <Paper
       elevation={0}
-      sx={{ p: 3, borderRadius: 3, bgcolor: '#141414', border: '1px solid rgba(255, 255, 255, 0.06)', height: '100%' }}
+      sx={{ p: 3, borderRadius: 3, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', height: '100%' }}
     >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -55,7 +55,7 @@ const FriendsPreviewCard: React.FC<FriendsPreviewCardProps> = React.memo(({ frie
               sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 64, cursor: 'pointer' }}
               onClick={() => navigate('/social/friends')}
             >
-              <Avatar src={friend.friendAvatar} sx={{ width: 56, height: 56, mb: 0.5 }}>
+              <Avatar src={friend.friendAvatar} slotProps={{ img: { loading: 'lazy' } }} sx={{ width: 56, height: 56, mb: 0.5 }}>
                 {friend.displayName?.[0]?.toUpperCase()}
               </Avatar>
               <Typography variant="caption" noWrap sx={{ width: '100%', textAlign: 'center' }}>

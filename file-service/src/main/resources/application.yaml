@@ -18,15 +18,26 @@ spring:
 jwt:
   signerKey: ${JWT_SIGNER_KEY:uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0}
 
-cloudinary:
-  cloud-name: ${CLOUDINARY_NAME:dhlqkqygg}
-  api-key: ${CLOUDINARY_API_KEY:589111187194195}
-  api-secret: ${CLOUDINARY_API_SECRET:s5JaqouoY6AKKdfqucqS8WhRJEY}
+# Backblaze B2 - S3-compatible API
+# Không đặt giá trị thật của key-id / application-key ở đây, luôn truyền qua biến môi trường.
+b2:
+  key-id: ${B2_KEY_ID:}
+  application-key: ${B2_APPLICATION_KEY:}
+  bucket-name: ${B2_BUCKET_NAME:}
+  endpoint: ${B2_ENDPOINT:} # vd: s3.us-west-004.backblazeb2.com (KHÔNG kèm "https://")
+  region: ${B2_REGION:} # để trống để tự suy ra từ endpoint (vd: us-west-004)
+  public: ${B2_BUCKET_PUBLIC:false} # true nếu bucket ở chế độ Public, false nếu Private (sẽ trả presigned URL)
+  presigned-url-ttl: ${B2_PRESIGNED_URL_TTL:PT1H} # dùng khi bucket Private
+
+file:
+  max-image-size: ${MAX_IMAGE_SIZE:25MB}
+  max-video-size: ${MAX_VIDEO_SIZE:5GB}
+  max-raw-size: ${MAX_RAW_SIZE:100MB}
 
 resilience4j:
   circuitbreaker:
     instances:
-      cloudinary:
+      b2:
         register-health-indicator: true
         sliding-window-size: 10
         permitted-number-of-calls-in-half-open-state: 3
@@ -39,7 +50,7 @@ resilience4j:
           - com.MyProject.file.file_service.exception.AppException
   ratelimiter:
     instances:
-      cloudinary:
+      b2:
         limit-for-period: 50
         limit-refresh-period: 1s
         timeout-duration: 0s

@@ -63,4 +63,20 @@ export const chatService = {
     });
     return response.data;
   },
+
+  searchConversations: async (query: string, page: number = 1, size: number = 10) => {
+    const response = await axiosInstance.get<ApiResponse<PageResponse<ConversationResponse>>>('/chats/conversations/search', {
+      params: {
+        query,
+        page,
+        size,
+      },
+    });
+    return response.data;
+  },
+
+  updateConversation: async (conversationId: string, data: { conversationName?: string; conversationAvatar?: string }) => {
+    const response = await axiosInstance.put<ApiResponse<ConversationResponse>>(`/chats/conversations/${conversationId}`, data);
+    return response.data;
+  },
 };

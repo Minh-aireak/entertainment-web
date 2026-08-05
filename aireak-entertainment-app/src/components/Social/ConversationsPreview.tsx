@@ -33,7 +33,7 @@ const ConversationsPreview: React.FC<ConversationsPreviewProps> = React.memo(
     return (
       <Paper
         elevation={0}
-        sx={{ p: 3, borderRadius: 3, bgcolor: '#141414', border: '1px solid rgba(255, 255, 255, 0.06)', height: '100%' }}
+        sx={{ p: 3, borderRadius: 3, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', height: '100%' }}
       >
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -85,7 +85,7 @@ const ConversationsPreview: React.FC<ConversationsPreviewProps> = React.memo(
                       overlap="circular"
                       anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                     >
-                      <Avatar src={avatar}>{title?.[0]?.toUpperCase()}</Avatar>
+                      <Avatar src={avatar} slotProps={{ img: { loading: 'lazy' } }}>{title?.[0]?.toUpperCase()}</Avatar>
                     </Badge>
                   </ListItemAvatar>
                   <ListItemText

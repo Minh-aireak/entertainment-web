@@ -1,9 +1,11 @@
 package com.MyProject.profile.profile_service.controller;
 
 import com.MyProject.common.dto.request.BulkUserProfileRequest;
+import com.MyProject.common.dto.request.ProfileSuggestionRequest;
 import com.MyProject.common.dto.response.ApiResponse;
 import com.MyProject.common.dto.response.PageResponse;
 import com.MyProject.common.dto.response.UserProfileResponse;
+import com.MyProject.profile.profile_service.dto.request.UpdateAvatarRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileCreationRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileUpdateRequest;
 import com.MyProject.profile.profile_service.service.UserProfileService;
@@ -35,6 +37,13 @@ public class UserProfileController {
     ApiResponse<UserProfileResponse> getMyProfile(){
         return ApiResponse.<UserProfileResponse>builder()
                 .result(userProfileService.getMyProfile())
+                .build();
+    }
+
+    @PutMapping("/my-profile/avatar")
+    ApiResponse<UserProfileResponse> updateAvatar(@RequestBody @Valid UpdateAvatarRequest request){
+        return ApiResponse.<UserProfileResponse>builder()
+                .result(userProfileService.updateAvatar(request.getAvatar()))
                 .build();
     }
 
@@ -75,6 +84,14 @@ public class UserProfileController {
     ApiResponse<Map<String, UserProfileResponse>> getBulkProfiles(@RequestBody BulkUserProfileRequest request){
         return ApiResponse.<Map<String, UserProfileResponse>>builder()
                 .result(userProfileService.getBulkProfiles(request))
+                .build();
+    }
+
+    @PostMapping("/internal/suggestions")
+    ApiResponse<PageResponse<UserProfileResponse>> getSuggestionProfiles(
+            @RequestBody ProfileSuggestionRequest request) {
+        return ApiResponse.<PageResponse<UserProfileResponse>>builder()
+                .result(userProfileService.getSuggestionProfiles(request))
                 .build();
     }
 

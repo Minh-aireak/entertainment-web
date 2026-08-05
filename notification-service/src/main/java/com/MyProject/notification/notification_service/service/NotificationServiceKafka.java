@@ -1,6 +1,7 @@
 package com.MyProject.notification.notification_service.service;
 
 import com.MyProject.common.redis.RedisService;
+import com.MyProject.notification.notification_service.dto.event.ConversationSeenEvent;
 import com.MyProject.notification.notification_service.dto.event.UserRegisteredEvent;
 import com.MyProject.notification.notification_service.dto.event.NotificationEvent;
 import com.MyProject.notification.notification_service.dto.request.EmailRequest;
@@ -156,6 +157,18 @@ public class NotificationServiceKafka {
         } catch (Exception e) {
             log.error("Failed to process notification event", e);
             throw new RuntimeException("Failed to process notification event", e);
+        }
+    }
+
+    @KafkaListener(topics = "chat.conversation.seen")
+    public void consumeConversationSeen(String message, Acknowledgment acknowledgment) {
+        try {
+            ConversationSeenEvent event = objectMapper.readValue(message, ConversationSeenEvent.class);
+            notificationService.markChatConversationRead(event.getUserId(), event.getConversationId());
+            acknowledgment.acknowledge();
+        } catch (Exception e) {
+            log.error("Failed to process chat.conversation.seen event", e);
+            throw new RuntimeException("Failed to process chat.conversation.seen event", e);
         }
     }
 }

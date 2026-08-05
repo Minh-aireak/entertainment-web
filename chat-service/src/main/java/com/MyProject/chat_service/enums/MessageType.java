@@ -15,11 +15,7 @@ public enum MessageType {
 
     VIDEO("Sent a video"),
 
-    FILE("Sent a file"),
-
-    STICKER("Sent a sticker"),
-
-    POST("Shared a post");
+    FILE("Sent a file");
 
     private final String defaultContent;
 

@@ -1,6 +1,8 @@
 package com.MyProject.friend.friend_service.service;
 
 import com.MyProject.common.dto.request.BulkUserProfileRequest;
+import com.MyProject.common.dto.request.ProfileSuggestionRequest;
+import com.MyProject.common.dto.response.PageResponse;
 import com.MyProject.common.dto.response.UserProfileResponse;
 import com.MyProject.friend.friend_service.repository.httpclient.ProfileClient;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
@@ -41,5 +43,43 @@ public class FriendProfileExternalService {
                 userIds,
                 throwable.getMessage());
         return Collections.emptyMap();
+    }
+
+    @CircuitBreaker(name = "profileService", fallbackMethod = "getSuggestionProfilesFallback")
+    @RateLimiter(name = "profileService")
+    @Retry(name = "profileService")
+    public PageResponse<UserProfileResponse> getSuggestionProfiles(
+            Set<String> excludedUserIds,
+            int page,
+            int size) {
+        var request = ProfileSuggestionRequest.builder()
+                .excludedUserIds(excludedUserIds)
+                .page(page)
+                .size(size)
+                .build();
+        var response = profileClient.getSuggestionProfiles(request);
+
+        return response != null && response.getResult() != null
+                ? response.getResult()
+                : emptySuggestionPage(page, size);
+    }
+
+    public PageResponse<UserProfileResponse> getSuggestionProfilesFallback(
+            Set<String> excludedUserIds,
+            int page,
+            int size,
+            Throwable throwable) {
+        log.warn("Fallback triggered while fetching friend suggestions: {}", throwable.getMessage());
+        return emptySuggestionPage(page, size);
+    }
+
+    private PageResponse<UserProfileResponse> emptySuggestionPage(int page, int size) {
+        return PageResponse.<UserProfileResponse>builder()
+                .currentPage(page)
+                .pageSize(size)
+                .totalPages(0)
+                .totalElement(0)
+                .data(Collections.emptyList())
+                .build();
     }
 }

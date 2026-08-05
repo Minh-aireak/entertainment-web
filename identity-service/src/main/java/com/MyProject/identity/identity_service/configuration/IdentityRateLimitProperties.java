@@ -16,7 +16,6 @@ public class IdentityRateLimitProperties {
     Rule resetPassword = new Rule();
     Rule userManagement = new Rule();
     Rule roleManagement = new Rule();
-    Rule permissionManagement = new Rule();
     Rule login = new Rule();
     Rule introspect = new Rule();
     Rule logout = new Rule();

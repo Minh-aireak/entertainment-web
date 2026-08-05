@@ -34,7 +34,8 @@ public enum ErrorCode {
     SERVICE_UNAVAILABLE(8618, "Chat service is temporarily unavailable. Please try again later!", HttpStatus.SERVICE_UNAVAILABLE),
     OUTBOX_SAVE_FAILED(8619, "Failed to persist outbox event. Transaction has been rolled back!", HttpStatus.INTERNAL_SERVER_ERROR),
     INVALID_CONVERSATION_PARTICIPANTS(8621, "Conversation participants are invalid!", HttpStatus.BAD_REQUEST),
-    KAFKA_PROCESSING_FAILED(8622, "Failed to process Kafka event", HttpStatus.INTERNAL_SERVER_ERROR);
+    KAFKA_PROCESSING_FAILED(8622, "Failed to process Kafka event", HttpStatus.INTERNAL_SERVER_ERROR),
+    REPLY_TARGET_NOT_FOUND(8623, "Reply target message not found in this conversation!", HttpStatus.NOT_FOUND);
 
     int code;
     String message;

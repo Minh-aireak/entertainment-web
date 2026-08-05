@@ -43,6 +43,7 @@ const authSlice = createSlice({
     setUser: (state, action: PayloadAction<User>) => {
       state.user = action.payload;
       state.isAuthenticated = true;
+      state.loading = false;
     },
   },
 });
@@ -153,6 +154,13 @@ const chatSlice = createSlice({
     setMessages: (state, action: PayloadAction<{ conversationId: string; messages: ChatMessage[] }>) => {
       state.messages[action.payload.conversationId] = action.payload.messages;
     },
+    prependMessages: (state, action: PayloadAction<{ conversationId: string; messages: ChatMessage[] }>) => {
+      const { conversationId, messages } = action.payload;
+      const existing = state.messages[conversationId] || [];
+      const existingIds = new Set(existing.map((item) => item.id));
+      const deduped = messages.filter((item) => !existingIds.has(item.id));
+      state.messages[conversationId] = [...deduped, ...existing];
+    },
     updateUserStatus: (state, action: PayloadAction<{ userId: string; status: 'ONLINE' | 'OFFLINE' }>) => {
       const { userId, status } = action.payload;
       if (status === 'ONLINE') {
@@ -251,7 +259,7 @@ const uiSlice = createSlice({
 // --- Exports ---
 export const { loginStart, loginSuccess, loginFailure, logout, setUser } = authSlice.actions;
 export const { setProfileData, setProfileLoading, clearProfileData } = profileSlice.actions;
-export const { setConversations, setActiveConversation, addMessage, setMessages, updateUserStatus, updateMessageSeen } = chatSlice.actions;
+export const { setConversations, setActiveConversation, addMessage, setMessages, prependMessages, updateUserStatus, updateMessageSeen } = chatSlice.actions;
 export const { fetchStart, fetchSuccess, fetchFailure, addItinerary, updateItinerary, deleteItinerary } = itinerarySlice.actions;
 export const { setFilmAggregateData, setNowPlayingFilms, setFilmLoading } = filmSlice.actions;
 export const { toggleThemeMode } = uiSlice.actions;

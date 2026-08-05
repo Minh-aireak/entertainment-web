@@ -21,6 +21,10 @@ public class ChatMessageResponse {
     long seq;
     String attachmentFileUrl;
     String replyToMessageId;
+    String replyToSenderId;
+    String replyToSenderName;
+    String replyToContent;
+    String replyToMessageType;
     Instant createdDate;
     Instant modifiedDate;
     String messageStatus;
