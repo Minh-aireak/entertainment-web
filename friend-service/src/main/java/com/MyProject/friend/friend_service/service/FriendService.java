@@ -381,7 +381,6 @@ public class FriendService {
                     .userId(userId)
                     .friendId(friendId)
                     .friendDisplayName(data.getDisplayName())
-                    .friendAvatar(data.getAvatar())
                     .build();
 
             outboxEventPublisher.publish(aggregate, "friend.sync", friendDoc);
@@ -395,18 +394,28 @@ public class FriendService {
         Pageable pageable = PageRequest.of(page - 1, size);
         var searchResult = friendElasticRepository.findByUserIdAndFriendDisplayNameContaining(userId, displayName, pageable);
 
+        // ES chỉ dùng để MATCH theo tên - avatar/tên hiển thị luôn lấy live từ profile-service (qua
+        // cache) tại đây, không tin vào giá trị đã lưu trong FriendDoc (có thể cũ, xem FriendDoc).
+        Set<String> friendIds = searchResult.getContent().stream()
+                .map(FriendDoc::getFriendId)
+                .collect(Collectors.toSet());
+        Map<String, UserProfileResponse> userProfilesMap = fetchUserProfiles(friendIds);
+
         return PageResponse.<UserRelationshipResponse>builder()
                 .currentPage(page)
                 .pageSize(size)
                 .totalPages(searchResult.getTotalPages())
                 .totalElement(searchResult.getTotalElements())
                 .data(searchResult.getContent().stream()
-                        .map(doc -> UserRelationshipResponse.builder()
-                                .friendId(doc.getFriendId())
-                                .displayName(doc.getFriendDisplayName())
-                                .friendAvatar(doc.getFriendAvatar())
-                                .status(RelationshipStatus.FRIEND)
-                                .build())
+                        .map(doc -> {
+                            UserProfileResponse profile = userProfilesMap.get(doc.getFriendId());
+                            return UserRelationshipResponse.builder()
+                                    .friendId(doc.getFriendId())
+                                    .displayName(profile != null ? profile.getDisplayName() : doc.getFriendDisplayName())
+                                    .friendAvatar(profile != null ? profile.getAvatar() : null)
+                                    .status(RelationshipStatus.FRIEND)
+                                    .build();
+                        })
                         .toList())
                 .build();
     }

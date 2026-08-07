@@ -13,6 +13,7 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -68,10 +69,15 @@ public class FriendSyncKafkaConsumer {
                 return;
             }
 
-            // Update FriendDocs in Elasticsearch (implement logic here if needed)
-            // For now, log, but you'd want to update all FriendDocs where friendId = event.getUserId()
-            log.info("Profile search sync for user: {}, new name: {}, new avatar: {}",
-                    event.getUserId(), event.getDisplayName(), event.getAvatar());
+            // Update mọi FriendDoc mà friendId = user này (đây là "bạn của tôi" ở phía những người
+            // khác) để search-theo-tên không bị lệch khi user đổi displayName. Trước đây nhánh này
+            // là no-op nên FriendDoc.friendDisplayName không bao giờ được cập nhật lại.
+            List<FriendDoc> docsToUpdate = friendElasticRepository.findByFriendId(event.getUserId());
+            if (!docsToUpdate.isEmpty()) {
+                docsToUpdate.forEach(doc -> doc.setFriendDisplayName(event.getDisplayName()));
+                friendElasticRepository.saveAll(docsToUpdate);
+                log.info("Updated friendDisplayName for {} FriendDoc(s) of user {}", docsToUpdate.size(), event.getUserId());
+            }
 
             // Mark as processed
             redisService.setWithExpiration(processedKey, "1", EVENT_TTL_DAYS, TimeUnit.DAYS);

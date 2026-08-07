@@ -12,9 +12,12 @@ import org.mapstruct.NullValuePropertyMappingStrategy;
 
 @Mapper(componentModel = "spring", nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
 public interface UserProfileMapper {
-    @Mapping(target = "avatar", ignore = true)
+    @Mapping(target = "avatarFileId", ignore = true)
     UserProfile toUserProfile(UserProfileCreationRequest request);
 
+    // avatar (URL) không map tự động từ avatarFileId - phải resolve presigned URL mới qua
+    // file-service ở tầng service (xem UserProfileService.resolveAvatarUrl), không lưu tĩnh.
+    @Mapping(target = "avatar", ignore = true)
     UserProfileResponse toUserProfileResponse(UserProfile userProfile);
 
     UserProfileDoc toUserProfileDoc(UserProfile userProfile);

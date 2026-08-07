@@ -4,21 +4,21 @@ server:
     context-path: /profiles
 
 jwt:
-  signerKey: ${JWT_SIGNER_KEY:uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0}
+  signerKey: ${JWT_SIGNER_KEY}
 
 spring:
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:REDACTED_LEGACY_CREDENTIAL}
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
       repositories:
         enabled: false
     mongodb:
-      uri: mongodb://${MONGODB_ROOT_USERNAME:root}:${MONGODB_ROOT_PASSWORD:REDACTED_LEGACY_CREDENTIAL}@${MONGODB_HOST:localhost}:${MONGODB_PORT:27017}/profile-service?authSource=admin
+      uri: mongodb://${MONGODB_ROOT_USERNAME}:${MONGODB_ROOT_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/profile-service?authSource=admin
 
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -47,7 +47,7 @@ spring:
         multiplier: 2.0
 
   elasticsearch:
-    uris: http://${ELASTICSEARCH_HOST:localhost}:${ELASTICSEARCH_PORT:9200}
+    uris: http://${ELASTICSEARCH_HOST}:${ELASTICSEARCH_PORT}
 
   cloud:
     openfeign:
@@ -78,10 +78,10 @@ resilience4j:
 app:
   services:
     file:
-      url: ${FILE_SERVICE_URL:http://localhost:8084}
+      url: ${FILE_SERVICE_URL}
     post:
-      url: ${POST_SERVICE_URL:http://localhost:8083}
+      url: ${POST_SERVICE_URL}
     friend:
-      url: ${FRIEND_SERVICE_URL:http://localhost:8087}
+      url: ${FRIEND_SERVICE_URL}
     notification:
-      url: ${NOTIFICATION_SERVICE_URL:http://localhost:8082}
+      url: ${NOTIFICATION_SERVICE_URL}

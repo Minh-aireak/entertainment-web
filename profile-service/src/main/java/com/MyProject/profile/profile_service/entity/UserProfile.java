@@ -28,5 +28,7 @@ public class UserProfile {
     String phoneNumber;
     String city;
     LocalDateTime joinDate;
-    String avatar;
+    // File ID trong file-service (bucket B2 private) - URL hiển thị được resolve mới mỗi lần đọc
+    // (xem UserProfileService.resolveAvatarUrl) để tránh presigned URL hết hạn sau ~1h.
+    String avatarFileId;
 }

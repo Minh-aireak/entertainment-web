@@ -8,10 +8,10 @@ spring:
     name: friend-service
   data:
     mongodb:
-      uri: mongodb://${MONGODB_ROOT_USERNAME:root}:${MONGODB_ROOT_PASSWORD:REDACTED_LEGACY_CREDENTIAL}@${MONGODB_HOST:localhost}:${MONGODB_PORT:27017}/friend-service?authSource=admin
+      uri: mongodb://${MONGODB_ROOT_USERNAME}:${MONGODB_ROOT_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/friend-service?authSource=admin
     redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
       password: ${REDIS_PASSWORD}
       connect-timeout: 5000
       timeout: 5000
@@ -19,7 +19,7 @@ spring:
         enabled: false
 
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -43,15 +43,15 @@ spring:
       ack-mode: manual_immediate
 
   elasticsearch:
-    uris: http://${ELASTICSEARCH_HOST:localhost}:${ELASTICSEARCH_PORT:9300}
+    uris: http://${ELASTICSEARCH_HOST}:${ELASTICSEARCH_PORT}
 
 jwt:
-  signerKey: ${JWT_SIGNER_KEY:uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0}
+  signerKey: ${JWT_SIGNER_KEY}
 
 app:
   services:
     profile:
-      url: ${PROFILES_SERVICE_URL:http://localhost:8081}
+      url: ${PROFILES_SERVICE_URL}
   rate-limit:
     send-friend-request:
       limit-for-period: 30
@@ -148,5 +148,3 @@ management:
   health:
     circuitbreakers:
       enabled: true
-
-

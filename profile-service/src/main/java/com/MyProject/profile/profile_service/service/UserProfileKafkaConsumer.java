@@ -75,7 +75,7 @@ public class UserProfileKafkaConsumer {
                     .userId(event.getUserId())
                     .username(event.getUsername())
                     .displayName(event.getDisplayName())
-                    .avatar(event.getAvatar())
+                    .avatarFileId(event.getAvatarFileId())
                     .build();
             userProfileElasticRepository.save(doc);
 

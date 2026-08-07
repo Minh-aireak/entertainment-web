@@ -43,7 +43,7 @@ public class UserProfileController {
     @PutMapping("/my-profile/avatar")
     ApiResponse<UserProfileResponse> updateAvatar(@RequestBody @Valid UpdateAvatarRequest request){
         return ApiResponse.<UserProfileResponse>builder()
-                .result(userProfileService.updateAvatar(request.getAvatar()))
+                .result(userProfileService.updateAvatar(request.getAvatarFileId()))
                 .build();
     }
 

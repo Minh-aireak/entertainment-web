@@ -11,5 +11,5 @@ import lombok.experimental.FieldDefaults;
 @Builder
 public class UpdateAvatarRequest {
     @NotBlank(message = "AVATAR_NOT_BLANK")
-    String avatar;
+    String avatarFileId;
 }

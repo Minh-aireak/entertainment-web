@@ -24,5 +24,5 @@ public class UserProfileDoc {
     String displayName;
 
     @Field(type = FieldType.Keyword)
-    String avatar;
+    String avatarFileId;
 }

@@ -12,7 +12,7 @@ import lombok.experimental.FieldDefaults;
 public class ProfileSearchUpdatedEvent {
     String eventId;
     String userId;
-    String avatar;
+    String avatarFileId;
     String displayName;
     String username;
     String version; // For event versioning

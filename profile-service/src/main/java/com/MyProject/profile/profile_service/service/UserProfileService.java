@@ -16,6 +16,7 @@ import com.MyProject.profile.profile_service.entity.UserProfile;
 import com.MyProject.profile.profile_service.exception.AppException;
 import com.MyProject.profile.profile_service.exception.ErrorCode;
 import com.MyProject.profile.profile_service.mapper.UserProfileMapper;
+import com.MyProject.profile.profile_service.repository.httpClient.FileClient;
 import com.MyProject.profile.profile_service.repository.mongo.OutboxRepository;
 import com.MyProject.profile.profile_service.repository.elasticsearch.UserProfileElasticRepository;
 import com.MyProject.profile.profile_service.repository.mongo.UserProfileRepository;
@@ -35,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -47,7 +49,51 @@ public class UserProfileService {
     UserProfileMapper userProfileMapper;
     RedisService redisService;
     OutboxRepository outboxRepository;
+    FileClient fileClient;
     com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+
+    // Bucket B2 private nên URL trả về từ file-service là presigned GET có hạn dùng (~1h) - không
+    // bao giờ lưu avatar dưới dạng URL, chỉ lưu avatarFileId và resolve lại URL mới ở đây mỗi lần
+    // trả response. Lỗi resolve (file-service down, file bị xoá...) không nên làm hỏng cả response
+    // profile, nên chỉ log và trả về null (frontend coi như chưa có avatar).
+    private String resolveAvatarUrl(String avatarFileId) {
+        if (avatarFileId == null || avatarFileId.isBlank()) {
+            return null;
+        }
+        try {
+            return fileClient.getFileInfo(avatarFileId).getResult().getUrl();
+        } catch (Exception e) {
+            log.warn("Failed to resolve avatar file {}", avatarFileId, e);
+            return null;
+        }
+    }
+
+    private UserProfileResponse buildResponse(UserProfile profile) {
+        UserProfileResponse response = userProfileMapper.toUserProfileResponse(profile);
+        response.setAvatar(resolveAvatarUrl(profile.getAvatarFileId()));
+        return response;
+    }
+
+    // Resolve avatar song song cho danh sách nhiều profile (bulk/page) - tránh N request tuần tự
+    // tới file-service khi trả về danh sách lớn (vd. gợi ý kết bạn, danh sách thành viên chat).
+    private List<UserProfileResponse> buildResponses(List<UserProfile> profiles) {
+        Map<String, CompletableFuture<String>> resolvedByFileId = profiles.stream()
+                .map(UserProfile::getAvatarFileId)
+                .filter(id -> id != null && !id.isBlank())
+                .distinct()
+                .collect(Collectors.toMap(id -> id, id -> CompletableFuture.supplyAsync(() -> resolveAvatarUrl(id))));
+
+        return profiles.stream()
+                .map(profile -> {
+                    UserProfileResponse response = userProfileMapper.toUserProfileResponse(profile);
+                    String fileId = profile.getAvatarFileId();
+                    if (fileId != null && !fileId.isBlank()) {
+                        response.setAvatar(resolvedByFileId.get(fileId).join());
+                    }
+                    return response;
+                })
+                .toList();
+    }
 
     private void saveToOutbox(String userId, String topic, Object payload) {
         try {
@@ -77,7 +123,7 @@ public class UserProfileService {
 
         UserProfile savedProfile = userProfileRepository.save(userProfile);
 
-        UserProfileResponse response = userProfileMapper.toUserProfileResponse(savedProfile);
+        UserProfileResponse response = buildResponse(savedProfile);
         // 1. Update cache FIRST
         redisService.setWithExpiration(cacheKey, response, 1, TimeUnit.HOURS);
 
@@ -97,7 +143,7 @@ public class UserProfileService {
 
         // Check which fields changed before updating
         String oldDisplayName = profile.getDisplayName();
-        String oldAvatar = profile.getAvatar();
+        String oldAvatarFileId = profile.getAvatarFileId();
 
         String cacheKey = getProfileKey(userId);
 
@@ -105,23 +151,23 @@ public class UserProfileService {
 
         UserProfile savedProfile = userProfileRepository.save(profile);
 
-        UserProfileResponse response = userProfileMapper.toUserProfileResponse(savedProfile);
+        UserProfileResponse response = buildResponse(savedProfile);
         // 1. Update cache FIRST - regardless of which field changed
         redisService.setWithExpiration(cacheKey, response, 1, TimeUnit.HOURS);
 
         // 2. Check if displayName or avatar changed - if yes, publish events
         boolean displayNameChanged = !java.util.Objects.equals(oldDisplayName, savedProfile.getDisplayName());
-        boolean avatarChanged = !java.util.Objects.equals(oldAvatar, savedProfile.getAvatar());
+        boolean avatarChanged = !java.util.Objects.equals(oldAvatarFileId, savedProfile.getAvatarFileId());
 
         if (displayNameChanged || avatarChanged) {
             String eventId = java.util.UUID.randomUUID().toString();
             String version = "1.0";
-            
+
             // Publish search sync event
             ProfileSearchUpdatedEvent searchEvent = ProfileSearchUpdatedEvent.builder()
                     .eventId(eventId)
                     .userId(savedProfile.getUserId())
-                    .avatar(savedProfile.getAvatar())
+                    .avatarFileId(savedProfile.getAvatarFileId())
                     .displayName(savedProfile.getDisplayName())
                     .username(savedProfile.getUsername())
                     .version(version)
@@ -141,22 +187,22 @@ public class UserProfileService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public UserProfileResponse updateAvatar(String avatar){
+    public UserProfileResponse updateAvatar(String avatarFileId){
         String userId = SecurityUtils.getCurrentUserId();
         UserProfile profile = userProfileRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
-        String oldAvatar = profile.getAvatar();
-        if (Objects.equals(oldAvatar, avatar)) {
-            return userProfileMapper.toUserProfileResponse(profile);
+        String oldAvatarFileId = profile.getAvatarFileId();
+        if (Objects.equals(oldAvatarFileId, avatarFileId)) {
+            return buildResponse(profile);
         }
 
         String cacheKey = getProfileKey(userId);
 
-        profile.setAvatar(avatar);
+        profile.setAvatarFileId(avatarFileId);
         UserProfile savedProfile = userProfileRepository.save(profile);
 
-        UserProfileResponse response = userProfileMapper.toUserProfileResponse(savedProfile);
+        UserProfileResponse response = buildResponse(savedProfile);
         redisService.setWithExpiration(cacheKey, response, 1, TimeUnit.HOURS);
 
         String eventId = java.util.UUID.randomUUID().toString();
@@ -165,7 +211,7 @@ public class UserProfileService {
         ProfileSearchUpdatedEvent searchEvent = ProfileSearchUpdatedEvent.builder()
                 .eventId(eventId)
                 .userId(savedProfile.getUserId())
-                .avatar(savedProfile.getAvatar())
+                .avatarFileId(savedProfile.getAvatarFileId())
                 .displayName(savedProfile.getDisplayName())
                 .username(savedProfile.getUsername())
                 .version(version)
@@ -193,16 +239,14 @@ public class UserProfileService {
             return cachedResponse;
         }
 
-        UserProfileResponse response = userProfileMapper.toUserProfileResponse(profile);
+        UserProfileResponse response = buildResponse(profile);
         redisService.setWithExpiration(cacheKey, response, 1, TimeUnit.HOURS);
 
         return response;
     }
 
     public List<UserProfileResponse> getAllProfiles(){
-        return userProfileRepository.findAll()
-                .stream().map(userProfileMapper::toUserProfileResponse)
-                .toList();
+        return buildResponses(userProfileRepository.findAll());
     }
 
     public PageResponse<UserProfileResponse> getAllProfiles(int page, int size){
@@ -211,9 +255,7 @@ public class UserProfileService {
 
         String currentUserId = SecurityUtils.getCurrentUserId();
         Page<UserProfile> pageData = userProfileRepository.findByUserIdNot(currentUserId, pageable);
-        List<UserProfileResponse> userProfileResponses = pageData.getContent()
-                .stream().map(userProfileMapper::toUserProfileResponse)
-                .toList();
+        List<UserProfileResponse> userProfileResponses = buildResponses(pageData.getContent());
 
         return PageResponse.<UserProfileResponse>builder()
                 .currentPage(page)
@@ -232,9 +274,7 @@ public class UserProfileService {
                 pageable
         );
 
-        List<UserProfileResponse> responses = pageData.getContent().stream()
-                .map(userProfileMapper::toUserProfileResponse)
-                .toList();
+        List<UserProfileResponse> responses = buildResponses(pageData.getContent());
 
         return PageResponse.<UserProfileResponse>builder()
                 .currentPage(request.getPage())
@@ -247,9 +287,8 @@ public class UserProfileService {
 
     public Map<String, UserProfileResponse> getBulkProfiles(BulkUserProfileRequest request){
         List<UserProfile> userProfiles = userProfileRepository.findAllById(request.getUserIds());
-        
-        return userProfiles.stream()
-                .map(userProfileMapper::toUserProfileResponse)
+
+        return buildResponses(userProfiles).stream()
                 .collect(Collectors.toMap(UserProfileResponse::getUserId, p -> p));
     }
 
@@ -263,7 +302,7 @@ public class UserProfileService {
         UserProfile userProfile = userProfileRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
-        UserProfileResponse response = userProfileMapper.toUserProfileResponse(userProfile);
+        UserProfileResponse response = buildResponse(userProfile);
         redisService.setWithExpiration(cacheKey, response, 1, TimeUnit.HOURS);
 
         return response;
@@ -280,7 +319,7 @@ public class UserProfileService {
                         .userId(doc.getUserId())
                         .username(doc.getUsername())
                         .displayName(doc.getDisplayName())
-                        .avatar(doc.getAvatar())
+                        .avatar(resolveAvatarUrl(doc.getAvatarFileId()))
                         .build())
                 .toList();
 

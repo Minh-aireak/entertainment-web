@@ -23,9 +23,10 @@ public class FriendDoc {
     @Field(type = FieldType.Keyword)
     String friendId;
 
+    // Chỉ dùng để search/match theo tên - KHÔNG dùng để hiển thị avatar/tên trên response (xem
+    // FriendService.searchFriends): trước đây có field friendAvatar lưu snapshot presigned URL từ
+    // profile-service, hết hạn sau ~1h và không bao giờ được refresh (listenSearchSync từng là
+    // no-op) - đã bỏ field đó, avatar giờ luôn lấy live từ profile-service tại thời điểm trả response.
     @Field(type = FieldType.Text, analyzer = "standard")
     String friendDisplayName;
-
-    @Field(type = FieldType.Keyword, index = false)
-    String friendAvatar;
 }
