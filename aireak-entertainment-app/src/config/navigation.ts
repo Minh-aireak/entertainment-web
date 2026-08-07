@@ -8,6 +8,7 @@ import {
   Groups,
   Movie,
   EventNote,
+  Search,
 } from '@mui/icons-material';
 
 export type AppModule = 'social' | 'film' | 'schedule';
@@ -61,7 +62,8 @@ export const MODULE_NAV: Record<AppModule, NavItemConfig[]> = {
   ],
   film: [
     { textKey: 'home', path: '/film', icon: Home, end: true },
-    { textKey: 'trending', path: '/film/trending', icon: Movie },
+    { textKey: 'searchFilms', path: '/film/search', icon: Search },
+    { textKey: 'watchTogether', path: '/film/watch-together', icon: Groups },
     { textKey: 'library', path: '/film/library', icon: Movie },
   ],
   schedule: [

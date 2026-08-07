@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { memo, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -80,7 +80,7 @@ const EpisodesTab: React.FC = () => {
     try {
       const response = await filmService.updateEpisode(editingEpisode.id, {
         ...form,
-        videoUrl: editingEpisode.videoUrl,
+        videoFileId: editingEpisode.videoFileId,
         filmId: selectedFilm.id,
       });
       if (response.code === 1000) {
@@ -180,12 +180,13 @@ const EpisodesTab: React.FC = () => {
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Chỉnh sửa tập phim</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <TextField
             label="Tiêu đề"
             value={form.title}
             onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
             fullWidth
+            sx={{ mt: 1 }}
           />
           <Box sx={{ display: 'flex', gap: 2 }}>
             <TextField
@@ -222,4 +223,4 @@ const EpisodesTab: React.FC = () => {
   );
 };
 
-export default EpisodesTab;
+export default memo(EpisodesTab);

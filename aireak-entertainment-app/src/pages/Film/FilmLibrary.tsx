@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Box,
   Typography,
@@ -15,12 +15,25 @@ import type { FilmSummaryResponse } from '../../models';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import FilmCard from '../../components/Film/FilmCard';
+import { clearPersistedState, usePersistedState } from '../../hooks/usePersistedState';
+
+const LIBRARY_CACHE_KEY = 'filmLibrary:films';
+
+// Registered once at module load (not tied to this component's mount state) so the
+// cached library list is dropped as soon as a follow/unfollow happens anywhere in the
+// app (e.g. from FilmDetail), even if the Library page isn't mounted at the time.
+if (typeof window !== 'undefined') {
+  window.addEventListener('sidebar-counts:refresh', () => {
+    clearPersistedState(LIBRARY_CACHE_KEY);
+  });
+}
 
 const FilmLibrary: React.FC = React.memo(() => {
   const { t } = useTranslation();
-  const [films, setFilms] = useState<FilmSummaryResponse[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [films, setFilms] = usePersistedState<FilmSummaryResponse[]>(LIBRARY_CACHE_KEY, []);
+  const [loading, setLoading] = useState(films.length === 0);
   const [error, setError] = useState<string | null>(null);
+  const skipInitialFetchRef = useRef(films.length > 0);
   const navigate = useNavigate();
 
   const fetchLibrary = async () => {
@@ -38,6 +51,10 @@ const FilmLibrary: React.FC = React.memo(() => {
   };
 
   useEffect(() => {
+    if (skipInitialFetchRef.current) {
+      skipInitialFetchRef.current = false;
+      return;
+    }
     fetchLibrary();
   }, []);
 
@@ -46,9 +63,9 @@ const FilmLibrary: React.FC = React.memo(() => {
       await filmService.processFollowAction(film.id, true);
       setFilms((prev) => prev.filter((f) => f.id !== film.id));
       window.dispatchEvent(new Event('sidebar-counts:refresh'));
-      toast.success('Removed from library');
+      toast.success('Đã xóa khỏi thư viện');
     } catch {
-      toast.error('Failed to remove from library');
+      toast.error('Không thể xóa khỏi thư viện');
     }
   };
 
@@ -60,7 +77,7 @@ const FilmLibrary: React.FC = React.memo(() => {
           <Typography variant="body1" color="text.secondary">{t('savedMovies')}</Typography>
         </Box>
         <Typography variant="h6" sx={{ color: 'primary.main', fontWeight: 700 }}>
-          {films.length} {films.length === 1 ? 'Film' : 'Films'}
+          {films.length} phim
         </Typography>
       </Box>
 
@@ -95,9 +112,9 @@ const FilmLibrary: React.FC = React.memo(() => {
           }}
         >
           <Search sx={{ fontSize: 80, color: 'rgba(255,255,255,0.1)', mb: 2 }} />
-          <Typography variant="h5" sx={{ mb: 1, fontWeight: 700 }}>Your library is empty</Typography>
+          <Typography variant="h5" sx={{ mb: 1, fontWeight: 700 }}>Thư viện của bạn đang trống</Typography>
           <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-            Explore our collection and add your favorite films here.
+            Khám phá kho phim và thêm những bộ phim yêu thích vào đây.
           </Typography>
           <Button
             variant="contained"
@@ -105,7 +122,7 @@ const FilmLibrary: React.FC = React.memo(() => {
             onClick={() => navigate('/film')}
             sx={{ borderRadius: 2, px: 4 }}
           >
-            Explore Movies
+            Khám phá phim
           </Button>
         </Box>
       ) : (

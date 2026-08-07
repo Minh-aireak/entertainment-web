@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { filmService } from '../../api/filmService';
 import PersonManagementTab from './PersonManagementTab';
 
@@ -15,4 +15,4 @@ const DirectorsTab: React.FC = () => (
   />
 );
 
-export default DirectorsTab;
+export default memo(DirectorsTab);

@@ -27,8 +27,9 @@ import {
   Home,
   Message,
   Group,
+  Groups,
   Explore,
-  TrendingUp,
+  Search,
   Bookmark,
   AdminPanelSettings,
 } from '@mui/icons-material';
@@ -109,7 +110,8 @@ const socialMenuItems = [
 
 const entertainmentMenuItems = [
   { id: 'explore', label: 'Khám phá phim', icon: Explore, path: '/film' },
-  { id: 'trending', label: 'Thịnh hành', icon: TrendingUp, path: '/film/trending' },
+  { id: 'search', label: 'Tìm kiếm phim', icon: Search, path: '/film/search' },
+  { id: 'watch-together', label: 'Xem chung', icon: Groups, path: '/film/watch-together' },
   { id: 'watchlist', label: 'Thư viện của tôi', icon: Bookmark, path: '/film/library', badgeKey: 'watchlist' },
 ] satisfies SidebarMenuItem[];
 

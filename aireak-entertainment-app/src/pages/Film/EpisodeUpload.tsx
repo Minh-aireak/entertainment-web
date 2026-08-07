@@ -42,39 +42,6 @@ const EpisodeUpload: React.FC = () => {
     }
   };
 
-  const uploadInChunks = async (file: File): Promise<{ url: string, duration?: number }> => {
-    // 1. Init
-    const initRes = await fileService.initChunkedUpload();
-    const uploadId = initRes.result;
-
-    const chunkSize = 5 * 1024 * 1024; // 5MB
-    const totalChunks = Math.ceil(file.size / chunkSize);
-
-    for (let i = 0; i < totalChunks; i++) {
-      const start = i * chunkSize;
-      const end = Math.min(file.size, start + chunkSize);
-      const chunk = file.slice(start, end);
-
-      await fileService.uploadChunk(uploadId, i, chunk);
-      
-      const currentProgress = Math.round(((i + 1) / totalChunks) * 90);
-      setProgress(currentProgress);
-    }
-
-    // 2. Complete
-    const completeRes = await fileService.completeChunkedUpload(
-      uploadId,
-      file.name,
-      file.type
-    );
-    
-    setProgress(100);
-    return {
-      url: completeRes.result.url,
-      duration: completeRes.result.duration
-    };
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file || !filmId) {
@@ -86,16 +53,16 @@ const EpisodeUpload: React.FC = () => {
     setProgress(0);
 
     try {
-      // Step 1: Upload Video
+      // Step 1: Upload Video - PUT thẳng lên B2 qua presigned URL, không qua file-service
       toast.loading('Đang upload video...', { id: 'upload' });
-      const uploadResult = await uploadInChunks(file);
+      const uploadResult = await fileService.uploadFileDirect(file, setProgress);
       toast.success('Upload video thành công!', { id: 'upload' });
 
       // Step 2: Create Episode in Film Service
       toast.loading('Đang cập nhật thông tin tập phim...', { id: 'episode' });
       await filmService.createEpisode({
         ...formData,
-        videoUrl: uploadResult.url,
+        videoFileId: uploadResult.id,
         durationMinutes: uploadResult.duration ? Math.floor(uploadResult.duration / 60) : 0,
         filmId,
       });
@@ -120,7 +87,8 @@ const EpisodeUpload: React.FC = () => {
             Upload Tập Phim Mới
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Sử dụng cơ chế upload chunked để đảm bảo tính ổn định cho video dung lượng lớn.
+            Video được upload trực tiếp lên kho lưu trữ (song song nhiều phần) để đảm bảo tốc độ và
+            tính ổn định cho file dung lượng lớn.
           </Typography>
         </Box>
 
@@ -155,7 +123,6 @@ const EpisodeUpload: React.FC = () => {
                 name="title"
                 value={formData.title}
                 onChange={handleInputChange}
-                required
               />
             </Grid>
 

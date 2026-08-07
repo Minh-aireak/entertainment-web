@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Provider, useSelector, useDispatch } from 'react-redux';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
@@ -31,10 +31,27 @@ import NotificationsPage from './pages/Notifications';
 import AdminPage from './pages/Admin';
 
 import FilmHome from './pages/Film/FilmHome';
-import FilmTrending from './pages/Film/FilmTrending';
+import FilmSearch from './pages/Film/FilmSearch';
+import FilmWatchTogether from './pages/Film/FilmWatchTogether';
+import WatchRoom from './pages/Film/WatchRoom';
 import FilmLibrary from './pages/Film/FilmLibrary';
 import FilmDetail from './pages/Film/FilmDetail';
+import FilmWatch from './pages/Film/FilmWatch';
 import EpisodeUpload from './pages/Film/EpisodeUpload';
+import FilmCategoryBrowse from './pages/Film/FilmCategoryBrowse';
+
+// React Router doesn't reset scroll position on navigation by default, so opening a
+// new page (e.g. a film's detail page) from a scrolled-down list kept the old scroll
+// offset instead of starting at the top.
+function ScrollToTop() {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
+  return null;
+}
 
 function AppContent() {
   const dispatch = useDispatch();
@@ -129,6 +146,7 @@ function AppContent() {
           }}
         />
         <Router>
+          <ScrollToTop />
           <WebSocketProvider>
           <ConfirmDialogProvider>
             <Routes>
@@ -230,12 +248,35 @@ function AppContent() {
                 </ProtectedRoute>
               }
             />
+            <Route path="/film/trending" element={<Navigate to="/film/search" replace />} />
+            <Route path="/film/latest" element={<Navigate to="/film/watch-together" replace />} />
+
             <Route
-              path="/film/trending"
+              path="/film/search"
               element={
                 <ProtectedRoute>
                   <MainLayout>
-                    <FilmTrending />
+                    <FilmSearch />
+                  </MainLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/film/watch-together"
+              element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <FilmWatchTogether />
+                  </MainLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/film/watch-together/room/:roomId"
+              element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <WatchRoom />
                   </MainLayout>
                 </ProtectedRoute>
               }
@@ -251,11 +292,51 @@ function AppContent() {
               }
             />
             <Route
+              path="/film/series"
+              element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <FilmCategoryBrowse category="SERIES" titleKey="seriesFilms" countryFilterEnabled />
+                  </MainLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/film/standalone"
+              element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <FilmCategoryBrowse category="STANDALONE" titleKey="standaloneFilms" countryFilterEnabled />
+                  </MainLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/film/animation"
+              element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <FilmCategoryBrowse category="ANIMATION" titleKey="animationFilms" countryFilterEnabled />
+                  </MainLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/film/:id"
               element={
                 <ProtectedRoute>
                   <MainLayout>
                     <FilmDetail />
+                  </MainLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/film/:id/watch/:episodeId"
+              element={
+                <ProtectedRoute>
+                  <MainLayout>
+                    <FilmWatch />
                   </MainLayout>
                 </ProtectedRoute>
               }

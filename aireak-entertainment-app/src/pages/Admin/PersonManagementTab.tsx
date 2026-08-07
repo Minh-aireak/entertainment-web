@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { memo, useEffect, useState } from 'react';
 import {
   Box,
   Table,
@@ -29,6 +29,7 @@ export interface PersonItem {
   id: string;
   name: string;
   avatarUrl: string;
+  avatarFileId?: string;
 }
 
 interface PersonManagementTabProps {
@@ -36,8 +37,8 @@ interface PersonManagementTabProps {
   editTitle: string;
   createTitle: string;
   fetchPage: (page: number, size: number) => Promise<ApiResponse<PageResponse<PersonItem>>>;
-  create: (data: { name: string; avatarUrl: string }) => Promise<ApiResponse<PersonItem>>;
-  update: (id: string, data: { name: string; avatarUrl: string }) => Promise<ApiResponse<PersonItem>>;
+  create: (data: { name: string; avatarUrl: string; avatarFileId?: string }) => Promise<ApiResponse<PersonItem>>;
+  update: (id: string, data: { name: string; avatarUrl: string; avatarFileId?: string }) => Promise<ApiResponse<PersonItem>>;
   remove: (id: string) => Promise<ApiResponse<void>>;
   deleteConfirmMessage: (name: string) => string;
 }
@@ -63,6 +64,7 @@ const PersonManagementTab: React.FC<PersonManagementTabProps> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [avatarFileId, setAvatarFileId] = useState('');
   const [saving, setSaving] = useState(false);
 
   const loadItems = async () => {
@@ -89,6 +91,7 @@ const PersonManagementTab: React.FC<PersonManagementTabProps> = ({
     setEditingId(null);
     setName('');
     setAvatarUrl('');
+    setAvatarFileId('');
     setDialogOpen(true);
   };
 
@@ -96,6 +99,7 @@ const PersonManagementTab: React.FC<PersonManagementTabProps> = ({
     setEditingId(item.id);
     setName(item.name);
     setAvatarUrl(item.avatarUrl);
+    setAvatarFileId(item.avatarFileId || '');
     setDialogOpen(true);
   };
 
@@ -107,8 +111,8 @@ const PersonManagementTab: React.FC<PersonManagementTabProps> = ({
     setSaving(true);
     try {
       const response = editingId
-        ? await update(editingId, { name, avatarUrl })
-        : await create({ name, avatarUrl });
+        ? await update(editingId, { name, avatarUrl, avatarFileId })
+        : await create({ name, avatarUrl, avatarFileId });
 
       if (response.code === 1000) {
         toast.success('Lưu thành công');
@@ -204,9 +208,21 @@ const PersonManagementTab: React.FC<PersonManagementTabProps> = ({
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>{editingId ? editTitle : createTitle}</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-          <TextField label="Tên" value={name} onChange={(e) => setName(e.target.value)} fullWidth required />
-          <AvatarUploadField label="URL ảnh đại diện" value={avatarUrl} onChange={setAvatarUrl} />
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <TextField
+            label="Tên"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            fullWidth
+            required
+            sx={{ mt: 1 }}
+          />
+          <AvatarUploadField
+            label="URL ảnh đại diện"
+            value={avatarUrl}
+            onChange={setAvatarUrl}
+            onFileIdChange={setAvatarFileId}
+          />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogOpen(false)}>Hủy</Button>
@@ -219,4 +235,4 @@ const PersonManagementTab: React.FC<PersonManagementTabProps> = ({
   );
 };
 
-export default PersonManagementTab;
+export default memo(PersonManagementTab);

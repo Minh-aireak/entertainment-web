@@ -1,10 +1,10 @@
 import axiosInstance from './axiosInstance';
-import type { 
-  ApiResponse, 
-  FilmResponse, 
-  PageResponse, 
-  FilmSummaryResponse, 
-  FilmAggregateResponse, 
+import type {
+  ApiResponse,
+  FilmResponse,
+  PageResponse,
+  FilmSummaryResponse,
+  FilmAggregateResponse,
   FilmDetailResponse,
   ActorResponse,
   DirectorResponse,
@@ -13,7 +13,12 @@ import type {
   FilmRequest,
   RatingRequest,
   EpisodeResponse,
-  EpisodeRequest
+  EpisodeRequest,
+  FilmCategory,
+  FilmSortField,
+  SortDirection,
+  Country,
+  Genre
 } from '../models';
 
 const FILM_BASE_URL = '/films';
@@ -92,7 +97,12 @@ export const filmService = {
     const response = await axiosInstance.post(`${FILM_BASE_URL}/`, request);
     return response.data;
   },
-  
+
+  updateFilm: async (id: string, request: FilmRequest): Promise<ApiResponse<FilmResponse>> => {
+    const response = await axiosInstance.put(`${FILM_BASE_URL}/${id}`, request);
+    return response.data;
+  },
+
   getPageFilms: async (page: number, size: number): Promise<ApiResponse<PageResponse<FilmSummaryResponse>>> => {
     const response = await axiosInstance.get(`${FILM_BASE_URL}/`, { params: { page, size } });
     return response.data;
@@ -115,6 +125,24 @@ export const filmService = {
 
   getNowPlayingFilms: async (page: number = 1, size: number = 10): Promise<ApiResponse<PageResponse<FilmSummaryResponse>>> => {
     const response = await axiosInstance.get(`${FILM_BASE_URL}/now-playing`, { params: { page, size } });
+    return response.data;
+  },
+
+  getTopRatedFilms: async (limit: number = 5): Promise<ApiResponse<FilmSummaryResponse[]>> => {
+    const response = await axiosInstance.get(`${FILM_BASE_URL}/top-rated`, { params: { limit } });
+    return response.data;
+  },
+
+  browseFilms: async (params: {
+    category: FilmCategory;
+    country?: Country;
+    genre?: Genre;
+    sortBy?: FilmSortField;
+    sortDir?: SortDirection;
+    page?: number;
+    size?: number;
+  }): Promise<ApiResponse<PageResponse<FilmSummaryResponse>>> => {
+    const response = await axiosInstance.get(`${FILM_BASE_URL}/browse`, { params });
     return response.data;
   },
 

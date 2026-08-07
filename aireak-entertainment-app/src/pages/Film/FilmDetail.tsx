@@ -1,36 +1,38 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  Box, 
-  Typography, 
-  Container, 
-  Grid, 
-  Avatar, 
-  Chip, 
-  Rating, 
-  Button, 
+import {
+  Box,
+  Typography,
+  Container,
+  Grid as MuiGrid,
+  Avatar,
+  Chip as MuiChip,
+  Rating,
+  Button,
   Divider,
   CircularProgress,
   IconButton,
   Paper,
   alpha,
   useTheme,
+  Tooltip,
+  Stack,
+  ButtonBase,
   Dialog,
-  DialogContent,
-  List,
-  ListItemButton,
-  ListItemText,
 } from '@mui/material';
-import { 
-  PlayArrow, 
-  Add, 
-  Check, 
+import {
+  PlayArrow,
+  Add,
+  Check,
   MovieOutlined,
   Share,
   CalendarToday,
   Public,
   AccessTime,
   Star,
+  ArrowUpward,
+  ArrowDownward,
+  FormatListBulleted,
   Close,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
@@ -38,7 +40,10 @@ import { filmService } from '../../api/filmService';
 import type { EpisodeResponse, FilmDetailResponse, FilmStatus } from '../../models';
 import toast from 'react-hot-toast';
 import CommentSection from '../../components/Comment/CommentSection';
-import VideoPlayer from '../../components/Film/VideoPlayer';
+import { extractYouTubeVideoId } from '../../utils/youtube';
+
+const Chip = MuiChip;
+const Grid = MuiGrid;
 
 const FilmDetail: React.FC = () => {
   const { t } = useTranslation();
@@ -48,7 +53,10 @@ const FilmDetail: React.FC = () => {
   const [userRating, setUserRating] = useState<number | null>(null);
   const [followed, setFollowed] = useState(false);
   const [episodes, setEpisodes] = useState<EpisodeResponse[]>([]);
-  const [selectedEpisode, setSelectedEpisode] = useState<EpisodeResponse | null>(null);
+  const [selectedSeason, setSelectedSeason] = useState<number>(1);
+  const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('ASC');
+  const [trailerModalOpen, setTrailerModalOpen] = useState(false);
+  const [descExpanded, setDescExpanded] = useState(false);
   const theme = useTheme();
   const navigate = useNavigate();
 
@@ -66,7 +74,7 @@ const FilmDetail: React.FC = () => {
         setEpisodes(episodesResponse.result ?? []);
       } catch (error) {
         console.error('Failed to fetch film details:', error);
-        toast.error('Failed to load film details');
+        toast.error('Không thể tải thông tin phim');
       } finally {
         setLoading(false);
       }
@@ -74,14 +82,43 @@ const FilmDetail: React.FC = () => {
     fetchDetail();
   }, [id]);
 
+  const seasons = useMemo(() => {
+    if (!episodes.length) return [];
+    const set = new Set<number>();
+    episodes.forEach((e) => set.add(e.seasonNumber));
+    return Array.from(set).sort((a, b) => a - b);
+  }, [episodes]);
+
+  const sortedEpisodesNatural = useMemo(() => {
+    return [...episodes].sort((a, b) =>
+      a.seasonNumber === b.seasonNumber
+        ? a.episodeNumber - b.episodeNumber
+        : a.seasonNumber - b.seasonNumber,
+    );
+  }, [episodes]);
+
+  const episodesInSelectedSeason = useMemo(() => {
+    const list = episodes.filter((e) => e.seasonNumber === selectedSeason);
+    return [...list].sort((a, b) =>
+      sortOrder === 'ASC' ? a.episodeNumber - b.episodeNumber : b.episodeNumber - a.episodeNumber,
+    );
+  }, [episodes, selectedSeason, sortOrder]);
+
+  useEffect(() => {
+    if (!seasons.length) return;
+    if (!seasons.includes(selectedSeason)) {
+      setSelectedSeason(seasons[0]);
+    }
+  }, [seasons, selectedSeason]);
+
   const handleRating = async (newValue: number | null) => {
     if (!id || newValue === null) return;
     try {
       await filmService.rateFilm(id, newValue);
       setUserRating(newValue);
-      toast.success('Rating updated');
+      toast.success('Đã cập nhật đánh giá');
     } catch (error) {
-      toast.error('Failed to update rating');
+      toast.error('Không thể cập nhật đánh giá');
     }
   };
 
@@ -91,17 +128,22 @@ const FilmDetail: React.FC = () => {
       await filmService.processFollowAction(id, followed);
       setFollowed(!followed);
       window.dispatchEvent(new Event('sidebar-counts:refresh'));
-      toast.success(followed ? 'Removed from library' : 'Added to library');
+      toast.success(followed ? 'Đã xóa khỏi thư viện' : 'Đã thêm vào thư viện');
     } catch (error) {
-      toast.error('Failed to update follow status');
+      toast.error('Không thể cập nhật trạng thái theo dõi');
     }
   };
 
   const handleWatch = () => {
-    if (episodes.length > 0) {
-      setSelectedEpisode(episodes[0]);
+    if (sortedEpisodesNatural.length > 0) {
+      navigate(`/film/${id}/watch/${sortedEpisodesNatural[0].id}`);
       return;
     }
+    if (extractYouTubeVideoId(data?.film.trailerUrl)) {
+      setTrailerModalOpen(true);
+      return;
+    }
+    // Phim cũ có thể còn trailerUrl là link video B2 (trước khi đổi sang YouTube) - vẫn mở được qua tab mới.
     if (data?.film.trailerUrl) {
       window.open(data.film.trailerUrl, '_blank', 'noopener,noreferrer');
       return;
@@ -134,20 +176,24 @@ const FilmDetail: React.FC = () => {
   if (!data) {
     return (
       <Container sx={{ mt: 4 }}>
-        <Typography variant="h5">Film not found</Typography>
-        <Button onClick={() => navigate('/film')}>Go Back</Button>
+        <Typography variant="h5">Không tìm thấy phim</Typography>
+        <Button onClick={() => navigate('/film')}>Quay lại</Button>
       </Container>
     );
   }
 
   const { film } = data;
+  const trailerVideoId = extractYouTubeVideoId(film.trailerUrl);
+
+  const STATUS_LABEL: Record<FilmStatus, string> = {
+    ONGOING: 'Đang cập nhật',
+    COMPLETED: 'Hoàn thành',
+  };
 
   const getStatusColor = (status: FilmStatus) => {
     switch (status) {
-      case 'NOW_PLAYING': return 'error';
-      case 'UPCOMING': return 'primary';
-      case 'ENDED': return 'default';
-      case 'ARCHIVED': return 'default';
+      case 'ONGOING': return 'success';
+      case 'COMPLETED': return 'default';
       default: return 'default';
     }
   };
@@ -194,7 +240,7 @@ const FilmDetail: React.FC = () => {
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
                   {film.status && (
                     <Chip 
-                      label={film.status.replace('_', ' ')} 
+                      label={STATUS_LABEL[film.status]}
                       color={getStatusColor(film.status)} 
                       size="small" 
                       sx={{ fontWeight: 700 }} 
@@ -213,7 +259,7 @@ const FilmDetail: React.FC = () => {
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                     <Star sx={{ color: '#FFD700' }} />
                     <Typography sx={{ fontWeight: 700, fontSize: '1.2rem' }}>{film.averageRating.toFixed(1)}</Typography>
-                    <Typography variant="caption" sx={{ color: 'text.secondary', ml: 0.5 }}>({film.ratingCount} reviews)</Typography>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', ml: 0.5 }}>({film.ratingCount} đánh giá)</Typography>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'text.secondary' }}>
                     <CalendarToday fontSize="small" />
@@ -221,7 +267,7 @@ const FilmDetail: React.FC = () => {
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'text.secondary' }}>
                     <AccessTime fontSize="small" />
-                    <Typography variant="body2">{film.durationMinutes} min</Typography>
+                    <Typography variant="body2">{film.durationMinutes} phút</Typography>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'text.secondary' }}>
                     <Public fontSize="small" />
@@ -255,9 +301,25 @@ const FilmDetail: React.FC = () => {
                   {followed ? 'Đã lưu vào thư viện' : 'Thêm vào thư viện'}
                 </Button>
                 {film.trailerUrl && (
-                  <IconButton onClick={() => window.open(film.trailerUrl, '_blank', 'noopener,noreferrer')} sx={{ bgcolor: 'rgba(255,255,255,0.1)', color: 'white' }}>
-                    <MovieOutlined />
-                  </IconButton>
+                  <Button
+                    variant="outlined"
+                    size="large"
+                    startIcon={<MovieOutlined />}
+                    onClick={() =>
+                      trailerVideoId
+                        ? setTrailerModalOpen(true)
+                        : window.open(film.trailerUrl, '_blank', 'noopener,noreferrer')
+                    }
+                    sx={{
+                      borderRadius: 2,
+                      px: 3,
+                      borderColor: 'rgba(255,255,255,0.3)',
+                      color: 'white',
+                      '&:hover': { borderColor: 'white', bgcolor: 'rgba(255,255,255,0.1)' },
+                    }}
+                  >
+                    Xem trailer
+                  </Button>
                 )}
                 <IconButton onClick={handleShare} sx={{ bgcolor: 'rgba(255,255,255,0.1)', color: 'white' }}>
                   <Share />
@@ -273,38 +335,152 @@ const FilmDetail: React.FC = () => {
           <Grid size={{ xs: 12, md: 8 }}>
             <Box sx={{ mb: 6 }}>
               <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>{t('storyline')}</Typography>
-              <Typography variant="body1" sx={{ color: 'text.secondary', lineHeight: 1.8 }}>
+              <Typography
+                variant="body1"
+                sx={{
+                  color: 'text.secondary',
+                  lineHeight: 1.8,
+                  whiteSpace: 'pre-line',
+                  ...(descExpanded
+                    ? {}
+                    : {
+                        display: '-webkit-box',
+                        WebkitLineClamp: 5,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                      }),
+                }}
+              >
                 {film.description}
               </Typography>
+              {(film.description?.length ?? 0) > 220 && (
+                <Button
+                  size="small"
+                  onClick={() => setDescExpanded((prev) => !prev)}
+                  sx={{ mt: 0.5, px: 0, minWidth: 0, textTransform: 'none', fontWeight: 700 }}
+                >
+                  {descExpanded ? 'Thu gọn' : 'Xem thêm'}
+                </Button>
+              )}
             </Box>
 
             <Box sx={{ mb: 6 }}>
-              <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>
-                {film.series ? 'Danh sách tập' : 'Nội dung phim'}
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2.5, flexWrap: 'wrap', gap: 1 }}>
+                <Typography variant="h5" sx={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <FormatListBulleted sx={{ color: 'primary.main' }} />
+                  {'CHỌN TẬP'}
+                </Typography>
+                {episodes.length > 0 && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Chip
+                      size="small"
+                      label={sortOrder === 'ASC' ? 'Tập tăng dần' : 'Tập giảm dần'}
+                      sx={{ bgcolor: 'rgba(255,255,255,0.05)', fontWeight: 700, letterSpacing: 0.2 }}
+                    />
+                    <Tooltip title={sortOrder === 'ASC' ? 'Chuyển sắp xếp giảm dần' : 'Chuyển sắp xếp tăng dần'}>
+                      <IconButton
+                        size="small"
+                        onClick={() => setSortOrder((prev) => (prev === 'ASC' ? 'DESC' : 'ASC'))}
+                        sx={{
+                          bgcolor: 'rgba(255,255,255,0.05)',
+                          border: '1px solid rgba(255,255,255,0.08)',
+                          '&:hover': { bgcolor: 'rgba(0,168,78,0.15)' },
+                        }}
+                      >
+                        {sortOrder === 'ASC' ? <ArrowUpward fontSize="small" /> : <ArrowDownward fontSize="small" />}
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                )}
+              </Box>
+
               {episodes.length === 0 ? (
                 <Paper sx={{ p: 3, borderRadius: 3, bgcolor: 'rgba(255,255,255,0.03)', color: 'text.secondary' }}>
                   Chưa có tập phim nào được phát hành.
                 </Paper>
               ) : (
-                <Paper sx={{ borderRadius: 3, overflow: 'hidden', bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <List disablePadding>
-                    {episodes.map((episode, index) => (
-                      <ListItemButton
-                        key={episode.id}
-                        onClick={() => setSelectedEpisode(episode)}
-                        divider={index < episodes.length - 1}
-                        sx={{ py: 1.5 }}
-                      >
-                        <PlayArrow color="primary" sx={{ mr: 2 }} />
-                        <ListItemText
-                          primary={episode.title}
-                          secondary={`Mùa ${episode.seasonNumber} · Tập ${episode.episodeNumber} · ${episode.durationMinutes || '--'} phút`}
-                        />
-                      </ListItemButton>
-                    ))}
-                  </List>
-                </Paper>
+                <>
+                  {seasons.length > 1 && (
+                    <Stack direction="row" spacing={1.5} sx={{ mb: 3, flexWrap: 'wrap', rowGap: 1 }}>
+                      {seasons.map((sn) => {
+                        const isActive = selectedSeason === sn;
+                        return (
+                          <Chip
+                            key={sn}
+                            label={`Phần ${sn}`}
+                            clickable
+                            onClick={() => setSelectedSeason(sn)}
+                            color={isActive ? 'primary' : 'default'}
+                            variant={isActive ? 'filled' : 'outlined'}
+                            sx={{
+                              fontWeight: 800,
+                              fontSize: '0.95rem',
+                              px: 0.5,
+                              py: 2.25,
+                              borderRadius: 1.25,
+                              letterSpacing: 0.15,
+                              border: isActive ? 'none' : '1px solid rgba(255,255,255,0.12)',
+                              bgcolor: isActive ? alpha(theme.palette.primary.main, 0.92) : 'rgba(255,255,255,0.025)',
+                              '&:hover': {
+                                bgcolor: isActive ? alpha(theme.palette.primary.main, 1) : 'rgba(255,255,255,0.06)',
+                              },
+                            }}
+                          />
+                        );
+                      })}
+                    </Stack>
+                  )}
+
+                  <Paper sx={{ borderRadius: 3, overflow: 'hidden', bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', p: 2 }}>
+                    {episodesInSelectedSeason.length === 0 ? (
+                      <Box sx={{ p: 4, color: 'text.secondary', textAlign: 'center' }}>
+                        Phần này chưa có tập phim nào.
+                      </Box>
+                    ) : (
+                      <MuiGrid container spacing={1.25}>
+                        {episodesInSelectedSeason.map((episode) => {
+                          return (
+                            <MuiGrid size={{ xs: 4, sm: 3, md: 3, lg: 2, xl: 2 }} key={episode.id}>
+                              <ButtonBase
+                                onClick={() => navigate(`/film/${id}/watch/${episode.id}`)}
+                                sx={{
+                                  width: '100%',
+                                  aspectRatio: '2.25 / 1',
+                                  borderRadius: 1.5,
+                                  bgcolor: 'rgba(255,255,255,0.04)',
+                                  color: 'text.primary',
+                                  position: 'relative',
+                                  fontWeight: 900,
+                                  fontSize: { xs: '0.95rem', sm: '1.05rem', md: '1.15rem' },
+                                  letterSpacing: 0.3,
+                                  transition: 'all 0.18s cubic-bezier(.2,.8,.2,1)',
+                                  border: '1px solid rgba(255,255,255,0.08)',
+                                  '&:hover': {
+                                    bgcolor: 'rgba(0,168,78,0.12)',
+                                    transform: 'translateY(-1.5px)',
+                                    boxShadow: '0 4px 14px rgba(0,0,0,0.35)',
+                                    borderColor: alpha(theme.palette.primary.main, 0.5),
+                                  },
+                                }}
+                              >
+                                <Typography
+                                  component="span"
+                                  sx={{
+                                    fontWeight: 900,
+                                    fontSize: { xs: '0.95rem', sm: '1.05rem', md: '1.15rem' },
+                                    letterSpacing: 0.3,
+                                  }}
+                                >
+                                  {episode.episodeNumber}
+                                </Typography>
+                              </ButtonBase>
+                            </MuiGrid>
+                          );
+                        })}
+                      </MuiGrid>
+                    )}
+                  </Paper>
+                </>
               )}
             </Box>
 
@@ -332,12 +508,18 @@ const FilmDetail: React.FC = () => {
           <Grid size={{ xs: 12, md: 4 }}>
             <Paper sx={{ p: 3, borderRadius: 4, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>{t('director')}</Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 4 }}>
-                <Avatar src={film.director.avatarUrl} sx={{ width: 64, height: 64 }} />
-                <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{film.director.name}</Typography>
-                  <Typography variant="caption" color="text.secondary">Director</Typography>
-                </Box>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 4 }}>
+                {[...film.directors]
+                  .sort((a, b) => a.displayOrder - b.displayOrder)
+                  .map(({ director }) => (
+                    <Box key={director.id} sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <Avatar src={director.avatarUrl} sx={{ width: 64, height: 64 }} />
+                      <Box>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{director.name}</Typography>
+                        <Typography variant="caption" color="text.secondary">Đạo diễn</Typography>
+                      </Box>
+                    </Box>
+                  ))}
               </Box>
 
               <Divider sx={{ my: 3 }} />
@@ -360,18 +542,18 @@ const FilmDetail: React.FC = () => {
               <Divider sx={{ my: 3 }} />
 
               <Box sx={{ mt: 2 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Details</Typography>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Chi tiết</Typography>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="body2" color="text.secondary">Country</Typography>
+                  <Typography variant="body2" color="text.secondary">Quốc gia</Typography>
                   <Typography variant="body2">{film.country}</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="body2" color="text.secondary">Series</Typography>
-                  <Typography variant="body2">{film.series ? 'Yes' : 'No'}</Typography>
+                  <Typography variant="body2" color="text.secondary">Loại phim</Typography>
+                  <Typography variant="body2">{film.series ? 'Phim bộ' : 'Phim lẻ'}</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="body2" color="text.secondary">Last Update</Typography>
-                  <Typography variant="body2">{new Date(film.lastUpdate).toLocaleDateString()}</Typography>
+                  <Typography variant="body2" color="text.secondary">Cập nhật lần cuối</Typography>
+                  <Typography variant="body2">{new Date(film.lastUpdate).toLocaleDateString('vi-VN')}</Typography>
                 </Box>
               </Box>
             </Paper>
@@ -384,25 +566,40 @@ const FilmDetail: React.FC = () => {
         </Box>
       </Container>
 
-      <Dialog open={Boolean(selectedEpisode)} onClose={() => setSelectedEpisode(null)} maxWidth="lg" fullWidth>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2, py: 1.5, bgcolor: '#101010' }}>
-          <Box>
-            <Typography sx={{ fontWeight: 800 }}>{selectedEpisode?.title}</Typography>
-            <Typography variant="caption" color="text.secondary">
-              Mùa {selectedEpisode?.seasonNumber} · Tập {selectedEpisode?.episodeNumber}
-            </Typography>
-          </Box>
-          <IconButton onClick={() => setSelectedEpisode(null)}><Close /></IconButton>
-        </Box>
-        <DialogContent sx={{ p: 0, bgcolor: '#000' }}>
-          {selectedEpisode && (
-            <VideoPlayer
-              key={selectedEpisode.id}
-              src={selectedEpisode.videoUrl}
-              style={{ width: '100%', maxHeight: '75vh', display: 'block' }}
+      <Dialog
+        open={trailerModalOpen}
+        onClose={() => setTrailerModalOpen(false)}
+        maxWidth="md"
+        fullWidth
+        slotProps={{ paper: { sx: { bgcolor: 'black', position: 'relative' } } }}
+      >
+        <IconButton
+          onClick={() => setTrailerModalOpen(false)}
+          sx={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            zIndex: 1,
+            color: 'white',
+            bgcolor: 'rgba(0,0,0,0.5)',
+            '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' },
+          }}
+        >
+          <Close />
+        </IconButton>
+        {/* Chỉ mount iframe khi modal mở để video dừng phát ngay khi đóng, không cần gọi postMessage API. */}
+        {trailerModalOpen && trailerVideoId && (
+          <Box sx={{ position: 'relative', pt: '56.25%' }}>
+            <Box
+              component="iframe"
+              src={`https://www.youtube.com/embed/${trailerVideoId}?autoplay=1`}
+              title={`${film.title} - Trailer`}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              sx={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 0 }}
             />
-          )}
-        </DialogContent>
+          </Box>
+        )}
       </Dialog>
     </Box>
   );

@@ -141,7 +141,7 @@ const FilmTrending: React.FC = React.memo(() => {
           sx={{ '& .MuiToggleButton-root': { px: 2.5, color: 'text.secondary', borderColor: 'rgba(255,255,255,0.12)' } }}
         >
           <ToggleButton value="all">Tất cả</ToggleButton>
-          <ToggleButton value="nowPlaying"><PlayCircleOutlined sx={{ mr: 1 }} />Đang chiếu</ToggleButton>
+          <ToggleButton value="nowPlaying"><PlayCircleOutlined sx={{ mr: 1 }} />Đang cập nhật</ToggleButton>
         </ToggleButtonGroup>
       </Box>
 
