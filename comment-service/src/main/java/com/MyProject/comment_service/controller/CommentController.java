@@ -1,10 +1,13 @@
 package com.MyProject.comment_service.controller;
 
 import com.MyProject.comment_service.service.CommentService;
+import com.MyProject.comment_service.service.CommentReactionService;
 import com.MyProject.comment_service.service.CommentApiRateLimitService;
 import com.MyProject.common.security.SecurityUtils;
 import com.MyProject.comment_service.dto.request.CreateCommentRequest;
+import com.MyProject.comment_service.dto.request.ReactionRequest;
 import com.MyProject.comment_service.dto.request.UpdateCommentRequest;
+import com.MyProject.comment_service.dto.response.CommentReactionResponse;
 import com.MyProject.comment_service.dto.response.CommentResponse;
 import com.MyProject.common.dto.response.ApiResponse;
 import com.MyProject.common.dto.response.PageResponse;
@@ -22,6 +25,7 @@ import org.springframework.web.bind.annotation.*;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class CommentController {
     CommentService commentService;
+    CommentReactionService commentReactionService;
     CommentApiRateLimitService commentApiRateLimitService;
 
     @PostMapping
@@ -66,6 +70,28 @@ public class CommentController {
         commentApiRateLimitService.checkCommentDelete(userId);
         commentService.deleteComment(commentId);
         return ApiResponse.<Void>builder()
+                .build();
+    }
+
+    @GetMapping("/{commentId}/replies")
+    @RateLimiter(name = "commentReadApi")
+    ApiResponse<PageResponse<CommentResponse>> getReplies(
+            @PathVariable String commentId,
+            @RequestParam(value = "page", defaultValue = "1") Integer page,
+            @RequestParam(value = "size", defaultValue = "5") Integer size){
+        return ApiResponse.<PageResponse<CommentResponse>>builder()
+                .result(commentService.getReplies(commentId, page, size))
+                .build();
+    }
+
+    @PostMapping("/{commentId}/reactions")
+    @PreAuthorize("isAuthenticated()")
+    @RateLimiter(name = "commentReactionApi")
+    ApiResponse<CommentReactionResponse> react(@PathVariable String commentId, @RequestBody ReactionRequest request){
+        String userId = SecurityUtils.getCurrentUserId();
+        commentApiRateLimitService.checkCommentReaction(userId);
+        return ApiResponse.<CommentReactionResponse>builder()
+                .result(commentReactionService.react(commentId, userId, request.getType()))
                 .build();
     }
 }

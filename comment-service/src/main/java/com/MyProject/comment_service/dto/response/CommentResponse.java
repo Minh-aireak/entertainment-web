@@ -18,12 +18,15 @@ public class CommentResponse {
     String parentId;
     String topParentId;
     int likeCount;
+    int loveCount;
     int replyCount;
     CommentType type;
     CommentStatus status;
     String durationCreatedDate;
     String avatar;
     String displayName;
+    /** Reaction the current viewer made on this comment ("LIKE"/"LOVE"), or null. Not persisted - computed per request. */
+    String myReaction;
 }
 
 

@@ -10,18 +10,18 @@ spring:
     name: comment-service
   data:
     mongodb:
-      uri: mongodb://${MONGODB_ROOT_USERNAME:root}:${MONGODB_ROOT_PASSWORD:REDACTED_LEGACY_CREDENTIAL}@${MONGODB_HOST:localhost}:${MONGODB_PORT:27017}/comment-service?authSource=admin
+      uri: mongodb://${MONGODB_ROOT_USERNAME}:${MONGODB_ROOT_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/comment-service?authSource=admin
     redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
       connect-timeout: 5000
       timeout: 5000
-      password: ${REDIS_PASSWORD:REDACTED_LEGACY_CREDENTIAL}
+      password: ${REDIS_PASSWORD}
 
 app:
   services:
     profile:
-      url: ${PROFILE_SERVICE_URL:http://localhost:8081}
+      url: ${PROFILE_SERVICE_URL}
   rate-limit:
     comment-write:
       limit-for-period: 30
@@ -34,6 +34,9 @@ app:
       limit-refresh-period: 60s
     comment-delete:
       limit-for-period: 20
+      limit-refresh-period: 60s
+    comment-reaction:
+      limit-for-period: 60
       limit-refresh-period: 60s
 
 resilience4j:
@@ -72,6 +75,8 @@ resilience4j:
         base-config: default
       commentWriteApi:
         base-config: default
+      commentReactionApi:
+        base-config: default
       profileService:
         base-config: downstream
   ratelimiter:
@@ -86,6 +91,10 @@ resilience4j:
       commentWriteApi:
         base-config: default
         limit-for-period: 50
+        limit-refresh-period: 1s
+      commentReactionApi:
+        base-config: default
+        limit-for-period: 100
         limit-refresh-period: 1s
       profileService:
         base-config: default
@@ -116,4 +125,4 @@ management:
       enabled: true
 
 jwt:
-  signerKey: ${JWT_SIGNER_KEY:uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0}
+  signerKey: ${JWT_SIGNER_KEY}

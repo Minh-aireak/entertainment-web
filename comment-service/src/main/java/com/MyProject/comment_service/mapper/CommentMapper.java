@@ -11,5 +11,6 @@ public interface CommentMapper {
     @Mapping(target = "durationCreatedDate", ignore = true)
     @Mapping(target = "avatar", ignore = true)
     @Mapping(target = "displayName", ignore = true)
+    @Mapping(target = "myReaction", ignore = true)
     CommentResponse toCommentResponse(Comment comment);
 }

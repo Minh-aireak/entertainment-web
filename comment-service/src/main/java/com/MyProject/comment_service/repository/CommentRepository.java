@@ -10,4 +10,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface CommentRepository extends MongoRepository<Comment, String> {
     Page<Comment> findBySourceIdAndParentIdIsNullAndStatusNot(String sourceId, CommentStatus status, Pageable pageable);
+
+    Page<Comment> findByParentIdAndStatusNot(String parentId, CommentStatus status, Pageable pageable);
 }

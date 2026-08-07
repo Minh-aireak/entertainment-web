@@ -33,6 +33,10 @@ public class CommentApiRateLimitService {
         enforce("comment-delete:" + userId, properties.getCommentDelete());
     }
 
+    public void checkCommentReaction(String userId) {
+        enforce("comment-reaction:" + userId, properties.getCommentReaction());
+    }
+
     private void enforce(String keySuffix, CommentRateLimitProperties.Rule rule) {
         try {
             long windowSeconds = Math.max(1, rule.getLimitRefreshPeriod().toSeconds());

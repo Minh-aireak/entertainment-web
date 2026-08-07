@@ -14,6 +14,7 @@ public class CommentRateLimitProperties {
     Rule commentRead = new Rule();
     Rule commentUpdate = new Rule();
     Rule commentDelete = new Rule();
+    Rule commentReaction = new Rule();
 
     @Data
     public static class Rule {

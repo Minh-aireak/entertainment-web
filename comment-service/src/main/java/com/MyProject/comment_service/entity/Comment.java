@@ -38,6 +38,7 @@ public class Comment {
     String parentId;
     String topParentId;
     int likeCount;
+    int loveCount;
     int replyCount;
     CommentStatus status;
     CommentType type;

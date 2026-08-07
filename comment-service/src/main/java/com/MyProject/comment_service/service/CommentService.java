@@ -1,21 +1,25 @@
 package com.MyProject.comment_service.service;
 
 import com.MyProject.comment_service.configuration.DateTimeFormatter;
+import com.MyProject.comment_service.dto.event.CommentCreatedEvent;
 import com.MyProject.comment_service.dto.request.CreateCommentRequest;
 import com.MyProject.comment_service.dto.request.UpdateCommentRequest;
 import com.MyProject.comment_service.dto.response.CommentResponse;
 import com.MyProject.comment_service.entity.Comment;
+import com.MyProject.comment_service.entity.Outbox;
 import com.MyProject.comment_service.enums.CommentStatus;
 import com.MyProject.comment_service.enums.CommentType;
 import com.MyProject.comment_service.exception.AppException;
 import com.MyProject.comment_service.enums.ErrorCode;
 import com.MyProject.comment_service.mapper.CommentMapper;
 import com.MyProject.comment_service.repository.CommentRepository;
+import com.MyProject.comment_service.repository.OutboxRepository;
 import com.MyProject.common.security.SecurityUtils;
 import com.MyProject.common.dto.response.PageResponse;
 import com.MyProject.common.dto.response.UserProfileResponse;
 import com.MyProject.common.redis.RedisService;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -24,9 +28,14 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -36,11 +45,17 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class CommentService {
+    private static final int MAX_CONTENT_LENGTH = 2000;
+
     CommentRepository commentRepository;
     CommentMapper commentMapper;
     CommentProfileExternalService commentProfileExternalService;
+    CommentReactionService commentReactionService;
     RedisService redisService;
     DateTimeFormatter formatter;
+    OutboxRepository outboxRepository;
+    ObjectMapper objectMapper;
+    MongoTemplate mongoTemplate;
 
     private String buildCacheKey(String sourceId, int page, int size) {
         return "comment:" + sourceId + ":page:" + page + ":size:" + size;
@@ -59,23 +74,57 @@ public class CommentService {
         }
     }
 
+    /**
+     * Overlays the live Redis reaction counts/viewer state onto an already-mapped response.
+     * Uses the response's own likeCount/loveCount (whatever was mapped from Mongo, cached or fresh)
+     * as the fallback when Redis has no entry - MUST be called AFTER any caching of the response,
+     * since myReaction is viewer-specific and must never be written into the shared page-1 cache.
+     */
+    private void applyReactionOverlay(CommentResponse response, String viewerId) {
+        int[] counts = commentReactionService.getCounts(response.getId(), response.getLikeCount(), response.getLoveCount());
+        response.setLikeCount(counts[0]);
+        response.setLoveCount(counts[1]);
+        response.setMyReaction(commentReactionService.getUserReaction(response.getId(), viewerId));
+    }
+
+    /** Same as SecurityUtils.getCurrentUserId() but returns null for anonymous viewers instead of throwing - GET endpoints are public. */
+    private String getCurrentUserIdOrNull() {
+        try {
+            return SecurityUtils.getCurrentUserId();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     @Transactional(rollbackFor = Exception.class)
     public CommentResponse createComment(CreateCommentRequest request) {
         String currentId = SecurityUtils.getCurrentUserId();
+        String content = validateAndNormalizeContent(request.getContent());
 
         Comment comment = Comment.builder()
                 .sourceId(request.getSourceId())
                 .userId(currentId)
-                .content(request.getContent())
+                .content(content)
                 .type(request.getType())
                 .parentId(request.getParentId())
                 .topParentId(request.getTopParentId())
                 .likeCount(0)
+                .loveCount(0)
                 .replyCount(0)
                 .status(CommentStatus.SENT)
                 .build();
 
         comment = commentRepository.save(comment);
+
+        // Reply -> atomically bump the parent's replyCount in the same transaction (partial
+        // update, does not touch the parent's modifiedDate/auditing).
+        if (comment.getParentId() != null) {
+            mongoTemplate.updateFirst(
+                    Query.query(Criteria.where("_id").is(comment.getParentId())),
+                    new Update().inc("replyCount", 1),
+                    Comment.class
+            );
+        }
 
         // Invalidate all comment caches for this source
         try {
@@ -87,17 +136,64 @@ public class CommentService {
         CommentResponse response = commentMapper.toCommentResponse(comment);
         enrichCommentResponse(response, comment);
 
+        // Ghi Outbox event trong CÙNG transaction Mongo với comment vừa lưu.
+        // Không emit socket trực tiếp ở đây - Debezium CDC sẽ đọc collection "outbox"
+        // và relay qua Kafka topic "comment.events" -> socket-service broadcast.
+        publishCommentEvent("COMMENT_CREATED", response);
+
         return response;
+    }
+
+    private String validateAndNormalizeContent(String content) {
+        if (content == null) {
+            throw new AppException(ErrorCode.COMMENT_CONTENT_EMPTY);
+        }
+        String trimmed = content.trim();
+        if (trimmed.isEmpty()) {
+            throw new AppException(ErrorCode.COMMENT_CONTENT_EMPTY);
+        }
+        // codePointCount thay vì length() để đếm đúng số ký tự khi content chứa emoji (surrogate pairs)
+        if (trimmed.codePointCount(0, trimmed.length()) > MAX_CONTENT_LENGTH) {
+            throw new AppException(ErrorCode.COMMENT_CONTENT_TOO_LONG);
+        }
+        return trimmed;
+    }
+
+    private void publishCommentEvent(String eventType, CommentResponse response) {
+        saveToOutbox(response.getId(), "comment.events", CommentCreatedEvent.builder()
+                .eventId(UUID.randomUUID().toString())
+                .eventType(eventType)
+                .timestamp(Instant.now())
+                .producer("comment-service")
+                .comment(response)
+                .build());
+    }
+
+    private void saveToOutbox(String aggregateId, String topic, Object payload) {
+        try {
+            outboxRepository.save(Outbox.builder()
+                    .aggregateId(aggregateId)
+                    .topic(topic)
+                    .payload(objectMapper.writeValueAsString(payload))
+                    .build());
+        } catch (Exception e) {
+            log.error("Failed to save outbox with topic: {}", topic, e);
+            throw new AppException(ErrorCode.OUTBOX_SAVE_FAILED);
+        }
     }
 
     public PageResponse<CommentResponse> getComments(String sourceId, int page, int size) {
         String cacheKey = buildCacheKey(sourceId, page, size);
+        String viewerId = getCurrentUserIdOrNull();
 
-        // Caching for first page (TTL 60s)
+        // Caching for first page (TTL 60s). Cached payload never carries reaction data
+        // (myReaction is per-viewer) - the live reaction overlay is applied after this
+        // method decides whether it served a cache hit or a fresh Mongo fetch.
         if (page == 1) {
             try {
                 PageResponse<CommentResponse> cachedResponse = redisService.get(cacheKey, new TypeReference<PageResponse<CommentResponse>>() {});
                 if (cachedResponse != null) {
+                    cachedResponse.getData().forEach(response -> applyReactionOverlay(response, viewerId));
                     return cachedResponse;
                 }
             } catch (Exception e) {
@@ -190,7 +286,7 @@ public class CommentService {
                 .totalPages(commentPage.getTotalPages())
                 .build();
 
-        // Cache first page
+        // Cache first page (base/shared data only)
         if (page == 1) {
             try {
                 redisService.setWithExpiration(cacheKey, response, 60, TimeUnit.SECONDS);
@@ -199,7 +295,33 @@ public class CommentService {
             }
         }
 
+        // Overlay live reaction counts + this viewer's own reaction state (never cached above)
+        commentResponses.forEach(r -> applyReactionOverlay(r, viewerId));
+
         return response;
+    }
+
+    public PageResponse<CommentResponse> getReplies(String parentId, int page, int size) {
+        String viewerId = getCurrentUserIdOrNull();
+
+        Pageable pageable = PageRequest.of(page - 1, size, Sort.by("createdDate").ascending());
+        Page<Comment> replyPage = commentRepository.findByParentIdAndStatusNot(parentId, CommentStatus.DELETED, pageable);
+
+        List<CommentResponse> replyResponses = replyPage.getContent().stream()
+                .map(comment -> {
+                    CommentResponse response = commentMapper.toCommentResponse(comment);
+                    enrichCommentResponse(response, comment);
+                    applyReactionOverlay(response, viewerId);
+                    return response;
+                }).collect(Collectors.toList());
+
+        return PageResponse.<CommentResponse>builder()
+                .data(replyResponses)
+                .currentPage(page)
+                .pageSize(size)
+                .totalElement(replyPage.getTotalElements())
+                .totalPages(replyPage.getTotalPages())
+                .build();
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -216,7 +338,7 @@ public class CommentService {
             throw new AppException(ErrorCode.INVALID_COMMENT_TYPE);
         }
 
-        comment.setContent(request.getContent());
+        comment.setContent(validateAndNormalizeContent(request.getContent()));
         comment.setStatus(CommentStatus.EDITED);
         comment = commentRepository.save(comment);
 
@@ -229,6 +351,13 @@ public class CommentService {
 
         CommentResponse response = commentMapper.toCommentResponse(comment);
         enrichCommentResponse(response, comment);
+        applyReactionOverlay(response, currentUserId);
+
+        // Same outbox mechanism as create - relay picks eventType up from the payload and
+        // broadcasts "comment:updated" to the sourceId room so every viewer (including replies
+        // rendered under it) stays in sync without a manual refresh.
+        publishCommentEvent("COMMENT_UPDATED", response);
+
         return response;
     }
 
@@ -243,7 +372,19 @@ public class CommentService {
         }
 
         comment.setStatus(CommentStatus.DELETED);
-        commentRepository.save(comment);
+        comment = commentRepository.save(comment);
+
+        if (comment.getParentId() != null) {
+            mongoTemplate.updateFirst(
+                    Query.query(Criteria.where("_id").is(comment.getParentId())),
+                    new Update().inc("replyCount", -1),
+                    Comment.class
+            );
+        }
+
+        CommentResponse response = commentMapper.toCommentResponse(comment);
+        enrichCommentResponse(response, comment);
+        publishCommentEvent("COMMENT_DELETED", response);
 
         // Invalidate all comment caches for this source
         try {
