@@ -645,7 +645,7 @@ const ChatPage: React.FC = React.memo(() => {
           conversationId: activeConversationId,
           content: '',
           messageType,
-          attachmentFileUrl: uploadRes.result.url,
+          attachmentFileId: uploadRes.result.id,
           replyToMessageId: replyTarget?.id,
         };
         const response = await chatService.createChatMessage(request);
@@ -928,8 +928,7 @@ const ChatPage: React.FC = React.memo(() => {
     try {
       const uploadRes = await fileService.uploadFile(file);
       if (uploadRes.code === 1000) {
-        const avatarUrl = uploadRes.result.url;
-        const updateRes = await chatService.updateConversation(activeConversationId, { conversationAvatar: avatarUrl });
+        const updateRes = await chatService.updateConversation(activeConversationId, { groupAvatarFileId: uploadRes.result.id });
         if (updateRes.code === 1000) {
           applyConversationUpdate(activeConversationId, { conversationAvatar: updateRes.result.conversationAvatar });
           toast.success('Đã đổi ảnh nhóm', { id: toastId });

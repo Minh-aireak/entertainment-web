@@ -75,7 +75,7 @@ export const chatService = {
     return response.data;
   },
 
-  updateConversation: async (conversationId: string, data: { conversationName?: string; conversationAvatar?: string }) => {
+  updateConversation: async (conversationId: string, data: { conversationName?: string; groupAvatarFileId?: string }) => {
     const response = await axiosInstance.put<ApiResponse<ConversationResponse>>(`/chats/conversations/${conversationId}`, data);
     return response.data;
   },
