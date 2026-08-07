@@ -6,95 +6,101 @@ spring:
     name: api-gateway
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:REDACTED_LEGACY_CREDENTIAL}
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
   cloud:
     gateway:
       routes:
         - id: block-api-internal-identities
-          uri: ${IDENTITY_SERVICE_URL:http://localhost:8080}
+          uri: ${IDENTITY_SERVICE_URL}
           predicates:
             - Path=/api/v1/identities/users/internal/**
           filters:
             - SetStatus=FORBIDDEN
             - StripPrefix=2
         - id: identity-service
-          uri: ${IDENTITY_SERVICE_URL:http://localhost:8080}
+          uri: ${IDENTITY_SERVICE_URL}
           predicates:
             - Path=/api/v1/identities/**
           filters:
             - StripPrefix=2
         - id: block-api-internal-profiles
-          uri: ${PROFILE_SERVICE_URL:http://localhost:8081} 
+          uri: ${PROFILE_SERVICE_URL}
           predicates:
             - Path=/api/v1/profiles/internal/**
           filters:
             - SetStatus=FORBIDDEN
             - StripPrefix=2
         - id: profile-service
-          uri: ${PROFILE_SERVICE_URL:http://localhost:8081} 
+          uri: ${PROFILE_SERVICE_URL}
           predicates:
             - Path=/api/v1/profiles/**
           filters:
             - StripPrefix=2
         - id: notification-service
-          uri: ${NOTIFICATION_SERVICE_URL:http://localhost:8082}
+          uri: ${NOTIFICATION_SERVICE_URL}
           predicates:
             - Path=/api/v1/notifications/**
           filters:
             - StripPrefix=2
         - id: post-service
-          uri: ${POST_SERVICE_URL:http://localhost:8083}
+          uri: ${POST_SERVICE_URL}
           predicates:
             - Path=/api/v1/posts/**
           filters:
             - StripPrefix=2
         - id: file-service
-          uri: ${FILE_SERVICE_URL:http://localhost:8084}
+          uri: ${FILE_SERVICE_URL}
           predicates:
             - Path=/api/v1/files/**
           filters:
             - StripPrefix=2
 
         - id: chat-service
-          uri: ${CHAT_SERVICE_URL:http://localhost:8086}
+          uri: ${CHAT_SERVICE_URL}
           predicates:
             - Path=/api/v1/chats/**
           filters:
             - StripPrefix=2
         - id: friend-service
-          uri: ${FRIEND_SERVICE_URL:http://localhost:8087}
+          uri: ${FRIEND_SERVICE_URL}
           predicates:
             - Path=/api/v1/friends/**
           filters:
             - StripPrefix=2
         - id: socket-service
-          uri: ${SOCKET_SERVICE_WS_URL:ws://localhost:8088}
+          uri: ${SOCKET_SERVICE_WS_URL}
           predicates:
             - Path=/api/v1/sockets/**
           filters:
             - StripPrefix=2
         - id: comment-service
-          uri: ${COMMENT_SERVICE_URL:http://localhost:8089}
+          uri: ${COMMENT_SERVICE_URL}
           predicates:
             - Path=/api/v1/comments/**
           filters:
             - StripPrefix=2
         - id: film-service
-          uri: ${FILM_SERVICE_URL:http://localhost:8090}
+          uri: ${FILM_SERVICE_URL}
           predicates:
             - Path=/api/v1/films/**
           filters:
             - StripPrefix=2
+        - id: room-service
+          uri: ${ROOM_SERVICE_URL}
+          predicates:
+            - Path=/api/v1/rooms/**
+          filters:
+            - StripPrefix=2
 
 jwt:
-  signerKey: ${JWT_SIGNER_KEY:uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0}
+  signerKey: ${JWT_SIGNER_KEY}
 
 app:
   gateway:
     public-rate-limit:
-      enabled: true
+      enabled: ${PUBLIC_RATE_LIMIT_ENABLED}
       rules:
         - name: auth-login
           path-pattern: /api/v1/identities/auth/login
@@ -137,6 +143,11 @@ app:
           window-seconds: 60
         - name: public-media-download
           path-pattern: /api/v1/files/media/download/**
+          method: GET
+          limit: 60
+          window-seconds: 60
+        - name: public-media-info
+          path-pattern: /api/v1/files/media/info/**
           method: GET
           limit: 60
           window-seconds: 60

@@ -29,21 +29,61 @@ services:
     image: ${MONGODB_IMAGE}
     container_name: ${MONGODB_CONTAINER_NAME}
     restart: unless-stopped
+    # Sinh keyFile từ MONGODB_REPLICA_SET_KEY trong /etc rồi delegate sang
+    # docker-entrypoint.sh chính thức (cần chạy ở entrypoint level để có quyền root
+    # tạo keyFile và vẫn giữ được luồng tạo root user lần đầu của image chính thức).
+    entrypoint:
+      - /start-mongod.sh
+    command:
+      - mongod
+      - --replSet
+      - rs0
+      - --bind_ip_all
     ports:
       - '${MONGODB_PORT}:27017'
     env_file:
       - .env
     environment:
-      MONGODB_ROOT_USER: ${MONGODB_ROOT_USERNAME}
-      MONGODB_ROOT_PASSWORD: ${MONGODB_ROOT_PASSWORD}
-      MONGODB_REPLICA_SET_MODE: primary
-      MONGODB_REPLICA_SET_NAME: rs0
-      MONGODB_REPLICA_SET_KEY: ${MONGODB_REPLICA_SET_KEY}
-      MONGODB_ADVERTISED_HOSTNAME: mongodb
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_ROOT_PASSWORD}
       TZ: ${TZ}
     volumes:
-      - mongodb_data:/bitnami/mongodb
-      - ./infrastructure/db-init/mongodb:/docker-entrypoint-initdb.d
+      - mongodb_data:/data/db
+      - ./infrastructure/db-init/mongodb/start-mongod.sh:/start-mongod.sh:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--username", "${MONGODB_ROOT_USERNAME}", "--password", "${MONGODB_ROOT_PASSWORD}", "--authenticationDatabase", "admin", "--eval", "try { db.adminCommand('ping').ok } catch (e) { quit(1) }"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - backend
+
+  # Khởi tạo Replica Set + user debezium cho MongoDB (CDC)
+  # Image mongo chính thức không tự khởi tạo replica set như Bitnami,
+  # nên cần một service init chạy một lần sau khi mongodb healthy.
+  mongo-init:
+    image: ${MONGODB_IMAGE}
+    container_name: mongo-init
+    restart: "no"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    env_file:
+      - .env
+    command:
+      - mongosh
+      - --host
+      - mongodb:27017
+      - --username
+      - ${MONGODB_ROOT_USERNAME}
+      - --password
+      - ${MONGODB_ROOT_PASSWORD}
+      - --authenticationDatabase
+      - admin
+      - /docker-entrypoint-initdb.d/01-init-replica-set.js
+    volumes:
+      - ./infrastructure/db-init/mongodb:/docker-entrypoint-initdb.d:ro
     networks:
       - backend
 
@@ -74,7 +114,7 @@ services:
       mysql:
         condition: service_started
       mongodb:
-        condition: service_started
+        condition: service_healthy
     networks:
       - backend
 
@@ -122,7 +162,7 @@ services:
   # CDC (DEBEZIUM)
   # ============================================================================
   connect:
-    image: quay.io/debezium/connect:2.7
+    image: quay.io/debezium/connect:3.0
     container_name: debezium-connect
     restart: unless-stopped
     ports:
@@ -170,8 +210,15 @@ services:
       - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD}
       - SPRING_DATA_REDIS_PORT=${REDIS_PORT}
       - SPRING_ELASTICSEARCH_URIS=http://${ELASTICSEARCH_HOST}:${ELASTICSEARCH_PORT}
-      - PROFILE_SERVICE_URL=${PROFILE_SERVICE_URL}/profiles
+      - PROFILE_SERVICE_URL=http://profile:8081/profiles
       - JWT_SIGNER_KEY=${JWT_SIGNER_KEY}
+      - VALID_DURATION=${VALID_DURATION}
+      - REFRESHABLE_DURATION=${REFRESHABLE_DURATION}
+      - CLIENT_ID=${CLIENT_ID}
+      - CLIENT_SECRET=${CLIENT_SECRET}
+      - REDIRECT_URI=${REDIRECT_URI}
+      - GRANT_TYPE=${GRANT_TYPE}
+      - DEBEZIUM_CONNECT_URL=http://connect:8083
       - TZ=${TZ}
     depends_on:
       mysql:
@@ -203,6 +250,10 @@ services:
       - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD}
       - SPRING_DATA_REDIS_PORT=${REDIS_PORT}
       - SPRING_ELASTICSEARCH_URIS=http://${ELASTICSEARCH_HOST}:${ELASTICSEARCH_PORT}
+      - ELASTICSEARCH_USERNAME=${ELASTICSEARCH_USERNAME}
+      - ELASTICSEARCH_PASSWORD=${ELASTICSEARCH_PASSWORD}
+      - COMMENT_SERVICE_URL=http://comment:8089
+      - FILE_SERVICE_URL=http://file:8084
       - JWT_SIGNER_KEY=${JWT_SIGNER_KEY}
       - TZ=${TZ}
     depends_on:
@@ -233,11 +284,15 @@ services:
       - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD}
       - SPRING_DATA_REDIS_PORT=${REDIS_PORT}
       - SPRING_ELASTICSEARCH_URIS=http://${ELASTICSEARCH_HOST}:${ELASTICSEARCH_PORT}
+      - FILE_SERVICE_URL=http://file:8084
+      - POST_SERVICE_URL=http://post:8083
+      - FRIEND_SERVICE_URL=http://friend:8087
+      - NOTIFICATION_SERVICE_URL=http://notification:8082
       - JWT_SIGNER_KEY=${JWT_SIGNER_KEY}
       - TZ=${TZ}
     depends_on:
       mongodb:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_started
       redis:
@@ -262,12 +317,16 @@ services:
       - SPRING_DATA_REDIS_HOST=${REDIS_HOST}
       - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD}
       - SPRING_DATA_REDIS_PORT=${REDIS_PORT}
-      - PROFILE_SERVICE_URL=${PROFILE_SERVICE_URL}/profiles
+      - PROFILE_SERVICE_URL=http://profile:8081/profiles
+      - BREVO_URL=${BREVO_URL}
+      - BREVO_API_KEY=${BREVO_API_KEY}
+      - EMAIL_SENDER_NAME=${EMAIL_SENDER_NAME}
+      - EMAIL_SENDER_EMAIL=${EMAIL_SENDER_EMAIL}
       - JWT_SIGNER_KEY=${JWT_SIGNER_KEY}
       - TZ=${TZ}
     depends_on:
       mongodb:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_started
       redis:
@@ -291,12 +350,13 @@ services:
       - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD}
       - SPRING_DATA_REDIS_PORT=${REDIS_PORT}
       - SPRING_ELASTICSEARCH_URIS=http://${ELASTICSEARCH_HOST}:${ELASTICSEARCH_PORT}
-      - PROFILE_SERVICE_URL=${PROFILE_SERVICE_URL}/profiles
+      - PROFILE_SERVICE_URL=http://profile:8081/profiles
+      - FILE_SERVICE_URL=http://file:8084
       - JWT_SIGNER_KEY=${JWT_SIGNER_KEY}
       - TZ=${TZ}
     depends_on:
       mongodb:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_started
       redis:
@@ -321,12 +381,14 @@ services:
       - SPRING_DATA_REDIS_HOST=${REDIS_HOST}
       - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD}
       - SPRING_DATA_REDIS_PORT=${REDIS_PORT}
-      - IDENTITY_SERVICE_URL=${IDENTITY_SERVICE_URL}
+      - IDENTITY_SERVICE_URL=http://identity:8080
+      - CHAT_SERVICE_URL=http://chat:8086
+      - PROFILE_SERVICE_URL=http://profile:8081
       - JWT_SIGNER_KEY=${JWT_SIGNER_KEY}
       - TZ=${TZ}
     depends_on:
       mongodb:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_started
       redis:
@@ -353,13 +415,14 @@ services:
       - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD}
       - SPRING_DATA_REDIS_PORT=${REDIS_PORT}
       - SPRING_ELASTICSEARCH_URIS=http://${ELASTICSEARCH_HOST}:${ELASTICSEARCH_PORT}
+      - PROFILE_SERVICE_URL=http://profile:8081
       - JWT_SIGNER_KEY=${JWT_SIGNER_KEY}
       - TZ=${TZ}
     depends_on:
       mysql:
         condition: service_started
       mongodb:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_started
       redis:
@@ -380,11 +443,23 @@ services:
       - .env
     environment:
       - SPRING_DATA_MONGODB_URI=mongodb://${MONGODB_ROOT_USERNAME}:${MONGODB_ROOT_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/file-service?authSource=admin
+      - B2_KEY_ID=${B2_KEY_ID}
+      - B2_APPLICATION_KEY=${B2_APPLICATION_KEY}
+      - B2_BUCKET_NAME=${B2_BUCKET_NAME}
+      - B2_ENDPOINT=${B2_ENDPOINT}
+      - B2_REGION=${B2_REGION}
+      - B2_BUCKET_PUBLIC=${B2_BUCKET_PUBLIC}
+      - B2_PRESIGNED_URL_TTL=${B2_PRESIGNED_URL_TTL}
+      - MAX_FILE_SIZE=${MAX_FILE_SIZE}
+      - MAX_REQUEST_SIZE=${MAX_REQUEST_SIZE}
+      - MAX_IMAGE_SIZE=${MAX_IMAGE_SIZE}
+      - MAX_VIDEO_SIZE=${MAX_VIDEO_SIZE}
+      - MAX_RAW_SIZE=${MAX_RAW_SIZE}
       - JWT_SIGNER_KEY=${JWT_SIGNER_KEY}
       - TZ=${TZ}
     depends_on:
       mongodb:
-        condition: service_started
+        condition: service_healthy
     networks:
       - backend
 
@@ -406,12 +481,12 @@ services:
       - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD}
       - SPRING_DATA_REDIS_PORT=${REDIS_PORT}
       - SPRING_ELASTICSEARCH_URIS=http://${ELASTICSEARCH_HOST}:${ELASTICSEARCH_PORT}
-      - PROFILES_SERVICE_URL=${PROFILE_SERVICE_URL}
+      - PROFILES_SERVICE_URL=http://profile:8081
       - JWT_SIGNER_KEY=${JWT_SIGNER_KEY}
       - TZ=${TZ}
     depends_on:
       mongodb:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_started
       redis:
@@ -436,11 +511,41 @@ services:
       - SPRING_DATA_REDIS_HOST=${REDIS_HOST}
       - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD}
       - SPRING_DATA_REDIS_PORT=${REDIS_PORT}
+      - PROFILE_SERVICE_URL=http://profile:8081
       - JWT_SIGNER_KEY=${JWT_SIGNER_KEY}
       - TZ=${TZ}
     depends_on:
       mongodb:
+        condition: service_healthy
+      kafka:
         condition: service_started
+      redis:
+        condition: service_started
+    networks:
+      - backend
+
+  room:
+    build:
+      context: .
+      dockerfile: room-service/Dockerfile
+    container_name: room-service
+    ports:
+      - '8091:8091'
+    env_file:
+      - .env
+    environment:
+      - SPRING_DATA_MONGODB_URI=mongodb://${MONGODB_ROOT_USERNAME}:${MONGODB_ROOT_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/room-service?authSource=admin
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS}
+      - SPRING_DATA_REDIS_HOST=${REDIS_HOST}
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD}
+      - SPRING_DATA_REDIS_PORT=${REDIS_PORT}
+      - PROFILE_SERVICE_URL=http://profile:8081
+      - FILM_SERVICE_URL=http://film:8090
+      - JWT_SIGNER_KEY=${JWT_SIGNER_KEY}
+      - TZ=${TZ}
+    depends_on:
+      mongodb:
+        condition: service_healthy
       kafka:
         condition: service_started
       redis:
@@ -478,16 +583,19 @@ services:
     env_file:
       - .env
     environment:
-      - IDENTITY_SERVICE_URL=${IDENTITY_SERVICE_URL}
-      - PROFILE_SERVICE_URL=${PROFILE_SERVICE_URL}
-      - NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL}
-      - CHAT_SERVICE_URL=${CHAT_SERVICE_URL}
-      - SOCKET_SERVICE_URL=${SOCKET_SERVICE_URL}
+      # Khi chạy trong docker, phải dùng tên service nội bộ (không phải localhost)
+      - IDENTITY_SERVICE_URL=http://identity:8080
+      - PROFILE_SERVICE_URL=http://profile:8081
+      - NOTIFICATION_SERVICE_URL=http://notification:8082
+      - CHAT_SERVICE_URL=http://chat:8086
+      - SOCKET_SERVICE_URL=http://socket:8088
       - SOCKET_SERVICE_WS_URL=ws://socket:8088
-      - POST_SERVICE_URL=${POST_SERVICE_URL}
-      - FILE_SERVICE_URL=${FILE_SERVICE_URL}
-      - FRIEND_SERVICE_URL=${FRIEND_SERVICE_URL}
-      - COMMENT_SERVICE_URL=${COMMENT_SERVICE_URL}
+      - POST_SERVICE_URL=http://post:8083
+      - FILE_SERVICE_URL=http://file:8084
+      - FRIEND_SERVICE_URL=http://friend:8087
+      - COMMENT_SERVICE_URL=http://comment:8089
+      - FILM_SERVICE_URL=http://film:8090
+      - ROOM_SERVICE_URL=http://room:8091
       - SPRING_DATA_REDIS_HOST=redis
       - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD}
       - SPRING_DATA_REDIS_PORT=${REDIS_PORT}

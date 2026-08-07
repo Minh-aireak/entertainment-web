@@ -1,2 +1,3 @@
 com\MyProject\debezium_manager\service\DebeziumConnectorService.class
 com\MyProject\debezium_manager\DebeziumManagerApplication.class
+com\MyProject\debezium_manager\service\DebeziumStartupListener.class

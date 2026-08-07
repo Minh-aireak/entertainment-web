@@ -5,9 +5,9 @@ spring:
   application:
     name: debezium-manager
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
 
 app:
   services:
     debezium:
-      connect-url: ${DEBEZIUM_CONNECT_URL:http://localhost:8100}
+      connect-url: ${DEBEZIUM_CONNECT_URL}

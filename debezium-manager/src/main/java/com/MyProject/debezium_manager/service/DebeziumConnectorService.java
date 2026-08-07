@@ -4,8 +4,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -28,12 +26,6 @@ public class DebeziumConnectorService {
 
     @Value("${spring.kafka.bootstrap-servers:kafka:9092}")
     String kafkaBootstrapServers;
-
-    @EventListener(ApplicationReadyEvent.class)
-    public void onApplicationReady() {
-        log.info("Application is ready. Checking Kafka Connect health...");
-        registerAllConnectorsWithRetry();
-    }
 
     @Retryable(
             retryFor = {ResourceAccessException.class, Exception.class},
@@ -80,6 +72,12 @@ public class DebeziumConnectorService {
 
         // 7. MongoDB Connector (Socket Service)
         registerMongoConnector("socket-service-connector", "socket-service", "outbox");
+
+        // 8. MongoDB Connector (Comment Service)
+        registerMongoConnector("comment-service-connector", "comment-service", "outbox");
+
+        // 9. MongoDB Connector (Room Service)
+        registerMongoConnector("room-service-connector", "room-service", "outbox");
     }
 
     private void registerMySQLConnector(String topicPrefix, String dbName, String tableName, String serverId) {
