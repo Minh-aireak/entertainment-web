@@ -1,7 +1,10 @@
 package com.MyProject.file.file_service.controller;
 
 import com.MyProject.common.dto.response.ApiResponse;
+import com.MyProject.file.file_service.dto.request.CompletePresignedUploadRequest;
+import com.MyProject.file.file_service.dto.request.InitPresignedUploadRequest;
 import com.MyProject.file.file_service.dto.response.FileResponse;
+import com.MyProject.file.file_service.dto.response.InitPresignedUploadResponse;
 import com.MyProject.file.file_service.service.FileService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -28,44 +31,34 @@ public class FileController {
     }
 
     @PostMapping("/media/upload/init")
-    ApiResponse<String> initChunkedUpload() {
-        return ApiResponse.<String>builder()
-                .result(fileService.initChunkedUpload())
-                .build();
-    }
-
-    @PostMapping("/media/upload/chunk")
-    ApiResponse<Void> uploadChunk(
-            @RequestParam("uploadId") String uploadId,
-            @RequestParam("chunkIndex") Integer chunkIndex,
-            @RequestParam("file") MultipartFile file) {
-        fileService.uploadChunk(uploadId, chunkIndex, file);
-        return ApiResponse.<Void>builder()
-                .message("Chunk " + chunkIndex + " uploaded")
+    ApiResponse<InitPresignedUploadResponse> initPresignedUpload(@RequestBody InitPresignedUploadRequest request) {
+        return ApiResponse.<InitPresignedUploadResponse>builder()
+                .result(fileService.initPresignedUpload(request))
                 .build();
     }
 
     @PostMapping("/media/upload/complete")
-    ApiResponse<FileResponse> completeChunkedUpload(
-            @RequestParam("uploadId") String uploadId,
-            @RequestParam("fileName") String fileName,
-            @RequestParam("contentType") String contentType) {
+    ApiResponse<FileResponse> completePresignedUpload(@RequestBody CompletePresignedUploadRequest request) {
         return ApiResponse.<FileResponse>builder()
-                .result(fileService.completeChunkedUpload(uploadId, fileName, contentType))
+                .result(fileService.completePresignedUpload(request))
                 .message("Upload complete!")
                 .build();
     }
 
-    @GetMapping("/media/info/{fileId}")
+    // {*fileId} (không phải {fileId}) vì id ở đây chính là object key trên B2 (xem FileMgmt.id), luôn
+    // chứa "/" (vd "movie-platform/uuid.mp4") - {fileId} thường chỉ khớp đúng 1 path segment nên sẽ
+    // không tìm thấy handler cho id có "/", request rơi xuống .anyRequest().authenticated() và trả về
+    // 401 thay vì chạy tới logic getFileInfo. {*fileId} khớp phần path còn lại (kèm "/" ở đầu, cần bỏ).
+    @GetMapping("/media/info/{*fileId}")
     ApiResponse<FileResponse> getFileInfo(@PathVariable String fileId) {
         return ApiResponse.<FileResponse>builder()
-                .result(fileService.getFileInfo(fileId))
+                .result(fileService.getFileInfo(stripLeadingSlash(fileId)))
                 .build();
     }
 
-    @GetMapping("/media/download/{fileName}")
+    @GetMapping("/media/download/{*fileName}")
     ResponseEntity<Resource> downloadMedia(@PathVariable String fileName) throws IOException {
-        var fileDownload = fileService.downloadFile(fileName);
+        var fileDownload = fileService.downloadFile(stripLeadingSlash(fileName));
         ContentDisposition contentDisposition = ContentDisposition.builder("attachment")
                 .filename(fileDownload.resource().getFilename())
                 .build();
@@ -77,5 +70,9 @@ public class FileController {
         return ResponseEntity.ok()
                 .headers(headers)
                 .body(fileDownload.resource());
+    }
+
+    private static String stripLeadingSlash(String path) {
+        return path.startsWith("/") ? path.substring(1) : path;
     }
 }

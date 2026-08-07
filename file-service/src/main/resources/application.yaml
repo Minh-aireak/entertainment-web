@@ -8,41 +8,47 @@ spring:
     name: file-service
   data:
     mongodb:
-      uri: mongodb://${MONGODB_ROOT_USERNAME:root}:${MONGODB_ROOT_PASSWORD:REDACTED_LEGACY_CREDENTIAL}@${MONGODB_HOST:localhost}:${MONGODB_PORT:27017}/file-service?authSource=admin
+      uri: mongodb://${MONGODB_ROOT_USERNAME}:${MONGODB_ROOT_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/file-service?authSource=admin
   servlet:
     multipart:
-      max-file-size: ${MAX_FILE_SIZE:2GB}
-      max-request-size: ${MAX_REQUEST_SIZE:2100MB}
+      max-file-size: ${MAX_FILE_SIZE}
+      max-request-size: ${MAX_REQUEST_SIZE}
       file-size-threshold: 2KB # Chuyển sang disk nếu > 2KB
 
 jwt:
-  signerKey: ${JWT_SIGNER_KEY:uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0}
+  signerKey: ${JWT_SIGNER_KEY}
 
 # Backblaze B2 - S3-compatible API
 # Không đặt giá trị thật của key-id / application-key ở đây, luôn truyền qua biến môi trường.
 b2:
-  key-id: ${B2_KEY_ID:}
-  application-key: ${B2_APPLICATION_KEY:}
-  bucket-name: ${B2_BUCKET_NAME:}
-  endpoint: ${B2_ENDPOINT:} # vd: s3.us-west-004.backblazeb2.com (KHÔNG kèm "https://")
-  region: ${B2_REGION:} # để trống để tự suy ra từ endpoint (vd: us-west-004)
-  public: ${B2_BUCKET_PUBLIC:false} # true nếu bucket ở chế độ Public, false nếu Private (sẽ trả presigned URL)
-  presigned-url-ttl: ${B2_PRESIGNED_URL_TTL:PT1H} # dùng khi bucket Private
+  key-id: ${B2_KEY_ID}
+  application-key: ${B2_APPLICATION_KEY}
+  bucket-name: ${B2_BUCKET_NAME}
+  endpoint: ${B2_ENDPOINT} # vd: s3.us-west-004.backblazeb2.com (KHÔNG kèm "https://")
+  region: ${B2_REGION} # để trống để tự suy ra từ endpoint (vd: us-west-004)
+  public: ${B2_BUCKET_PUBLIC} # true nếu bucket ở chế độ Public, false nếu Private (sẽ trả presigned URL)
+  presigned-url-ttl: ${B2_PRESIGNED_URL_TTL} # dùng khi bucket Private
+  http:
+    max-connections: ${B2_HTTP_MAX_CONNECTIONS:100} # kích thước connection pool của S3Client (xem B2Config)
+  multipart:
+    concurrency: ${B2_MULTIPART_CONCURRENCY:6} # số part upload song song mỗi file (xem FileService)
 
 file:
-  max-image-size: ${MAX_IMAGE_SIZE:25MB}
-  max-video-size: ${MAX_VIDEO_SIZE:5GB}
-  max-raw-size: ${MAX_RAW_SIZE:100MB}
+  max-image-size: ${MAX_IMAGE_SIZE}
+  max-video-size: ${MAX_VIDEO_SIZE}
+  max-raw-size: ${MAX_RAW_SIZE}
 
 resilience4j:
   circuitbreaker:
     instances:
       b2:
         register-health-indicator: true
-        sliding-window-size: 10
-        permitted-number-of-calls-in-half-open-state: 3
+        # Cửa sổ 10 call là quá nhỏ khi upload song song part (xem uploadInSelfDrivenMultipart):
+        # vài part fail cùng lúc trong 1 burst đã đủ làm sập cả breaker cho toàn bộ service.
+        sliding-window-size: 20
+        permitted-number-of-calls-in-half-open-state: 5
         sliding-window-type: COUNT_BASED
-        minimum-number-of-calls: 5
+        minimum-number-of-calls: 10
         wait-duration-in-open-state: 5s
         failure-rate-threshold: 50
         event-consumer-buffer-size: 10
@@ -51,9 +57,12 @@ resilience4j:
   ratelimiter:
     instances:
       b2:
-        limit-for-period: 50
+        # Nâng limit vì upload song song (mặc định 6 luồng/upload) + nhiều user cùng lúc dễ vượt 50 rps
+        # dù B2 vẫn xử lý tốt. timeout-duration > 0 cho phép call xếp hàng chờ permit ngắn thay vì
+        # ném RequestNotPermittedException ngay lập tức khi có burst từ upload song song.
+        limit-for-period: 100
         limit-refresh-period: 1s
-        timeout-duration: 0s
+        timeout-duration: 2s
       file-api:
         limit-for-period: 100
         limit-refresh-period: 1s

@@ -70,6 +70,13 @@
 			<groupId>software.amazon.awssdk</groupId>
 			<artifactId>s3</artifactId>
 		</dependency>
+        <!-- apache-client vốn chỉ là dependency "runtime" của module s3 (không có sẵn ở compile
+             classpath). Khai báo tường minh để B2Config có thể gọi ApacheHttpClient.builder()
+             và tinh chỉnh connection pool/timeout thay vì dùng toàn bộ giá trị mặc định của SDK. -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>apache-client</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.project</groupId>
             <artifactId>common-security</artifactId>

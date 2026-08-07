@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
@@ -14,6 +15,7 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.time.Duration;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -25,6 +27,14 @@ public class B2Config {
     private static final Pattern ENDPOINT_REGION_PATTERN =
             Pattern.compile("^s3\\.([a-zA-Z0-9-]+)\\.backblazeb2\\.com$");
     private static final String FALLBACK_REGION = "us-west-004";
+
+    // SDK mặc định chỉ có 50 connection dùng chung cho MỌI request S3Client (putObject, uploadPart,
+    // headObject, copyObject...). Khi upload nhiều part song song (xem FileService.uploadInSelfDrivenMultipart)
+    // cộng với nhiều user upload đồng thời, pool 50 connection rất dễ bị cạn — request mới phải xếp hàng
+    // chờ connectionAcquisitionTimeout (mặc định 10s) trước khi request thật sự bắt đầu chạy, cộng dồn
+    // với thời gian upload rất dễ vượt timeout phía client (vd. axios 15s).
+    @Value("${b2.http.max-connections:100}")
+    private int maxConnections;
 
     @Value("${b2.key-id}")
     private String keyId;
@@ -62,6 +72,15 @@ public class B2Config {
                 .endpointOverride(endpointUri())
                 .region(resolveRegion())
                 .credentialsProvider(credentialsProvider())
+                .httpClientBuilder(ApacheHttpClient.builder()
+                        .maxConnections(maxConnections)
+                        // Thời gian thiết lập TCP connection tới B2, không phải thời gian upload.
+                        .connectionTimeout(Duration.ofSeconds(5))
+                        // Thời gian tối đa 1 request chờ để lấy được connection rảnh từ pool khi pool đầy.
+                        .connectionAcquisitionTimeout(Duration.ofSeconds(10))
+                        // Đủ lớn cho part upload lớn (vài chục-trăm MB) qua kết nối chậm; không giới hạn
+                        // ở mức mặc định của SDK vốn nhắm tới các API call nhỏ, nhanh.
+                        .socketTimeout(Duration.ofMinutes(2)))
                 .serviceConfiguration(S3Configuration.builder()
                         .pathStyleAccessEnabled(true)
                         .build())
