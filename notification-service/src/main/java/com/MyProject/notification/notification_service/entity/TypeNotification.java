@@ -63,7 +63,7 @@ public enum TypeNotification {
 
     NEW_EPISODE(
             "New Episode",
-            "The film {film} has released a new episode!"
+            "The film \"{film}\" has a new episode"
     );
 
     private final String title;

@@ -8,17 +8,17 @@ spring:
     name: notification-service
   data:
     mongodb:
-      uri: mongodb://${MONGODB_ROOT_USERNAME:root}:${MONGODB_ROOT_PASSWORD:REDACTED_LEGACY_CREDENTIAL}@${MONGODB_HOST:localhost}:${MONGODB_PORT:27017}/notification-service?authSource=admin
+      uri: mongodb://${MONGODB_ROOT_USERNAME}:${MONGODB_ROOT_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/notification-service?authSource=admin
     redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
       connect-timeout: 5000
       timeout: 5000
-      password: ${REDIS_PASSWORD:REDACTED_LEGACY_CREDENTIAL}
+      password: ${REDIS_PASSWORD}
       repositories:
         enabled: false
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -49,7 +49,7 @@ spring:
 app:
   services:
     profile:
-      url: ${PROFILE_SERVICE_URL:http://localhost:8081}
+      url: ${PROFILE_SERVICE_URL}
   rate-limit:
     get-my-notifications:
       limit-for-period: 50
@@ -63,10 +63,10 @@ app:
 
 notification:
   email:
-    brevo-url: ${BREVO_URL:https://api.brevo.com}
-    brevo-apikey: ${BREVO_API_KEY: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}
-    sender-name: "aireak.com"
-    sender-email: "tuanminh18122005@gmail.com"
+    brevo-url: ${BREVO_URL}
+    brevo-apikey: ${BREVO_API_KEY}
+    sender-name: ${EMAIL_SENDER_NAME}
+    sender-email: ${EMAIL_SENDER_EMAIL}
 
 resilience4j:
   circuitbreaker:
@@ -107,4 +107,4 @@ resilience4j:
         exponential-backoff-multiplier: 2
 
 jwt:
-  signerKey: ${JWT_SIGNER_KEY:uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0}
+  signerKey: ${JWT_SIGNER_KEY}

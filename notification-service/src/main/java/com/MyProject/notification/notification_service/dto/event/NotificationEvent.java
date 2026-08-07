@@ -16,4 +16,5 @@ public class NotificationEvent {
     String userIdSender;
     List<String> toUserIds;
     String conversationId;
+    String filmTitle;
 }

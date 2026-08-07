@@ -35,6 +35,8 @@ public class Notification {
 
     String conversationId;
 
+    String filmTitle;
+
     @Builder.Default
     Integer count = 1;
 

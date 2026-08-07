@@ -68,7 +68,7 @@ public class NotificationService {
             
             Boolean isRead = noti.getRecipientReadMap().getOrDefault(currentUserId, null) != null;
             response.setRead(isRead);
-            response.setMessage(buildContent(noti.getType(), response.getDisplayNameSender(), noti.getCount()));
+            response.setMessage(buildContent(noti.getType(), response.getDisplayNameSender(), noti.getCount(), noti.getFilmTitle()));
             response.setCreatedAt(noti.getCreatedAt() != null ? noti.getCreatedAt().toString() : "");
             return response;
         }).toList();
@@ -152,6 +152,7 @@ public class NotificationService {
                 .userIdSender(event.getUserIdSender())
                 .toUserIds(event.getToUserIds())
                 .recipientReadMap(recipientReadMap)
+                .filmTitle(event.getFilmTitle())
                 .build();
 
         // Save notification first (in transaction)
@@ -175,7 +176,7 @@ public class NotificationService {
                         avatarSender,
                         typeNotification.name(),
                         typeNotification.getTitle(),
-                        typeNotification.getContent().replace("{sender}", displayNameSender),
+                        buildContent(typeNotification, displayNameSender, notificationSaved.getCount(), event.getFilmTitle()),
                         event.getToUserIds());
 
         // Publish to outbox (in same transaction)
@@ -221,7 +222,7 @@ public class NotificationService {
                     avatarSender,
                     typeNotification.name(),
                     typeNotification.getTitle(),
-                    buildContent(typeNotification, displayNameSender, notification.getCount()),
+                    buildContent(typeNotification, displayNameSender, notification.getCount(), null),
                     List.of(recipientId));
 
             outboxEventPublisher.publish(notification.getId(), "notification", notificationSocket);
@@ -310,10 +311,20 @@ public class NotificationService {
         return CHAT_NOTIF_OPEN_KEY_PREFIX + recipientId + ":" + conversationId;
     }
 
-    private String buildContent(TypeNotification type, String displayNameSender, Integer count) {
+    private static final String DEFAULT_FILM_TITLE = "this film";
+
+    private String buildContent(TypeNotification type, String displayNameSender, Integer count, String filmTitle) {
         if (type == TypeNotification.NEW_CHAT && count != null && count > 1) {
             return displayNameSender + " đã gửi " + count + " tin nhắn mới";
         }
-        return type.getContent().replace("{sender}", displayNameSender);
+
+        String content = type.getContent().replace("{sender}", displayNameSender);
+
+        if (content.contains("{film}")) {
+            String resolvedFilmTitle = (filmTitle == null || filmTitle.isBlank()) ? DEFAULT_FILM_TITLE : filmTitle;
+            content = content.replace("{film}", resolvedFilmTitle);
+        }
+
+        return content;
     }
 }
