@@ -94,7 +94,7 @@ public class ChatMessageKafkaService {
                 .content(response.getContent())
                 .messageType(response.getMessageType() != null ? response.getMessageType().name() : null)
                 .messageStatus(response.getMessageStatus() != null ? response.getMessageStatus().name() : null)
-                .attachmentFileUrl(response.getAttachmentFileUrl())
+                .attachmentFileId(response.getAttachmentFileId())
                 .replyToMessageId(response.getReplyToMessageId())
                 .createdAt(response.getCreatedDate())
                 .modifiedAt(response.getModifiedDate())

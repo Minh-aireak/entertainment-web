@@ -18,7 +18,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 public class ConversationGroup extends Conversation{
     String groupName;
     String groupOwner;
-    String groupAvatar;
+    String groupAvatarFileId;
 
     public static ConversationGroup.ConversationGroupBuilder<?, ?> fromConversation(Conversation c) {
         return ConversationGroup.builder()

@@ -35,7 +35,7 @@ public class ChatMessageDoc {
     String messageStatus;
 
     @Field(type = FieldType.Keyword)
-    String attachmentFileUrl;
+    String attachmentFileId;
 
     @Field(type = FieldType.Keyword)
     String replyToMessageId;

@@ -19,7 +19,7 @@ public class ChatMessageCreateRequest {
 
    String content;
 
-   String attachmentFileUrl;
+   String attachmentFileId;
 
    String replyToMessageId;
 

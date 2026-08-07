@@ -63,6 +63,13 @@ public class ChatMessageService {
     RedisService redisService;
     OutboxRepository outboxRepository;
     ObjectMapper objectMapper;
+    ChatFileUrlResolver chatFileUrlResolver;
+
+    private ChatMessageResponse buildMessageResponse(ChatMessage message) {
+        ChatMessageResponse response = chatMessageMapper.toChatMessageResponse(message);
+        response.setAttachmentFileUrl(chatFileUrlResolver.resolve(message.getAttachmentFileId()));
+        return response;
+    }
 
     private String getLastMessageCacheKey(String conversationId) {
         return "chat:last-message:" + conversationId;
@@ -102,8 +109,8 @@ public class ChatMessageService {
 
         } else {
 
-            if(request.getAttachmentFileUrl() == null
-                    || request.getAttachmentFileUrl().isBlank()){
+            if(request.getAttachmentFileId() == null
+                    || request.getAttachmentFileId().isBlank()){
 
                 throw new AppException(
                         ErrorCode.FILE_REQUIRED);
@@ -191,7 +198,7 @@ public class ChatMessageService {
             );
             if (existing.isPresent()) {
                 log.info("Duplicate message detected with clientMessageId: {}", request.getClientMessageId());
-                ChatMessageResponse duplicateResponse = chatMessageMapper.toChatMessageResponse(existing.get());
+                ChatMessageResponse duplicateResponse = buildMessageResponse(existing.get());
                 duplicateResponse.setMe(true);
                 return duplicateResponse;
             }
@@ -232,7 +239,7 @@ public class ChatMessageService {
                                 request.getConversationId()
                         )
                         .map(existing -> {
-                            ChatMessageResponse duplicateResponse = chatMessageMapper.toChatMessageResponse(existing);
+                            ChatMessageResponse duplicateResponse = buildMessageResponse(existing);
                             duplicateResponse.setMe(true);
                             return duplicateResponse;
                         })
@@ -240,7 +247,7 @@ public class ChatMessageService {
             }
             throw duplicateKeyException;
         }
-        var response = chatMessageMapper.toChatMessageResponse(savedMessage);
+        var response = buildMessageResponse(savedMessage);
         if (replyTarget != null) {
             applyReplyPreview(response, replyTarget, enrichProfiles(Set.of(replyTarget.getSenderId())));
         }
@@ -300,6 +307,10 @@ public class ChatMessageService {
         // 3. Enrich profiles (Bulk)
         Map<String, UserProfileResponse> profileMap = enrichProfiles(senderIds);
 
+        // 3b. Resolve attachment URLs for the whole page in parallel (tránh N request tuần tự)
+        Map<String, String> attachmentUrls = chatFileUrlResolver.resolveBatch(
+                pageData.getContent().stream().map(ChatMessage::getAttachmentFileId).toList());
+
         // 4. Map to response with profile info
         List<ChatMessageResponse> chatMessageResponseList = pageData.getContent().stream()
                 .map(a -> {
@@ -308,6 +319,9 @@ public class ChatMessageService {
                         response.setContent(MessageType.DELETED_FOR_EVERYONE.getDefaultContent());
 
                     response.setMe(a.getSenderId().equals(userId));
+                    if (a.getAttachmentFileId() != null) {
+                        response.setAttachmentFileUrl(attachmentUrls.get(a.getAttachmentFileId()));
+                    }
 
                     // Fill profile info from map
                     UserProfileResponse profile = profileMap.get(a.getSenderId());
@@ -464,7 +478,7 @@ public class ChatMessageService {
         chatMessageRepository.save(chatMessage);
 
         // 2. Prepare response for event
-        var response = chatMessageMapper.toChatMessageResponse(chatMessage);
+        var response = buildMessageResponse(chatMessage);
         response.setContent(MessageType.DELETED_FOR_EVERYONE.getDefaultContent());
         enrichReplyPreview(response, chatMessage);
 
@@ -512,7 +526,7 @@ public class ChatMessageService {
         // 1. Update content in MongoDB
         chatMessage.setContent(request.getContent());
         var saved = chatMessageRepository.save(chatMessage);
-        var response = chatMessageMapper.toChatMessageResponse(saved);
+        var response = buildMessageResponse(saved);
         enrichReplyPreview(response, saved);
 
         // 2. Save to Outbox for CDC (Sync to ES and notify other users)
@@ -671,6 +685,10 @@ public class ChatMessageService {
         // 3. Enrich profiles (Bulk: Redis check -> Service fallback -> Warm cache)
         Map<String, UserProfileResponse> profileMap = enrichProfiles(senderIds);
 
+        // 3b. Resolve attachment URLs for the whole page in parallel
+        Map<String, String> attachmentUrls = chatFileUrlResolver.resolveBatch(
+                searchResult.getContent().stream().map(ChatMessageDoc::getAttachmentFileId).toList());
+
         // 4. Map to response with profile info
         List<ChatMessageResponse> data = searchResult.getContent().stream()
                 .map(doc -> {
@@ -681,7 +699,7 @@ public class ChatMessageService {
                             .content(doc.getContent())
                             .messageType(doc.getMessageType() != null ? MessageType.valueOf(doc.getMessageType()) : null)
                             .messageStatus(doc.getMessageStatus() != null ? MessageStatus.valueOf(doc.getMessageStatus()) : null)
-                            .attachmentFileUrl(doc.getAttachmentFileUrl())
+                            .attachmentFileUrl(attachmentUrls.get(doc.getAttachmentFileId()))
                             .replyToMessageId(doc.getReplyToMessageId())
                             .createdDate(doc.getCreatedAt())
                             .modifiedDate(doc.getModifiedAt())

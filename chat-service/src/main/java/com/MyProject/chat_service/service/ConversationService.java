@@ -52,6 +52,7 @@ public class ConversationService {
     RedisService redisService;
     OutboxRepository outboxRepository;
     ObjectMapper objectMapper;
+    ChatFileUrlResolver chatFileUrlResolver;
 
     private void saveToOutbox(String aggregateId, String topic, Object payload) {
         try {
@@ -212,9 +213,12 @@ public class ConversationService {
         return String.join(", ", names);
     }
 
+    // Trả về cho ConversationDoc (Elasticsearch): group trả fileId thô (resolve URL lúc đọc, xem
+    // toSearchConversationResponse), direct trả avatar đã resolve sẵn của profile-service nhưng giá
+    // trị này không thực sự được dùng khi đọc lại (luôn bị override live, xem ghi chú ở ConversationDoc).
     private String buildConversationAvatarForDocument(Conversation conversation, Map<String, UserProfileResponse> profileMap) {
         if (conversation instanceof ConversationGroup group) {
-            return group.getGroupAvatar();
+            return group.getGroupAvatarFileId();
         }
 
         return conversation.getUserIds().stream()
@@ -252,7 +256,7 @@ public class ConversationService {
             Map<String, UserProfileResponse> profileMap
     ) {
         if (conversation instanceof ConversationGroup group) {
-            return group.getGroupAvatar();
+            return chatFileUrlResolver.resolve(group.getGroupAvatarFileId());
         }
 
         return conversation.getUserIds().stream()
@@ -271,7 +275,7 @@ public class ConversationService {
                 .lastMessage(conversation.getLastMessage())
                 .deleted(conversation.isDeleted())
                 .conversationName(buildConversationNameForDocument(conversation, profileMap))
-                .conversationAvatar(buildConversationAvatarForDocument(conversation, profileMap));
+                .conversationAvatarFileId(buildConversationAvatarForDocument(conversation, profileMap));
 
         return builder.build();
     }
@@ -312,7 +316,7 @@ public class ConversationService {
                 .type(doc.getType())
                 .userIds(doc.getUserIds())
                 .conversationName(doc.getConversationName())
-                .conversationAvatar(doc.getConversationAvatar())
+                .conversationAvatar(chatFileUrlResolver.resolve(doc.getConversationAvatarFileId()))
                 .lastMessage(doc.getLastMessage())
                 .deleted(doc.isDeleted());
 
@@ -465,7 +469,7 @@ public class ConversationService {
                     .fromConversation(baseConversation("GROUP", sortedIds))
                     .groupName(createGroupName(profileMap.values()))
                     .groupOwner(currentId != null ? currentId : sortedIds.get(0))
-                    .groupAvatar("") // Can be updated later or set default
+                    .groupAvatarFileId(null) // Can be updated later or set default
                     .build();
 
             conversation = conversationGroupRepository.save((ConversationGroup) conversation);
@@ -501,7 +505,7 @@ public class ConversationService {
         } else {
             ConversationGroup group = (ConversationGroup) conversation;
             response.setConversationName(group.getGroupName());
-            response.setConversationAvatar(group.getGroupAvatar());
+            response.setConversationAvatar(chatFileUrlResolver.resolve(group.getGroupAvatarFileId()));
             response.setGroupOwner(group.getGroupOwner());
         }
 
@@ -607,7 +611,7 @@ public class ConversationService {
                     } else if (a instanceof ConversationGroup group) {
                         // Logic cho GROUP: Lấy thông tin hard-coded trong Entity
                         response.setConversationName(group.getGroupName());
-                        response.setConversationAvatar(group.getGroupAvatar());
+                        response.setConversationAvatar(chatFileUrlResolver.resolve(group.getGroupAvatarFileId()));
                         response.setGroupOwner(group.getGroupOwner());
                     }
 
@@ -642,8 +646,8 @@ public class ConversationService {
         if (request.getConversationName() != null && !request.getConversationName().isBlank()) {
             group.setGroupName(request.getConversationName().trim());
         }
-        if (request.getConversationAvatar() != null && !request.getConversationAvatar().isBlank()) {
-            group.setGroupAvatar(request.getConversationAvatar().trim());
+        if (request.getGroupAvatarFileId() != null && !request.getGroupAvatarFileId().isBlank()) {
+            group.setGroupAvatarFileId(request.getGroupAvatarFileId().trim());
         }
 
         ConversationGroup saved = conversationGroupRepository.save(group);
@@ -654,7 +658,7 @@ public class ConversationService {
         ConversationResponse response = toConversationResponse(saved);
         enrichParticipants(response, saved.getUserIds(), profileMap);
         response.setConversationName(saved.getGroupName());
-        response.setConversationAvatar(saved.getGroupAvatar());
+        response.setConversationAvatar(chatFileUrlResolver.resolve(saved.getGroupAvatarFileId()));
         response.setGroupOwner(saved.getGroupOwner());
         return response;
     }

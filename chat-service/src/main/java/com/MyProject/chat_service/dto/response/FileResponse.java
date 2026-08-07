@@ -1,4 +1,4 @@
-package com.MyProject.chat_service.dto.request;
+package com.MyProject.chat_service.dto.response;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -8,7 +8,6 @@ import lombok.experimental.FieldDefaults;
 @AllArgsConstructor
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class ConversationUpdateRequest {
-    String conversationName;
-    String groupAvatarFileId;
+public class FileResponse {
+    String url;
 }

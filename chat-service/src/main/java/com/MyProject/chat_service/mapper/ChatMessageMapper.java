@@ -15,5 +15,8 @@ public interface ChatMessageMapper {
     @Mapping(target = "content", source = "content")
     ChatMessage toChatMessage(ChatMessageCreateRequest request);
 
+    // attachmentFileUrl không map tự động từ attachmentFileId - phải resolve presigned URL mới qua
+    // file-service ở tầng service (xem ChatMessageService/ChatFileUrlResolver), không lưu tĩnh.
+    @Mapping(target = "attachmentFileUrl", ignore = true)
     ChatMessageResponse toChatMessageResponse(ChatMessage chatMessage);
 }

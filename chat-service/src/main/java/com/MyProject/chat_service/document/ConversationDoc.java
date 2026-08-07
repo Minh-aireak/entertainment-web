@@ -26,8 +26,11 @@ public class ConversationDoc {
     @Field(type = FieldType.Text, analyzer = "standard")
     String conversationName;
 
+    // Với group: fileId thô (chưa resolve URL). Với direct: luôn bị override bằng avatar live
+    // của "đối phương" khi trả response (xem ConversationService.toSearchConversationResponse),
+    // giá trị lưu ở đây không được dùng trực tiếp.
     @Field(type = FieldType.Keyword)
-    String conversationAvatar;
+    String conversationAvatarFileId;
 
     @Field(type = FieldType.Keyword)
     List<String> userIds;

@@ -22,6 +22,10 @@ public class ChatMessageResponse {
    String content;
    long seq;
    String attachmentFileUrl;
+   // File ID thô (không phải URL) - chỉ dùng nội bộ để MessageCreatedEvent mang theo cho
+   // ChatMessageKafkaService lưu vào ChatMessageDoc (ES); client không cần field này vì
+   // attachmentFileUrl ở trên đã là URL resolve sẵn, luôn còn hiệu lực tại thời điểm response.
+   String attachmentFileId;
    String replyToMessageId;
    String replyToSenderId;
    String replyToSenderName;

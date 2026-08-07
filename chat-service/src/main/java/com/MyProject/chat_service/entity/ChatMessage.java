@@ -43,7 +43,7 @@ public class ChatMessage {
 
     long seq;
 
-    String attachmentFileUrl;
+    String attachmentFileId;
 
     String replyToMessageId;
 
