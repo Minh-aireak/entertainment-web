@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 
 import { postService } from '../../api/postService';
+import { getAvatarGradient } from '../../utils/avatarColor';
 import type { Post } from './types';
 
 const POST_TYPE = 'BUSINESS_SCHEDULE';
@@ -57,10 +58,22 @@ const PostComposer: React.FC<PostComposerProps> = ({ avatar, displayName, onPost
   };
 
   return (
-    <Card elevation={0} sx={{ borderRadius: 3, mb: 2 }}>
+    <Card
+      elevation={0}
+      sx={{
+        borderRadius: 3,
+        mb: 2,
+        transition: 'box-shadow 200ms ease',
+        '&:focus-within': { boxShadow: '0 0 0 2px rgba(0, 168, 78, 0.35)' },
+      }}
+    >
       <CardContent>
         <Box className="flex gap-2" sx={{ alignItems: expanded ? 'flex-start' : 'center' }}>
-          <Avatar src={avatar || undefined} slotProps={{ img: { loading: 'lazy' } }} sx={{ bgcolor: 'primary.main' }}>
+          <Avatar
+            src={avatar || undefined}
+            slotProps={{ img: { loading: 'lazy' } }}
+            sx={{ background: avatar ? undefined : getAvatarGradient(displayName), color: '#fff', fontWeight: 700 }}
+          >
             {displayName?.[0]?.toUpperCase() || '?'}
           </Avatar>
           <Box className="flex flex-1 flex-col gap-2" sx={{ minWidth: 0 }}>

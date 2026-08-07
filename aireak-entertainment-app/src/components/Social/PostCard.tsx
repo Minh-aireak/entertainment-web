@@ -7,7 +7,10 @@ import toast from 'react-hot-toast';
 
 import CommentSection from '../Comment/CommentSection';
 import { formatRelativeTime } from '../../utils/time';
+import { getAvatarGradient } from '../../utils/avatarColor';
 import type { Post } from './types';
+
+const CONTENT_TRUNCATE_LENGTH = 260;
 
 const heartBeat = keyframes`
   0% { transform: scale(1); }
@@ -57,7 +60,14 @@ const PostCard: React.FC<PostCardProps> = React.memo(({ post, liking, onToggleLi
   const { t, i18n } = useTranslation();
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [justLiked, setJustLiked] = useState(false);
+  const [contentExpanded, setContentExpanded] = useState(false);
   const countPulsing = usePulseOnChange(post.likeCount);
+
+  const isLongContent = post.content.length > CONTENT_TRUNCATE_LENGTH;
+  const displayedContent =
+    isLongContent && !contentExpanded
+      ? `${post.content.slice(0, CONTENT_TRUNCATE_LENGTH).trimEnd()}…`
+      : post.content;
 
   const handleLikeClick = () => {
     if (!post.liked) setJustLiked(true);
@@ -75,13 +85,31 @@ const PostCard: React.FC<PostCardProps> = React.memo(({ post, liking, onToggleLi
   };
 
   return (
-    <Card id={`post-${post.id}`} elevation={0} sx={{ borderRadius: 3 }} className="mb-4">
+    <Card
+      id={`post-${post.id}`}
+      elevation={0}
+      className="mb-4"
+      sx={{
+        borderRadius: 3,
+        transition: 'transform 200ms ease, box-shadow 200ms ease',
+        '&:hover': {
+          transform: 'translateY(-3px)',
+          boxShadow: '0 16px 32px rgba(0, 168, 78, 0.14)',
+        },
+      }}
+    >
       <CardHeader
         avatar={
           <Avatar
             src={post.avatar || undefined}
             slotProps={{ img: { loading: 'lazy' } }}
-            sx={{ bgcolor: 'primary.main', fontWeight: 700 }}
+            sx={{
+              width: 44,
+              height: 44,
+              fontWeight: 700,
+              color: '#fff',
+              background: post.avatar ? undefined : getAvatarGradient(post.userId || post.displayName),
+            }}
           >
             {post.displayName?.[0]?.toUpperCase() || '?'}
           </Avatar>
@@ -105,8 +133,24 @@ const PostCard: React.FC<PostCardProps> = React.memo(({ post, liking, onToggleLi
           </Typography>
         )}
         <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-          {post.content}
+          {displayedContent}
         </Typography>
+        {isLongContent && (
+          <Button
+            size="small"
+            onClick={() => setContentExpanded((prev) => !prev)}
+            sx={{
+              mt: 0.5,
+              px: 0,
+              minWidth: 0,
+              fontWeight: 700,
+              color: 'primary.main',
+              '&:hover': { bgcolor: 'transparent', textDecoration: 'underline' },
+            }}
+          >
+            {contentExpanded ? t('readLess') : t('readMore')}
+          </Button>
+        )}
       </CardContent>
 
       {post.likeCount > 0 && (

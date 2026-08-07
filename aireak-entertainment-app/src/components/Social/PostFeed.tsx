@@ -1,26 +1,20 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Box, Card, CircularProgress, Skeleton, Typography } from '@mui/material';
+import { Box, Card, CircularProgress, Grow, IconButton, Skeleton, Tooltip, Typography } from '@mui/material';
+import { Autorenew, AutoAwesome } from '@mui/icons-material';
 import { useSelector } from 'react-redux';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 
 import { postService } from '../../api/postService';
 import { type RootState } from '../../store';
-import { REALTIME_NOTIFICATION_EVENT } from '../../contexts/WebSocketContext';
 import { useInfiniteScroll } from '../../hooks/useInfiniteScroll';
 import PostComposer from './PostComposer';
 import PostCard from './PostCard';
 import type { Post } from './types';
 
-const POST_TYPE = 'BUSINESS_SCHEDULE';
-const PAGE_SIZE = 10;
-
-// Post like/comment counts have no dedicated push event on the backend today —
-// only a generic "notification" socket message fires for these actions. When one
-// of these types arrives we do a light, debounced re-sync of the visible feed's
-// counts instead of guessing which post changed.
-const REALTIME_SYNC_TYPES = new Set(['SOCIAL_LIKE', 'SOCIAL_COMMENT', 'LIKE_POST', 'COMMENT_POST']);
-const REALTIME_SYNC_DEBOUNCE_MS = 1200;
+const RANDOM_LIMIT = 5;
+const MAX_EXCLUDE_IDS = 100;
+const ENTRANCE_STAGGER_CAP = 6;
 
 const FeedSkeleton: React.FC = () => (
   <Box className="flex flex-col gap-4">
@@ -47,40 +41,51 @@ const PostFeed: React.FC = () => {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [likingIds, setLikingIds] = useState<Set<string>>(new Set());
 
-  const fetchPosts = useCallback(async (pageNum: number) => {
-    if (pageNum === 1) setLoading(true);
+  const postsRef = useRef<Post[]>([]);
+  useEffect(() => {
+    postsRef.current = posts;
+  }, [posts]);
+
+  const fetchRandomPosts = useCallback(async (excludeIds: string[], isInitial: boolean, notifySuccess = false) => {
+    if (isInitial) setLoading(true);
     else setLoadingMore(true);
 
     try {
-      const res = await postService.getPosts(pageNum, PAGE_SIZE, POST_TYPE);
+      const res = await postService.getRandomPosts(RANDOM_LIMIT, excludeIds);
       if (res.data.code === 1000) {
-        const pageData = res.data.result;
-        setPosts((prev) => (pageNum === 1 ? pageData?.data ?? [] : [...prev, ...(pageData?.data ?? [])]));
-        setHasMore(pageNum < (pageData?.totalPages ?? 0));
+        const fresh = res.data.result ?? [];
+        setPosts((prev) => (isInitial ? fresh : [...prev, ...fresh]));
+        setHasMore(fresh.length > 0);
+        if (notifySuccess) toast.success(t('feedRefreshed'));
       }
     } catch (error) {
-      console.error('Failed to fetch posts:', error);
-      if (pageNum > 1) toast.error(t('postsLoadMoreFailed'));
+      console.error('Failed to fetch random posts:', error);
+      if (!isInitial) toast.error(t('postsLoadMoreFailed'));
     } finally {
-      if (pageNum === 1) setLoading(false);
+      if (isInitial) setLoading(false);
       else setLoadingMore(false);
     }
   }, [t]);
 
   useEffect(() => {
-    fetchPosts(1);
-  }, [fetchPosts]);
+    fetchRandomPosts([], true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleLoadMore = useCallback(() => {
     if (loadingMore || loading || !hasMore) return;
-    const nextPage = page + 1;
-    setPage(nextPage);
-    fetchPosts(nextPage);
-  }, [page, hasMore, loading, loadingMore, fetchPosts]);
+    const excludeIds = postsRef.current.map((p) => p.id).slice(-MAX_EXCLUDE_IDS);
+    fetchRandomPosts(excludeIds, false);
+  }, [loading, loadingMore, hasMore, fetchRandomPosts]);
+
+  const handleShuffle = useCallback(() => {
+    if (loading) return;
+    setHasMore(true);
+    fetchRandomPosts([], true, true);
+  }, [loading, fetchRandomPosts]);
 
   const sentinelRef = useInfiniteScroll({
     hasMore,
@@ -127,41 +132,6 @@ const PostFeed: React.FC = () => {
     }
   }, [likingIds, t]);
 
-  // Soft realtime sync: merge fresh like/comment counts into whatever is already
-  // on screen, matched by id. Never reorders or injects posts we didn't already load.
-  const syncVisibleCounts = useCallback(async () => {
-    try {
-      const res = await postService.getPosts(1, PAGE_SIZE, POST_TYPE);
-      if (res.data.code !== 1000) return;
-      const freshById = new Map((res.data.result?.data ?? []).map((p) => [p.id, p]));
-      setPosts((prev) =>
-        prev.map((p) => {
-          const fresh = freshById.get(p.id);
-          return fresh ? { ...p, likeCount: fresh.likeCount, liked: fresh.liked } : p;
-        })
-      );
-    } catch (error) {
-      console.error('Failed to sync realtime post counts:', error);
-    }
-  }, []);
-
-  const syncDebounceRef = useRef<number | undefined>(undefined);
-
-  useEffect(() => {
-    const handleRealtimeNotification = (event: Event) => {
-      const detail = (event as CustomEvent<{ type?: string }>).detail;
-      if (!detail?.type || !REALTIME_SYNC_TYPES.has(detail.type)) return;
-      window.clearTimeout(syncDebounceRef.current);
-      syncDebounceRef.current = window.setTimeout(syncVisibleCounts, REALTIME_SYNC_DEBOUNCE_MS);
-    };
-
-    window.addEventListener(REALTIME_NOTIFICATION_EVENT, handleRealtimeNotification);
-    return () => {
-      window.removeEventListener(REALTIME_NOTIFICATION_EVENT, handleRealtimeNotification);
-      window.clearTimeout(syncDebounceRef.current);
-    };
-  }, [syncVisibleCounts]);
-
   return (
     <Box>
       <PostComposer
@@ -169,6 +139,40 @@ const PostFeed: React.FC = () => {
         displayName={profileData?.displayName || profileData?.username}
         onPostCreated={handlePostCreated}
       />
+
+      <Box className="flex items-center justify-between" sx={{ mb: 2, px: 0.5 }}>
+        <Box className="flex items-center gap-1">
+          <AutoAwesome sx={{ fontSize: 20, color: 'primary.main' }} />
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
+              {t('discoverFeedTitle')}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {t('discoverFeedSubtitle')}
+            </Typography>
+          </Box>
+        </Box>
+
+        <Tooltip title={t('refreshFeed')}>
+          <span>
+            <IconButton
+              onClick={handleShuffle}
+              disabled={loading}
+              size="small"
+              sx={{
+                color: 'primary.main',
+                bgcolor: 'action.hover',
+                animation: loading ? 'spin 900ms linear infinite' : 'none',
+                '@keyframes spin': { from: { transform: 'rotate(0deg)' }, to: { transform: 'rotate(360deg)' } },
+                '&:hover': { bgcolor: 'action.selected', transform: 'rotate(90deg)' },
+                transition: 'transform 200ms ease',
+              }}
+            >
+              <Autorenew fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+      </Box>
 
       {loading ? (
         <FeedSkeleton />
@@ -178,13 +182,18 @@ const PostFeed: React.FC = () => {
         </Card>
       ) : (
         <Box className="flex flex-col gap-4">
-          {posts.map((post) => (
-            <PostCard
+          {posts.map((post, index) => (
+            <Grow
+              in
+              appear
               key={post.id}
-              post={post}
-              liking={likingIds.has(post.id)}
-              onToggleLike={handleToggleLike}
-            />
+              timeout={400}
+              style={{ transitionDelay: `${Math.min(index, ENTRANCE_STAGGER_CAP) * 60}ms` }}
+            >
+              <div>
+                <PostCard post={post} liking={likingIds.has(post.id)} onToggleLike={handleToggleLike} />
+              </div>
+            </Grow>
           ))}
 
           <Box ref={sentinelRef} className="flex items-center justify-center" sx={{ py: 2, minHeight: 40 }}>

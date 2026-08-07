@@ -30,4 +30,12 @@ export const postService = {
 
   getStatus: () =>
     axiosInstance.get<ApiResponse<StatusResponse>>('/posts/status'),
+
+  getRandomPosts: (limit: number, excludeIds: string[] = []) =>
+    axiosInstance.get<ApiResponse<ScheduleResponse[]>>('/posts/random', {
+      params: {
+        limit,
+        excludeIds: excludeIds.length ? excludeIds.join(',') : undefined,
+      },
+    }),
 };
