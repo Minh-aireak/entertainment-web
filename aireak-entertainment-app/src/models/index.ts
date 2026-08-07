@@ -1,4 +1,34 @@
-export type FilmStatus = 'NOW_PLAYING' | 'UPCOMING' | 'ENDED' | 'ARCHIVED';
+export type FilmStatus = 'ONGOING' | 'COMPLETED';
+
+export type Genre =
+  | 'ACTION'
+  | 'COMEDY'
+  | 'DRAMA'
+  | 'HORROR'
+  | 'ROMANCE'
+  | 'SCI_FI'
+  | 'THRILLER'
+  | 'DOCUMENTARY'
+  | 'ANIMATION'
+  | 'FANTASY';
+
+export type Country =
+  | 'USA'
+  | 'VIETNAM'
+  | 'KOREA'
+  | 'JAPAN'
+  | 'CHINA'
+  | 'FRANCE'
+  | 'UK'
+  | 'GERMANY'
+  | 'INDIA'
+  | 'THAILAND';
+
+export type FilmCategory = 'SERIES' | 'STANDALONE' | 'ANIMATION';
+
+export type FilmSortField = 'LAST_UPDATE' | 'AVERAGE_RATING' | 'FOLLOW_COUNT' | 'RELEASE_DATE';
+
+export type SortDirection = 'ASC' | 'DESC';
 
 export interface ApiResponse<T> {
   code: number;
@@ -136,6 +166,7 @@ export interface FilmSummaryResponse {
   id: string;
   title: string;
   thumbnailUrl: string;
+  thumbnailFileId?: string;
   averageRating: number;
   ratingCount: number;
   followCount: number;
@@ -143,20 +174,24 @@ export interface FilmSummaryResponse {
   season: number;
   status?: FilmStatus;
   lastUpdate: string;
+  series?: boolean;
+  country?: Country;
+  genres?: Genre[];
 }
 
 export interface FilmRequest {
   title: string;
   description: string;
   thumbnailUrl: string;
+  thumbnailFileId?: string;
   trailerUrl: string;
   durationMinutes: number;
   releaseDate: string;
   series: boolean;
-  directorId: string;
+  directorIds: string[];
   season: number;
-  country: string;
-  genres: string[];
+  country: Country;
+  genres: Genre[];
   casts: FilmCastRequest[];
   status?: FilmStatus;
 }
@@ -170,11 +205,13 @@ export interface FilmCastRequest {
 export interface ActorRequest {
   name: string;
   avatarUrl: string;
+  avatarFileId?: string;
 }
 
 export interface DirectorRequest {
   name: string;
   avatarUrl: string;
+  avatarFileId?: string;
 }
 
 export interface RatingRequest {
@@ -186,6 +223,7 @@ export interface FilmResponse {
   title: string;
   description: string;
   thumbnailUrl: string;
+  thumbnailFileId?: string;
   trailerUrl: string;
   durationMinutes: number;
   releaseDate: string;
@@ -196,9 +234,9 @@ export interface FilmResponse {
   followCount: number;
   season: number;
   status?: FilmStatus;
-  director: DirectorResponse;
-  country: string;
-  genres: string[];
+  directors: FilmDirectorResponse[];
+  country: Country;
+  genres: Genre[];
   casts: FilmCastResponse[];
 }
 
@@ -213,6 +251,7 @@ export interface DirectorResponse {
   id: string;
   name: string;
   avatarUrl: string;
+  avatarFileId?: string;
 }
 
 export interface FilmCastResponse {
@@ -222,10 +261,17 @@ export interface FilmCastResponse {
   displayOrder: number;
 }
 
+export interface FilmDirectorResponse {
+  id: string;
+  director: DirectorResponse;
+  displayOrder: number;
+}
+
 export interface ActorResponse {
   id: string;
   name: string;
   avatarUrl: string;
+  avatarFileId?: string;
 }
 
 export interface CommentResponse {
@@ -249,7 +295,9 @@ export interface EpisodeResponse {
   seasonNumber: number;
   episodeNumber: number;
   title: string;
-  videoUrl: string;
+  // File ID trong file-service, không phải URL trực tiếp - bucket B2 private nên URL phải
+  // được resolve lại (fileService.getFileInfo) mỗi khi phát để tránh presigned URL hết hạn.
+  videoFileId: string;
   durationMinutes: number;
   filmId: string;
 }
@@ -258,7 +306,7 @@ export interface EpisodeRequest {
   seasonNumber: number;
   episodeNumber: number;
   title: string;
-  videoUrl: string;
+  videoFileId: string;
   durationMinutes: number;
   filmId: string;
 }
@@ -389,7 +437,7 @@ export interface ChatMessageCreateRequest {
   conversationId: string;
   messageType: MessageType;
   content: string;
-  attachmentFileUrl?: string;
+  attachmentFileId?: string;
   replyToMessageId?: string;
   clientMessageId?: string;
 }
@@ -770,4 +818,140 @@ export interface FileInfo {
   duration?: number;
   format?: string;
   resolution?: string;
+}
+
+export interface PresignedPart {
+  partNumber: number;
+  url: string;
+}
+
+export interface InitPresignedUploadResult {
+  uploadId: string;
+  partSize: number;
+  parts: PresignedPart[];
+}
+
+export interface CompletedPart {
+  partNumber: number;
+  eTag: string;
+}
+
+// ============================================================
+// Watch Together (room-service)
+// ============================================================
+
+export type RoomStatus = 'ACTIVE' | 'CLOSED';
+export type ParticipantRole = 'HOST' | 'VIEWER';
+export type PlaybackAction = 'PLAY' | 'PAUSE' | 'SEEK' | 'CHANGE_EPISODE' | 'HEARTBEAT';
+
+export interface CreateRoomRequest {
+  filmId: string;
+  episodeId?: string;
+  name?: string;
+  publicRoom: boolean;
+  inviteeUserIds?: string[];
+}
+
+export interface JoinRoomRequest {
+  inviteCode?: string;
+}
+
+export interface PlaybackUpdateRequest {
+  action: PlaybackAction;
+  positionSeconds?: number;
+  episodeId?: string;
+  playbackRate?: number;
+}
+
+export interface RoomMessageCreateRequest {
+  content: string;
+}
+
+export interface RoomResponse {
+  id: string;
+  name: string;
+  hostUserId: string;
+  hostDisplayName?: string;
+  hostAvatar?: string;
+  host: boolean;
+  participant: boolean;
+  filmId: string;
+  filmTitle?: string;
+  filmThumbnail?: string;
+  episodeId?: string;
+  publicRoom: boolean;
+  inviteCode: string;
+  status: RoomStatus;
+  playing: boolean;
+  positionSeconds: number;
+  playbackRate: number;
+  lastActionAt?: string;
+  participantCount: number;
+  maxParticipants: number;
+  createdDate?: string;
+}
+
+export interface RoomListItemResponse {
+  id: string;
+  name: string;
+  hostUserId: string;
+  hostDisplayName?: string;
+  hostAvatar?: string;
+  filmId: string;
+  filmTitle?: string;
+  filmThumbnail?: string;
+  publicRoom: boolean;
+  /** Only meaningful in listMyRooms: true if already joined, false if this room only appears
+   *  because you were invited and haven't joined yet. Always false elsewhere. */
+  alreadyJoined: boolean;
+  status: RoomStatus;
+  participantCount: number;
+  maxParticipants: number;
+  createdDate?: string;
+  modifiedDate?: string;
+}
+
+export interface RoomParticipantResponse {
+  userId: string;
+  displayName?: string;
+  avatar?: string;
+  role: ParticipantRole;
+  joinedAt?: string;
+}
+
+export interface RoomMessageResponse {
+  id: string;
+  roomId: string;
+  senderId: string;
+  senderName?: string;
+  senderAvatar?: string;
+  content: string;
+  createdAt: string;
+}
+
+/** Broadcast on WS event "room:playback" - carries raw state + server timestamp "at", not a
+ *  pre-computed live position; the client extrapolates locally the same way the room-service
+ *  REST snapshot does (positionSeconds + elapsed * playbackRate when playing). */
+export interface RoomPlaybackChangedEvent {
+  roomId: string;
+  action: PlaybackAction;
+  playing: boolean;
+  positionSeconds: number;
+  playbackRate: number;
+  episodeId?: string;
+  actorUserId: string;
+  at: string;
+}
+
+export interface RoomParticipantChangedEvent {
+  roomId: string;
+  eventType: 'JOINED' | 'LEFT';
+  participant?: RoomParticipantResponse;
+  participantCount: number;
+}
+
+export interface RoomClosedEvent {
+  roomId: string;
+  reason: 'HOST_CLOSED' | 'HOST_LEFT';
+  closedAt: string;
 }
