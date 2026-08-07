@@ -1,5 +1,6 @@
 import { configureStore, createSlice, type PayloadAction } from '@reduxjs/toolkit';
-import type { User, ChatMessage, Conversation, TravelItinerary, ConversationParticipant, UserFullSummaryResponse, FilmAggregateResponse } from '../models';
+import type { User, ChatMessage, Conversation, TravelItinerary, ConversationParticipant, UserFullSummaryResponse } from '../models';
+import type { CommentResponse } from '../api/commentService';
 
 // --- Auth Slice ---
 interface AuthState {
@@ -76,38 +77,6 @@ const profileSlice = createSlice({
     clearProfileData: (state) => {
       state.profileData = null;
       state.lastUpdated = null;
-    },
-  },
-});
-
-// --- Film Slice ---
-import type { PageResponse, FilmSummaryResponse } from '../models';
-
-interface FilmState {
-  aggregateData: FilmAggregateResponse | null;
-  nowPlayingFilms: PageResponse<FilmSummaryResponse> | null;
-  loading: boolean;
-}
-
-const filmInitialState: FilmState = {
-  aggregateData: null,
-  nowPlayingFilms: null,
-  loading: false,
-};
-
-const filmSlice = createSlice({
-  name: 'film',
-  initialState: filmInitialState,
-  reducers: {
-    setFilmAggregateData: (state, action: PayloadAction<FilmAggregateResponse>) => {
-      state.aggregateData = action.payload;
-      state.loading = false;
-    },
-    setNowPlayingFilms: (state, action: PayloadAction<PageResponse<FilmSummaryResponse>>) => {
-      state.nowPlayingFilms = action.payload;
-    },
-    setFilmLoading: (state, action: PayloadAction<boolean>) => {
-      state.loading = action.payload;
     },
   },
 });
@@ -193,6 +162,83 @@ const chatSlice = createSlice({
   },
 });
 
+// --- Comment Slice ---
+// State keyed by "groupId" - a post/film's sourceId for its top-level comments, or a top-level
+// comment's id for the flat list of replies under it. Same shape either way, mirroring the chat
+// slice's per-conversationId map. Comments arrive here either from a REST list fetch
+// (setComments/appendComments) or from the "comment:created"/"comment:updated"/"comment:deleted"
+// realtime broadcasts relayed via the Outbox -> Kafka -> socket-service pipeline. Both paths
+// converge on the same array so the UI never has two sources of truth.
+interface CommentState {
+  comments: Record<string, CommentResponse[]>;
+}
+
+const commentInitialState: CommentState = {
+  comments: {},
+};
+
+const commentSlice = createSlice({
+  name: 'comment',
+  initialState: commentInitialState,
+  reducers: {
+    setComments: (state, action: PayloadAction<{ groupId: string; comments: CommentResponse[] }>) => {
+      state.comments[action.payload.groupId] = action.payload.comments;
+    },
+    appendComments: (state, action: PayloadAction<{ groupId: string; comments: CommentResponse[] }>) => {
+      const { groupId, comments } = action.payload;
+      const existing = state.comments[groupId] || [];
+      const existingIds = new Set(existing.map((c) => c.id));
+      state.comments[groupId] = [...existing, ...comments.filter((c) => !existingIds.has(c.id))];
+    },
+    addComment: (state, action: PayloadAction<{ groupId: string; comment: CommentResponse }>) => {
+      const { groupId, comment } = action.payload;
+      const existing = state.comments[groupId] || [];
+      if (existing.some((c) => c.id === comment.id)) return;
+      state.comments[groupId] = [comment, ...existing];
+    },
+    // Used for the "comment:updated" broadcast, which never carries myReaction (per-viewer,
+    // stripped by socket-service) - preserve whatever this client already knew about its own
+    // reaction instead of letting the broadcast blank it out.
+    replaceComment: (state, action: PayloadAction<{ groupId: string; comment: CommentResponse }>) => {
+      const { groupId, comment } = action.payload;
+      const existing = state.comments[groupId];
+      if (!existing) return;
+      const index = existing.findIndex((c) => c.id === comment.id);
+      if (index >= 0) {
+        const previousMyReaction = existing[index].myReaction;
+        existing[index] = { ...comment, myReaction: comment.myReaction ?? previousMyReaction };
+      }
+    },
+    removeComment: (state, action: PayloadAction<{ groupId: string; commentId: string }>) => {
+      const { groupId, commentId } = action.payload;
+      const existing = state.comments[groupId];
+      if (!existing) return;
+      state.comments[groupId] = existing.filter((c) => c.id !== commentId);
+    },
+    incrementReplyCount: (state, action: PayloadAction<{ groupId: string; commentId: string }>) => {
+      const existing = state.comments[action.payload.groupId];
+      const target = existing?.find((c) => c.id === action.payload.commentId);
+      if (target) target.replyCount += 1;
+    },
+    decrementReplyCount: (state, action: PayloadAction<{ groupId: string; commentId: string }>) => {
+      const existing = state.comments[action.payload.groupId];
+      const target = existing?.find((c) => c.id === action.payload.commentId);
+      if (target) target.replyCount = Math.max(0, target.replyCount - 1);
+    },
+    // Applied right after the POST /reactions REST response, for the acting viewer only -
+    // not routed through the realtime broadcast (reactions are high-frequency; see the
+    // reaction endpoint's Redis-backed hot path on the backend).
+    patchComment: (
+      state,
+      action: PayloadAction<{ groupId: string; commentId: string; patch: Partial<CommentResponse> }>,
+    ) => {
+      const existing = state.comments[action.payload.groupId];
+      const target = existing?.find((c) => c.id === action.payload.commentId);
+      if (target) Object.assign(target, action.payload.patch);
+    },
+  },
+});
+
 // --- Itinerary Slice ---
 interface ItineraryState {
   itineraries: TravelItinerary[];
@@ -260,8 +306,8 @@ const uiSlice = createSlice({
 export const { loginStart, loginSuccess, loginFailure, logout, setUser } = authSlice.actions;
 export const { setProfileData, setProfileLoading, clearProfileData } = profileSlice.actions;
 export const { setConversations, setActiveConversation, addMessage, setMessages, prependMessages, updateUserStatus, updateMessageSeen } = chatSlice.actions;
+export const { setComments, appendComments, addComment, replaceComment, removeComment, incrementReplyCount, decrementReplyCount, patchComment } = commentSlice.actions;
 export const { fetchStart, fetchSuccess, fetchFailure, addItinerary, updateItinerary, deleteItinerary } = itinerarySlice.actions;
-export const { setFilmAggregateData, setNowPlayingFilms, setFilmLoading } = filmSlice.actions;
 export const { toggleThemeMode } = uiSlice.actions;
 
 export const store = configureStore({
@@ -269,8 +315,8 @@ export const store = configureStore({
     auth: authSlice.reducer,
     profile: profileSlice.reducer,
     chat: chatSlice.reducer,
+    comment: commentSlice.reducer,
     itinerary: itinerarySlice.reducer,
-    film: filmSlice.reducer,
     ui: uiSlice.reducer,
   },
 });

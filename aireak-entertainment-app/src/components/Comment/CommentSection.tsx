@@ -1,37 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { useSelector } from 'react-redux';
-import {
-  Box,
-  Typography,
-  Avatar,
-  TextField,
-  Button,
-  List,
-  ListItem,
-  ListItemAvatar,
-  ListItemText,
-  Divider,
-  CircularProgress,
-  IconButton,
-  Menu,
-  MenuItem,
-  Tooltip,
-  Collapse,
-} from '@mui/material';
-import {
-  Send,
-  ChatBubbleOutlined,
-  MoreVert,
-  Edit,
-  Delete,
-  EmojiEmotions,
-  TextSnippet,
-} from '@mui/icons-material';
+import { useDispatch, useSelector } from 'react-redux';
+import { Box, Typography, Button, CircularProgress, IconButton, Tooltip, Collapse } from '@mui/material';
+import { ChatBubbleOutlined, EmojiEmotions, TextSnippet } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
-import { commentService, type CommentResponse, type CommentType } from '../../api/commentService';
-import { type RootState } from '../../store';
-import { useConfirmDialog } from '../../contexts/ConfirmDialogContext';
+import { commentService, type CommentType } from '../../api/commentService';
+import { setComments, appendComments } from '../../store';
+import { type RootState, type AppDispatch } from '../../store';
+import { useCommentSocket } from '../../hooks/useCommentSocket';
+import CommentComposer from './CommentComposer';
+import CommentItem from './CommentItem';
 import toast from 'react-hot-toast';
+
+const DEFAULT_PAGE_SIZE = 5;
+const MAX_COMMENT_LENGTH = 2000;
 
 interface CommentSectionProps {
   sourceId: string;
@@ -42,38 +23,48 @@ interface CommentSectionProps {
 
 const CommentSection: React.FC<CommentSectionProps> = ({ sourceId, open }) => {
   const { t } = useTranslation();
-  const user = useSelector((state: RootState) => state.auth.user);
-  const confirmDialog = useConfirmDialog();
+  const dispatch = useDispatch<AppDispatch>();
+  const comments = useSelector((state: RootState) => state.comment.comments[sourceId] ?? []);
   const isControlled = open !== undefined;
 
-  const [comments, setComments] = useState<CommentResponse[]>([]);
+  const [totalComments, setTotalComments] = useState(0);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(true);
   const [newComment, setNewComment] = useState('');
   const [commentType, setCommentType] = useState<CommentType>('TEXT');
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
 
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editContent, setEditContent] = useState('');
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
-
   const showComments = isControlled ? Boolean(open) : uncontrolledOpen;
+
+  // Realtime: join the sourceId room while comments are visible, and bump the header count
+  // whenever a "comment:created" broadcast lands for this post (top-level or reply, own included).
+  // For "comment:deleted" the count is decremented (top-level comments only - a reply delete
+  // does not change the top-level comment header count, mirroring what totalElement reports on
+  // the REST `getComments` page).
+  useCommentSocket(sourceId, showComments, {
+    onCommentCreated: () => setTotalComments((prev) => prev + 1),
+    onCommentDeleted: (comment) => {
+      if (!comment.parentId) {
+        setTotalComments((prev) => Math.max(0, prev - 1));
+      }
+    },
+  });
 
   const fetchComments = async (pageNum: number) => {
     setLoading(true);
     try {
-      const response = await commentService.getComments(sourceId, pageNum, 10);
+      const response = await commentService.getComments(sourceId, pageNum, DEFAULT_PAGE_SIZE);
       const newComments = response.result.data;
 
       if (pageNum === 1) {
-        setComments(newComments);
+        dispatch(setComments({ groupId: sourceId, comments: newComments }));
       } else {
-        setComments((prev) => [...prev, ...newComments]);
+        dispatch(appendComments({ groupId: sourceId, comments: newComments }));
       }
 
+      setTotalComments(response?.result?.totalElement || 0);
       setHasMore(pageNum < (response?.result?.totalPages || 0));
       setLoaded(true);
     } catch (error) {
@@ -97,72 +88,28 @@ const CommentSection: React.FC<CommentSectionProps> = ({ sourceId, open }) => {
   };
 
   const handleCreateComment = async () => {
-    if (!newComment.trim()) return;
+    const trimmed = newComment.trim();
+    if (!trimmed) return;
+    if (Array.from(trimmed).length > MAX_COMMENT_LENGTH) {
+      toast.error(t('commentContentTooLong'));
+      return;
+    }
 
     try {
-      const response = await commentService.createComment({
+      // Server saves the comment + writes the Outbox event in the same transaction;
+      // the new comment reaches the UI (for every viewer, including the sender) only
+      // once the "comment:created" broadcast arrives - no local optimistic insert here.
+      await commentService.createComment({
         sourceId,
-        content: newComment,
+        content: trimmed,
         type: commentType,
         listIdsJoin: [],
       });
-
-      setComments((prev) => [response.result, ...prev]);
       setNewComment('');
       toast.success(t('commentCreated'));
     } catch {
       toast.error(t('commentCreateFailed'));
     }
-  };
-
-  const handleUpdateComment = async () => {
-    if (!editingId || !editContent.trim()) return;
-
-    try {
-      const response = await commentService.updateComment(editingId, {
-        content: editContent,
-      });
-
-      setComments((prev) => prev.map((c) => (c.id === editingId ? response.result : c)));
-      setEditingId(null);
-      setEditContent('');
-      toast.success(t('commentUpdated'));
-    } catch {
-      toast.error(t('commentUpdateFailed'));
-    }
-  };
-
-  const handleDeleteComment = async (id: string) => {
-    const confirmed = await confirmDialog({
-      title: t('deleteCommentTitle'),
-      message: t('deleteCommentMessage'),
-      confirmText: t('delete'),
-    });
-    if (!confirmed) return;
-
-    try {
-      await commentService.deleteComment(id);
-      setComments((prev) => prev.filter((c) => c.id !== id));
-      toast.success(t('commentDeleted'));
-    } catch {
-      toast.error(t('commentDeleteFailed'));
-    }
-  };
-
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, commentId: string) => {
-    setAnchorEl(event.currentTarget);
-    setSelectedCommentId(commentId);
-  };
-
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-    setSelectedCommentId(null);
-  };
-
-  const handleEditClick = (comment: CommentResponse) => {
-    setEditingId(comment.id);
-    setEditContent(comment.content);
-    handleMenuClose();
   };
 
   const loadMore = () => {
@@ -171,20 +118,11 @@ const CommentSection: React.FC<CommentSectionProps> = ({ sourceId, open }) => {
     fetchComments(nextPage);
   };
 
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'EDITED':
-        return t('editedLabel');
-      default:
-        return '';
-    }
-  };
-
   return (
     <Box sx={{ mt: isControlled ? 0 : 2 }}>
       {!isControlled && (
         <Button startIcon={<ChatBubbleOutlined />} onClick={handleToggleComments} sx={{ mb: 1 }}>
-          {t('commentsLabel')} ({comments.length || 0})
+          {t('commentsLabel')} ({totalComments})
         </Button>
       )}
 
@@ -218,19 +156,12 @@ const CommentSection: React.FC<CommentSectionProps> = ({ sourceId, open }) => {
                 </IconButton>
               </Tooltip>
             </Box>
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <TextField
-                fullWidth
-                size="small"
-                placeholder={commentType === 'TEXT' ? t('writeCommentPlaceholder') : t('writeIconCommentPlaceholder')}
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleCreateComment()}
-              />
-              <IconButton color="primary" onClick={handleCreateComment} disabled={!newComment.trim()}>
-                <Send />
-              </IconButton>
-            </Box>
+            <CommentComposer
+              value={newComment}
+              onChange={setNewComment}
+              onSubmit={handleCreateComment}
+              placeholder={commentType === 'TEXT' ? t('writeCommentPlaceholder') : t('writeIconCommentPlaceholder')}
+            />
           </Box>
 
           {loading && page === 1 ? (
@@ -242,92 +173,12 @@ const CommentSection: React.FC<CommentSectionProps> = ({ sourceId, open }) => {
               {t('noCommentsYet')}
             </Typography>
           ) : (
-            <List>
+            <Box>
               {comments.map((comment) => (
-                <React.Fragment key={comment.id}>
-                  <ListItem alignItems="flex-start" sx={{ px: 0 }}>
-                    <ListItemAvatar>
-                      <Avatar src={comment.avatar} slotProps={{ img: { loading: 'lazy' } }} />
-                    </ListItemAvatar>
-                    <ListItemText
-                      primary={
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                              {comment.displayName || t('anonymousUser')}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              • {comment.durationCreatedDate}
-                            </Typography>
-                            {comment.status === 'EDITED' && (
-                              <Typography variant="caption" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
-                                ({getStatusLabel(comment.status)})
-                              </Typography>
-                            )}
-                          </Box>
-                          {user?.id === comment.userId && (
-                            <IconButton size="small" onClick={(e) => handleMenuOpen(e, comment.id)}>
-                              <MoreVert fontSize="small" />
-                            </IconButton>
-                          )}
-                        </Box>
-                      }
-                      secondary={
-                        editingId === comment.id ? (
-                          <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
-                            <TextField
-                              fullWidth
-                              size="small"
-                              value={editContent}
-                              onChange={(e) => setEditContent(e.target.value)}
-                              autoFocus
-                            />
-                            <Button size="small" onClick={handleUpdateComment}>{t('save')}</Button>
-                            <Button size="small" color="inherit" onClick={() => setEditingId(null)}>{t('cancel')}</Button>
-                          </Box>
-                        ) : (
-                          <Typography
-                            variant="body2"
-                            color="text.primary"
-                            sx={{ mt: 0.5, display: 'flex', alignItems: 'center', gap: 1 }}
-                          >
-                            {comment.type === 'ICON' && <EmojiEmotions fontSize="small" color="primary" />}
-                            {comment.content}
-                          </Typography>
-                        )
-                      }
-                    />
-                  </ListItem>
-                  <Divider variant="inset" component="li" sx={{ ml: 7 }} />
-                </React.Fragment>
+                <CommentItem key={comment.id} comment={comment} groupId={sourceId} sourceId={sourceId} />
               ))}
-            </List>
+            </Box>
           )}
-
-          <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
-            <MenuItem
-              onClick={() => {
-                const comment = comments.find((c) => c.id === selectedCommentId);
-                if (comment && comment.type === 'TEXT') {
-                  handleEditClick(comment);
-                } else {
-                  toast.error(t('textOnlyCommentsEditable'));
-                  handleMenuClose();
-                }
-              }}
-            >
-              <Edit fontSize="small" sx={{ mr: 1 }} /> {t('edit')}
-            </MenuItem>
-            <MenuItem
-              onClick={() => {
-                if (selectedCommentId) handleDeleteComment(selectedCommentId);
-                handleMenuClose();
-              }}
-              sx={{ color: 'error.main' }}
-            >
-              <Delete fontSize="small" sx={{ mr: 1 }} /> {t('delete')}
-            </MenuItem>
-          </Menu>
 
           {hasMore && !loading && comments.length > 0 && (
             <Button size="small" onClick={loadMore} sx={{ mt: 1 }}>
