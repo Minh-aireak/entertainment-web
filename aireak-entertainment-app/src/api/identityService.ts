@@ -93,7 +93,7 @@ export const identityService = {
   },
 
   toggleAccount: async (userId: string) => {
-    const response = await axiosInstance.post<ApiResponse<void>>(`/identities/users/${userId}/toggle-account`);
+    const response = await axiosInstance.put<ApiResponse<void>>(`/identities/users/${userId}/toggle-account`);
     return response.data;
   },
 

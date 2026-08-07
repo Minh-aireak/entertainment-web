@@ -243,9 +243,11 @@ const ProfilePage: React.FC = React.memo(() => {
     try {
       const uploadRes = await fileService.uploadFile(file);
       if (uploadRes.code === 1000) {
+        // avatar hiển thị dùng URL mới nhận (còn hiệu lực ngay lúc này); server chỉ lưu fileId và
+        // tự resolve lại URL mới mỗi lần trả profile response, tránh lưu presigned URL bị hết hạn.
         const newAvatarUrl = uploadRes.result.url;
-        
-        const updateRes = await profileService.updateAvatar(newAvatarUrl);
+
+        const updateRes = await profileService.updateAvatar(uploadRes.result.id);
 
         if (updateRes.code === 1000) {
           setFormData(prev => ({ ...prev, avatar: newAvatarUrl }));

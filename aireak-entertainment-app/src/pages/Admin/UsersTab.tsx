@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { memo, useEffect, useState } from 'react';
 import {
   Box,
   Table,
@@ -156,4 +156,4 @@ const UsersTab: React.FC = () => {
   );
 };
 
-export default UsersTab;
+export default memo(UsersTab);

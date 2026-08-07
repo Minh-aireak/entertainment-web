@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { memo, useEffect, useState } from 'react';
 import {
   Box,
   Table,
@@ -163,7 +163,7 @@ const RolesTab: React.FC = () => {
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>{editingName ? 'Chỉnh sửa vai trò' : 'Thêm vai trò mới'}</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <TextField
             label="Tên vai trò"
             value={form.name}
@@ -171,6 +171,7 @@ const RolesTab: React.FC = () => {
             onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value.toUpperCase() }))}
             fullWidth
             required
+            sx={{ mt: 1 }}
           />
           <TextField
             label="Mô tả"
@@ -192,4 +193,4 @@ const RolesTab: React.FC = () => {
   );
 };
 
-export default RolesTab;
+export default memo(RolesTab);

@@ -18,7 +18,13 @@ const TABS = [
 
 const AdminPage: React.FC = () => {
   const [tabIndex, setTabIndex] = useState(0);
-  const ActiveTab = TABS[tabIndex].component;
+  // Giữ lại các tab đã từng mở để tránh unmount/remount (và refetch API) khi quay lại tab cũ
+  const [visitedTabs, setVisitedTabs] = useState<Set<number>>(() => new Set([0]));
+
+  const handleChangeTab = (_e: React.SyntheticEvent, value: number) => {
+    setTabIndex(value);
+    setVisitedTabs((prev) => (prev.has(value) ? prev : new Set(prev).add(value)));
+  };
 
   return (
     <Box>
@@ -28,7 +34,7 @@ const AdminPage: React.FC = () => {
 
       <Tabs
         value={tabIndex}
-        onChange={(_e, value) => setTabIndex(value)}
+        onChange={handleChangeTab}
         variant="scrollable"
         scrollButtons="auto"
         sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}
@@ -38,7 +44,15 @@ const AdminPage: React.FC = () => {
         ))}
       </Tabs>
 
-      <ActiveTab />
+      {TABS.map((tab, index) => {
+        if (!visitedTabs.has(index)) return null;
+        const TabComponent = tab.component;
+        return (
+          <Box key={tab.label} sx={{ display: index === tabIndex ? 'block' : 'none' }}>
+            <TabComponent />
+          </Box>
+        );
+      })}
     </Box>
   );
 };
