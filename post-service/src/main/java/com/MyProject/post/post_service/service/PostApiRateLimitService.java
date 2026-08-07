@@ -41,6 +41,10 @@ public class PostApiRateLimitService {
         enforce("post-count:" + userId, properties.getPostCount());
     }
 
+    public void checkPostRandom(String userId) {
+        enforce("post-random:" + userId, properties.getPostRandom());
+    }
+
     private void enforce(String keySuffix, PostRateLimitProperties.Rule rule) {
         try {
             long windowSeconds = Math.max(1, rule.getLimitRefreshPeriod().toSeconds());

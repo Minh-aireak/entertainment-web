@@ -16,6 +16,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Arrays;
+import java.util.List;
+
 @RestController
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -89,6 +92,24 @@ public class PostController {
         postApiRateLimitService.checkPostUpdate(userId);
         return ApiResponse.<LikeResponse>builder()
                 .result(postService.toggleLike(id, type))
+                .build();
+    }
+
+    @GetMapping("/random")
+    ApiResponse<List<ScheduleResponse>> getRandomPosts(@RequestParam(value = "limit", defaultValue = "5") int limit,
+                                                        @RequestParam(value = "excludeIds", required = false, defaultValue = "") String excludeIds) {
+        String userId = SecurityUtils.getCurrentUserId();
+        postApiRateLimitService.checkPostRandom(userId);
+
+        List<String> excludeIdList = excludeIds.isBlank()
+                ? List.of()
+                : Arrays.stream(excludeIds.split(","))
+                        .map(String::trim)
+                        .filter(id -> !id.isEmpty())
+                        .toList();
+
+        return ApiResponse.<List<ScheduleResponse>>builder()
+                .result(postService.getRandomPosts(limit, excludeIdList))
                 .build();
     }
 

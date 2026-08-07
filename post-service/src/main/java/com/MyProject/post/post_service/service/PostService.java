@@ -1,6 +1,7 @@
 package com.MyProject.post.post_service.service;
 
 import com.MyProject.common.dto.response.PageResponse;
+import com.MyProject.common.dto.response.UserProfileResponse;
 import com.MyProject.post.post_service.dto.request.ScheduleRequest;
 import com.MyProject.post.post_service.dto.request.ScheduleUpdateRequest;
 import com.MyProject.post.post_service.dto.response.LikeResponse;
@@ -17,7 +18,6 @@ import com.MyProject.post.post_service.repository.PostElasticRepository;
 import com.MyProject.post.post_service.repository.PostLikeRepository;
 import com.MyProject.post.post_service.repository.PostRepository;
 import com.MyProject.post.post_service.repository.TravelItineraryRepository;
-import com.MyProject.post.post_service.service.DateTimeFormatter;
 import com.MyProject.common.security.SecurityUtils;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -27,11 +27,16 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
+import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -46,14 +51,18 @@ public class PostService {
     PostElasticRepository postElasticRepository;
     PostLikeRepository postLikeRepository;
     PostMapper postMapper;
-    DateTimeFormatter dateTimeFormatter;
     PostJobManagementService postJobManagementService;
     PostCacheService postCacheService;
     OutboxEventPublisher outboxEventPublisher;
+    MongoTemplate mongoTemplate;
+    PostProfileExternalService postProfileExternalService;
 
     private static final String STATUS_ONGOING = "On going";
     private static final String STATUS_UPCOMING = "Up coming";
     private static final String STATUS_COMPLETED = "Completed";
+    private static final String POST_COLLECTION = "post";
+    private static final String BUSINESS_SCHEDULE_CLASS = "business-schedule";
+    private static final int MAX_RANDOM_LIMIT = 20;
 
     private String calculateStatus(LocalDateTime start, LocalDateTime end, LocalDateTime now) {
         String status = STATUS_ONGOING;
@@ -136,7 +145,6 @@ public class PostService {
             } else {
                 response = postMapper.toScheduleResponse(post);
             }
-            response.setCreatedDate(dateTimeFormatter.format(post.getCreatedDate()));
             response.setPostType(post.getPostType().toString());
             return response;
         }).toList();
@@ -286,5 +294,76 @@ public class PostService {
 
     public Integer countByUserId() {
         return postRepository.countByUserId(SecurityUtils.getCurrentUserId());
+    }
+
+    public List<ScheduleResponse> getRandomPosts(int limit, List<String> excludeIds) {
+        String userId = SecurityUtils.getCurrentUserId();
+        int safeLimit = Math.min(Math.max(limit, 1), MAX_RANDOM_LIMIT);
+
+        List<Post> posts = sampleRandomPosts(safeLimit, excludeIds);
+        if (posts.isEmpty()) {
+            return List.of();
+        }
+
+        List<String> postIds = posts.stream().map(Post::getId).toList();
+        Set<String> likedPostIds = postLikeRepository.findByPostIdInAndUserId(postIds, userId).stream()
+                .map(PostLike::getPostId)
+                .collect(Collectors.toSet());
+
+        Set<String> authorIds = posts.stream().map(Post::getUserId).collect(Collectors.toSet());
+        Map<String, UserProfileResponse> profiles = postProfileExternalService.getBulkUserProfiles(authorIds);
+
+        return posts.stream().map(post -> {
+            ScheduleResponse response = postMapper.toScheduleResponse(post);
+            response.setPostType(post.getPostType().toString());
+            response.setLiked(likedPostIds.contains(post.getId()));
+
+            UserProfileResponse profile = profiles.get(post.getUserId());
+            if (profile != null) {
+                response.setDisplayName(profile.getDisplayName());
+                response.setAvatar(profile.getAvatar());
+            }
+            return response;
+        }).toList();
+    }
+
+    // Pulls a random sample across ALL users via Mongo's $sample aggregation stage (first use of the
+    // aggregation framework in post-service - no repository-level pagination concept applies to "random").
+    // When excludeIds (posts the caller already has on screen) leaves too few candidates behind, we
+    // backfill by re-sampling without the exclusion filter so infinite scroll never dead-ends on a small
+    // dataset - occasional repeats are an acceptable trade-off for a feed that should never feel "stuck".
+    private List<Post> sampleRandomPosts(int limit, List<String> excludeIds) {
+        Criteria criteria = Criteria.where("_class").is(BUSINESS_SCHEDULE_CLASS);
+        if (excludeIds != null && !excludeIds.isEmpty()) {
+            criteria = criteria.and("_id").nin(excludeIds);
+        }
+
+        List<Post> sampled = new ArrayList<>(mongoTemplate.aggregate(
+                Aggregation.newAggregation(Aggregation.match(criteria), Aggregation.sample(limit)),
+                POST_COLLECTION,
+                Post.class
+        ).getMappedResults());
+
+        if (sampled.size() < limit && excludeIds != null && !excludeIds.isEmpty()) {
+            Set<String> pickedIds = sampled.stream().map(Post::getId).collect(Collectors.toSet());
+            int remaining = limit - sampled.size();
+
+            List<Post> refill = mongoTemplate.aggregate(
+                    Aggregation.newAggregation(
+                            Aggregation.match(Criteria.where("_class").is(BUSINESS_SCHEDULE_CLASS)),
+                            Aggregation.sample(remaining)
+                    ),
+                    POST_COLLECTION,
+                    Post.class
+            ).getMappedResults();
+
+            for (Post post : refill) {
+                if (pickedIds.add(post.getId())) {
+                    sampled.add(post);
+                }
+            }
+        }
+
+        return sampled;
     }
 }

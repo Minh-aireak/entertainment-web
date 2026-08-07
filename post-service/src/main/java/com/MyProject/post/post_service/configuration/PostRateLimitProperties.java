@@ -16,6 +16,7 @@ public class PostRateLimitProperties {
     Rule postRead = new Rule();
     Rule postSearch = new Rule();
     Rule postCount = new Rule();
+    Rule postRandom = new Rule();
 
     @Data
     public static class Rule {
