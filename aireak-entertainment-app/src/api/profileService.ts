@@ -7,9 +7,9 @@ export const profileService = {
     return response.data;
   },
 
-  updateAvatar: async (avatarUrl: string) => {
+  updateAvatar: async (avatarFileId: string) => {
     const response = await axiosInstance.put<ApiResponse<UserProfileResponse>>('/profiles/my-profile/avatar', {
-      avatar: avatarUrl,
+      avatarFileId,
     });
     return response.data;
   },
