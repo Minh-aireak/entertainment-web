@@ -53,6 +53,7 @@
 		<module>socket-service</module>
 		<module>debezium-manager</module>
 		<module>comment-service</module>
+		<module>room-service</module>
 	</modules>
 
 	<dependencyManagement>

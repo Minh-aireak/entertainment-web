@@ -1,0 +1,132 @@
+server:
+  port: 8091
+  tomcat:
+    redirect-context-root: false
+  servlet:
+    context-path: /rooms
+
+spring:
+  application:
+    name: room-service
+  data:
+    mongodb:
+      uri: mongodb://${MONGODB_ROOT_USERNAME}:${MONGODB_ROOT_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/room-service?authSource=admin
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      connect-timeout: 5000
+      timeout: 5000
+      password: ${REDIS_PASSWORD}
+
+app:
+  services:
+    profile:
+      url: ${PROFILE_SERVICE_URL}
+    film:
+      url: ${FILM_SERVICE_URL}
+  room:
+    max-participants: 50
+    invite-code-length: 8
+  rate-limit:
+    room-create:
+      limit-for-period: 10
+      limit-refresh-period: 60s
+    room-read:
+      limit-for-period: 100
+      limit-refresh-period: 10s
+    room-playback:
+      limit-for-period: 20
+      limit-refresh-period: 1s
+    room-message:
+      limit-for-period: 20
+      limit-refresh-period: 10s
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        register-health-indicator: true
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        permitted-number-of-calls-in-half-open-state: 5
+        wait-duration-in-open-state: 10s
+        failure-rate-threshold: 50
+        automatic-transition-from-open-to-half-open-enabled: true
+        writable-stack-trace-enabled: false
+        ignore-exceptions:
+          - com.MyProject.room_service.exception.AppException
+          - io.github.resilience4j.ratelimiter.RequestNotPermitted
+      downstream:
+        register-health-indicator: true
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        permitted-number-of-calls-in-half-open-state: 3
+        wait-duration-in-open-state: 10s
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 60
+        slow-call-duration-threshold: 2s
+        automatic-transition-from-open-to-half-open-enabled: true
+        writable-stack-trace-enabled: false
+        ignore-exceptions:
+          - com.MyProject.room_service.exception.AppException
+          - io.github.resilience4j.ratelimiter.RequestNotPermitted
+    instances:
+      roomReadApi:
+        base-config: default
+      roomWriteApi:
+        base-config: default
+      profileService:
+        base-config: downstream
+      filmService:
+        base-config: downstream
+  ratelimiter:
+    configs:
+      default:
+        timeout-duration: 0s
+    instances:
+      roomReadApi:
+        base-config: default
+        limit-for-period: 100
+        limit-refresh-period: 1s
+      roomWriteApi:
+        base-config: default
+        limit-for-period: 50
+        limit-refresh-period: 1s
+      profileService:
+        base-config: default
+        limit-for-period: 60
+        limit-refresh-period: 1s
+      filmService:
+        base-config: default
+        limit-for-period: 60
+        limit-refresh-period: 1s
+  retry:
+    configs:
+      downstream:
+        max-attempts: 2
+        wait-duration: 300ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        retry-exceptions:
+          - feign.RetryableException
+          - java.io.IOException
+          - java.net.SocketTimeoutException
+          - java.util.concurrent.TimeoutException
+        ignore-exceptions:
+          - com.MyProject.room_service.exception.AppException
+          - io.github.resilience4j.ratelimiter.RequestNotPermitted
+          - io.github.resilience4j.circuitbreaker.CallNotPermittedException
+    instances:
+      profileService:
+        base-config: downstream
+      filmService:
+        base-config: downstream
+management:
+  health:
+    circuitbreakers:
+      enabled: true
+
+jwt:
+  signerKey: ${JWT_SIGNER_KEY}
