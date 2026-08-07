@@ -7,9 +7,14 @@ import com.MyProject.film.film_service.dto.response.FilmDetailResponse;
 import com.MyProject.film.film_service.dto.response.FilmResponse;
 import com.MyProject.film.film_service.dto.response.FilmSummaryResponse;
 import com.MyProject.film.film_service.entity.*;
+import com.MyProject.film.film_service.enums.Country;
+import com.MyProject.film.film_service.enums.FilmCategory;
+import com.MyProject.film.film_service.enums.FilmSortField;
 import com.MyProject.film.film_service.enums.FilmStatus;
+import com.MyProject.film.film_service.enums.Genre;
 import com.MyProject.film.film_service.mapper.FilmMapper;
 import com.MyProject.film.film_service.repository.elasticsearch.FilmElasticRepository;
+import com.MyProject.film.film_service.repository.httpclient.FileClient;
 import com.MyProject.film.film_service.repository.mysql.*;
 import com.MyProject.film.film_service.document.FilmDoc;
 import com.MyProject.common.redis.RedisService;
@@ -33,6 +38,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -56,9 +62,59 @@ public class FilmService {
     DirectorRepository directorRepository;
     ActorRepository actorRepository;
     FilmCastRepository filmCastRepository;
+    FilmDirectorRepository filmDirectorRepository;
     FilmElasticRepository filmElasticRepository;
     FilmFollowService filmFollowService;
     CommentExternalService commentExternalService;
+    FileClient fileClient;
+
+    // Nếu thumbnail được upload qua file-service (bucket B2 private), thumbnailUrl lưu trong DB/cache
+    // chỉ là metadata cũ/rỗng - phải resolve presigned URL mới ở đây mỗi lần trả response, nếu không
+    // URL sẽ hết hạn sau ~1h (xem B2_PRESIGNED_URL_TTL). thumbnailUrl do admin tự nhập (external) thì
+    // giữ nguyên. Áp dụng sau khi đọc từ cache/Elasticsearch (không phải trước khi ghi cache) để mỗi
+    // lần trả về client luôn là URL còn hiệu lực, kể cả khi dữ liệu gốc đã nằm trong cache lâu.
+    private FilmResponse resolveThumbnail(FilmResponse response) {
+        if (response.getThumbnailFileId() == null || response.getThumbnailFileId().isBlank()) {
+            return response;
+        }
+        try {
+            response.setThumbnailUrl(fileClient.getFileInfo(response.getThumbnailFileId()).getResult().getUrl());
+        } catch (Exception e) {
+            log.warn("Failed to resolve thumbnail file {} for film {}", response.getThumbnailFileId(), response.getId(), e);
+        }
+        return response;
+    }
+
+    private FilmSummaryResponse resolveThumbnail(FilmSummaryResponse response) {
+        if (response.getThumbnailFileId() == null || response.getThumbnailFileId().isBlank()) {
+            return response;
+        }
+        try {
+            response.setThumbnailUrl(fileClient.getFileInfo(response.getThumbnailFileId()).getResult().getUrl());
+        } catch (Exception e) {
+            log.warn("Failed to resolve thumbnail file {} for film {}", response.getThumbnailFileId(), response.getId(), e);
+        }
+        return response;
+    }
+
+    private void resolveThumbnails(PageResponse<FilmSummaryResponse> pageResponse) {
+        if (pageResponse == null || pageResponse.getData() == null) {
+            return;
+        }
+        pageResponse.setData(pageResponse.getData().stream()
+                .map(this::resolveThumbnail)
+                .collect(Collectors.toList()));
+    }
+
+    // Nếu request đi kèm thumbnailFileId (upload qua file-service), thumbnailUrl gửi lên chỉ là URL
+    // preview tạm thời (xem AvatarUploadField ở frontend) - không lưu vào DB, để tránh baked-in một
+    // presigned URL sẽ hết hạn sau ~1h. resolveThumbnail() luôn resolve lại URL mới từ thumbnailFileId
+    // khi đọc.
+    private void clearStalePreviewUrl(Film film) {
+        if (film.getThumbnailFileId() != null && !film.getThumbnailFileId().isBlank()) {
+            film.setThumbnailUrl(null);
+        }
+    }
 
     @Transactional
     public FilmResponse createFilm(FilmRequest request) {
@@ -66,14 +122,15 @@ public class FilmService {
         if (request.getStatus() != null) {
             film.setStatus(request.getStatus());
         }
-
-        if (request.getDirectorId() != null) {
-            Director director = directorRepository.findById(request.getDirectorId())
-                    .orElseThrow(() -> new AppException(ErrorCode.DIRECTOR_NOT_FOUND));
-            film.setDirector(director);
-        }
+        clearStalePreviewUrl(film);
 
         var filmSaved = filmRepository.save(film);
+
+        if (request.getDirectorIds() != null && !request.getDirectorIds().isEmpty()) {
+            List<FilmDirector> directors = resolveFilmDirectors(filmSaved, request.getDirectorIds());
+            filmDirectorRepository.saveAll(directors);
+            filmSaved.setDirectors(directors);
+        }
 
         if (request.getCasts() != null && !request.getCasts().isEmpty()) {
             List<FilmCast> casts = request.getCasts().stream().map(castReq -> {
@@ -91,12 +148,70 @@ public class FilmService {
         }
 
         syncFilmToElasticsearch(filmSaved);
-        
+
         FilmResponse response = filmMapper.toFilmResponse(filmSaved);
         // Invalidate caches on creation
         invalidateFilmCaches(filmSaved.getId());
-        
-        return response;
+
+        return resolveThumbnail(response);
+    }
+
+    private List<FilmDirector> resolveFilmDirectors(Film film, List<String> directorIds) {
+        List<FilmDirector> directors = new ArrayList<>();
+        for (int i = 0; i < directorIds.size(); i++) {
+            Director director = directorRepository.findById(directorIds.get(i))
+                    .orElseThrow(() -> new AppException(ErrorCode.DIRECTOR_NOT_FOUND));
+            directors.add(FilmDirector.builder()
+                    .film(film)
+                    .director(director)
+                    .displayOrder(i)
+                    .build());
+        }
+        return directors;
+    }
+
+    @Transactional
+    public FilmResponse updateFilm(String id, FilmRequest request) {
+        Film film = filmRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.FILM_NOT_FOUND));
+
+        filmMapper.updateFilm(film, request);
+        if (request.getStatus() != null) {
+            film.setStatus(request.getStatus());
+        }
+        clearStalePreviewUrl(film);
+
+        var filmSaved = filmRepository.save(film);
+
+        if (request.getDirectorIds() != null) {
+            filmDirectorRepository.deleteByFilm_Id(filmSaved.getId());
+            List<FilmDirector> directors = resolveFilmDirectors(filmSaved, request.getDirectorIds());
+            filmDirectorRepository.saveAll(directors);
+            filmSaved.setDirectors(directors);
+        }
+
+        if (request.getCasts() != null) {
+            filmCastRepository.deleteByFilm_Id(filmSaved.getId());
+            List<FilmCast> casts = request.getCasts().stream().map(castReq -> {
+                Actor actor = actorRepository.findById(castReq.getActorId())
+                        .orElseThrow(() -> new AppException(ErrorCode.ACTOR_NOT_FOUND));
+                return FilmCast.builder()
+                        .film(filmSaved)
+                        .actor(actor)
+                        .characterName(castReq.getCharacterName())
+                        .displayOrder(castReq.getDisplayOrder())
+                        .build();
+            }).collect(Collectors.toList());
+            filmCastRepository.saveAll(casts);
+            filmSaved.setCasts(casts);
+        }
+
+        syncFilmToElasticsearch(filmSaved);
+
+        FilmResponse response = filmMapper.toFilmResponse(filmSaved);
+        invalidateFilmCaches(filmSaved.getId());
+
+        return resolveThumbnail(response);
     }
 
     public PageResponse<FilmSummaryResponse> getPageFilms(int page, int size) {
@@ -111,6 +226,7 @@ public class FilmService {
                 );
                 if (cached != null) {
                     log.info("Cache hit for films page: {}", page);
+                    resolveThumbnails(cached);
                     return cached;
                 }
             } catch (Exception e) {
@@ -142,6 +258,7 @@ public class FilmService {
             }
         }
 
+        resolveThumbnails(response);
         return response;
     }
 
@@ -212,6 +329,9 @@ public class FilmService {
             }
         }
 
+        resolveThumbnails(topHotFilms);
+        resolveThumbnails(latestFilms);
+
         return FilmAggregateResponse.builder()
                 .topHotFilms(topHotFilms)
                 .latestFilms(latestFilms)
@@ -224,6 +344,7 @@ public class FilmService {
                 .id(film.getId())
                 .title(film.getTitle())
                 .thumbnailUrl(film.getThumbnailUrl())
+                .thumbnailFileId(film.getThumbnailFileId())
                 .averageRating(film.getAverageRating())
                 .ratingCount(film.getRatingCount())
                 .followCount(film.getFollowCount())
@@ -306,7 +427,7 @@ public class FilmService {
             redisService.deletePattern("film:comments:" + filmId + ":*");
             redisService.deletePattern("film:latest:page:*");
             redisService.deletePattern("film:hot:page:*");
-            redisService.deletePattern("film:now-playing:page:*");
+            redisService.deletePattern("film:ongoing:page:*");
             log.info("Invalidated film caches for film: {}", filmId);
         } catch (Exception e) {
             log.warn("Failed to invalidate caches for film: {}", filmId, e);
@@ -314,7 +435,7 @@ public class FilmService {
     }
 
     public PageResponse<FilmSummaryResponse> getNowPlayingFilms(int page, int size) {
-        String cacheKey = "film:now-playing:page:" + page + ":size:" + size;
+        String cacheKey = "film:ongoing:page:" + page + ":size:" + size;
 
         if (page <= 2) {
             try {
@@ -323,17 +444,18 @@ public class FilmService {
                         new TypeReference<PageResponse<FilmSummaryResponse>>() {}
                 );
                 if (cached != null) {
-                    log.info("Cache hit for now playing films page: {}", page);
+                    log.info("Cache hit for ongoing films page: {}", page);
+                    resolveThumbnails(cached);
                     return cached;
                 }
             } catch (Exception e) {
-                log.warn("Failed to retrieve from cache for now playing films page: {}", page, e);
+                log.warn("Failed to retrieve from cache for ongoing films page: {}", page, e);
             }
         }
 
         Sort sort = Sort.by(Sort.Direction.DESC, "followCount");
         Pageable pageable = PageRequest.of(page - 1, size, sort);
-        Page<Film> pageData = filmRepository.findByStatus(FilmStatus.NOW_PLAYING, pageable);
+        Page<Film> pageData = filmRepository.findByStatus(FilmStatus.ONGOING, pageable);
 
         PageResponse<FilmSummaryResponse> response = PageResponse.<FilmSummaryResponse>builder()
                 .currentPage(page)
@@ -354,7 +476,40 @@ public class FilmService {
             }
         }
 
+        resolveThumbnails(response);
         return response;
+    }
+
+    public List<FilmSummaryResponse> getTopRatedFilms(int limit) {
+        Pageable pageable = PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "averageRating"));
+        return filmRepository.findAll(pageable).getContent().stream()
+                .map(filmMapper::toFilmSummaryResponse)
+                .map(this::resolveThumbnail)
+                .collect(Collectors.toList());
+    }
+
+    public PageResponse<FilmSummaryResponse> browseFilms(FilmCategory category, Country country, Genre genre,
+                                                           FilmSortField sortBy, Sort.Direction sortDir,
+                                                           int page, int size) {
+        Sort sort = Sort.by(sortDir, sortBy.getFieldName());
+        Pageable pageable = PageRequest.of(page - 1, size, sort);
+
+        Page<Film> pageData = switch (category) {
+            case SERIES -> filmRepository.findSeriesOrStandalone(true, Genre.ANIMATION, country, genre, pageable);
+            case STANDALONE -> filmRepository.findSeriesOrStandalone(false, Genre.ANIMATION, country, genre, pageable);
+            case ANIMATION -> filmRepository.findByGenreContaining(Genre.ANIMATION, country, pageable);
+        };
+
+        return PageResponse.<FilmSummaryResponse>builder()
+                .currentPage(page)
+                .pageSize(size)
+                .totalPages(pageData.getTotalPages())
+                .totalElement(pageData.getTotalElements())
+                .data(pageData.getContent().stream()
+                        .map(filmMapper::toFilmSummaryResponse)
+                        .map(this::resolveThumbnail)
+                        .collect(Collectors.toList()))
+                .build();
     }
 
     public List<FilmSummaryResponse> searchFilms(String title) {
@@ -363,6 +518,7 @@ public class FilmService {
                         .id(doc.getId())
                         .title(doc.getTitle())
                         .thumbnailUrl(doc.getThumbnailUrl())
+                        .thumbnailFileId(doc.getThumbnailFileId())
                         .season(doc.getSeason())
                         .status(doc.getStatus())
                         .ratingCount(doc.getRatingCount())
@@ -371,6 +527,7 @@ public class FilmService {
                         .averageRating(doc.getAverageRating())
                         .lastUpdate(doc.getLastUpdate())
                         .build())
+                .map(this::resolveThumbnail)
                 .collect(Collectors.toList());
     }
 
@@ -399,6 +556,8 @@ public class FilmService {
                 log.warn("Failed to cache film basic info", e);
             }
         }
+
+        filmResponse = resolveThumbnail(filmResponse);
 
         // 2. Lấy Comments (từ cache hoặc Service)
         PageResponse<CommentResponse> comments = null;

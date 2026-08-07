@@ -22,7 +22,12 @@ public class Episode {
 
     String title;
 
-    String videoUrl;
+    // ID (object key) tra vào file-service, KHÔNG lưu URL trực tiếp: bucket B2 private nên URL trả về
+    // là presigned GET có hạn dùng (mặc định 1h, xem file-service FileService.resolvePublicUrl) - lưu
+    // thẳng URL sẽ khiến video ngừng phát được khi chữ ký hết hạn. Frontend gọi lại file-service bằng
+    // ID này để lấy URL mới mỗi khi phát.
+    @Column(columnDefinition = "TEXT")
+    String videoFileId;
 
     int durationMinutes;
 

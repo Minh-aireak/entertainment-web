@@ -8,9 +8,8 @@ import lombok.experimental.FieldDefaults;
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class DirectorResponse {
+public class FilmDirectorResponse {
     String id;
-    String name;
-    String avatarUrl;
-    String avatarFileId;
+    DirectorResponse director;
+    int displayOrder;
 }

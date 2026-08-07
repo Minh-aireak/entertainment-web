@@ -20,6 +20,7 @@ public class FilmResponse {
     String title;
     String description;
     String thumbnailUrl;
+    String thumbnailFileId;
     String trailerUrl;
     int durationMinutes;
     Instant releaseDate;
@@ -30,7 +31,7 @@ public class FilmResponse {
     int followCount;
     int season;
     FilmStatus status;
-    DirectorResponse director;
+    List<FilmDirectorResponse> directors;
     Country country;
     Set<Genre> genres;
     List<FilmCastResponse> casts;

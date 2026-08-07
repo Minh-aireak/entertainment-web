@@ -15,4 +15,5 @@ public class NotificationEvent {
     String typeNotification;
     String userIdSender;
     List<String> toUserIds;
+    String filmTitle;
 }

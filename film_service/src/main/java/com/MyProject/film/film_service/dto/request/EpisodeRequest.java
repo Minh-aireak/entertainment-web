@@ -12,7 +12,7 @@ public class EpisodeRequest {
     int seasonNumber;
     int episodeNumber;
     String title;
-    String videoUrl;
+    String videoFileId;
     int durationMinutes;
     String filmId;
 }

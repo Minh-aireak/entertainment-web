@@ -10,6 +10,7 @@ import com.MyProject.film.film_service.exception.AppException;
 import com.MyProject.film.film_service.enums.ErrorCode;
 import com.MyProject.film.film_service.mapper.FilmFollowMapper;
 import com.MyProject.film.film_service.mapper.FilmMapper;
+import com.MyProject.film.film_service.repository.httpclient.FileClient;
 import com.MyProject.film.film_service.repository.mysql.FilmFollowRepository;
 import com.MyProject.film.film_service.repository.mysql.FilmRepository;
 import com.MyProject.film.film_service.repository.mysql.OutboxRepository;
@@ -39,6 +40,7 @@ public class FilmFollowService {
     ObjectMapper objectMapper;
     FilmMapper filmMapper;
     RedisService redisService;
+    FileClient fileClient;
 
     @Transactional
     public void processFollowAction(String filmId, String action) {
@@ -128,7 +130,22 @@ public class FilmFollowService {
         String userId = SecurityUtils.getCurrentUserId();
         return filmFollowRepository.findAllByUserId(userId).stream()
                 .map(filmFollow -> filmMapper.toFilmSummaryResponse(filmFollow.getFilm()))
+                .map(this::resolveThumbnail)
                 .collect(Collectors.toList());
+    }
+
+    // Phim có thumbnailFileId (upload qua file-service, bucket B2 private) chỉ lưu metadata, không
+    // lưu URL vĩnh viễn - phải resolve presigned URL mới mỗi lần đọc, giống FilmService.resolveThumbnail().
+    private FilmSummaryResponse resolveThumbnail(FilmSummaryResponse response) {
+        if (response.getThumbnailFileId() == null || response.getThumbnailFileId().isBlank()) {
+            return response;
+        }
+        try {
+            response.setThumbnailUrl(fileClient.getFileInfo(response.getThumbnailFileId()).getResult().getUrl());
+        } catch (Exception e) {
+            log.warn("Failed to resolve thumbnail file {} for film {}", response.getThumbnailFileId(), response.getId(), e);
+        }
+        return response;
     }
 
     public boolean isFollowing(String filmId) {

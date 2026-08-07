@@ -26,6 +26,9 @@ public class FilmDoc {
     @Field(type = FieldType.Keyword)
     String thumbnailUrl;
 
+    @Field(type = FieldType.Keyword)
+    String thumbnailFileId;
+
     @Field(type = FieldType.Double)
     double averageRating;
 

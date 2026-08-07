@@ -34,8 +34,16 @@ public class Film {
     @Column(columnDefinition = "TEXT")
     String description;
 
+    // URL ngoài do admin tự nhập (vd. link ảnh khác) - dùng thẳng, không hết hạn.
+    @Column(columnDefinition = "TEXT")
     String thumbnailUrl;
 
+    // Nếu khác null: ảnh được upload qua file-service (bucket B2 private) - thumbnailUrl ở trên bị bỏ
+    // qua, URL hiển thị được resolve mới mỗi lần đọc (xem FilmService) để tránh presigned URL hết hạn.
+    @Column(columnDefinition = "TEXT")
+    String thumbnailFileId;
+
+    @Column(columnDefinition = "TEXT")
     String trailerUrl;
 
     int durationMinutes;
@@ -57,15 +65,11 @@ public class Film {
 
     int season;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "director_id")
-    Director director;
-
     @Enumerated(EnumType.STRING)
     Country country;
 
     @Enumerated(EnumType.STRING)
-    FilmStatus status = FilmStatus.UPCOMING;
+    FilmStatus status = FilmStatus.ONGOING;
 
     @ElementCollection(targetClass = Genre.class)
     @CollectionTable(name = "film_genres", joinColumns = @JoinColumn(name = "film_id"))
@@ -78,4 +82,7 @@ public class Film {
 
     @OneToMany(mappedBy = "film")
     List<FilmCast> casts = new ArrayList<>();
+
+    @OneToMany(mappedBy = "film")
+    List<FilmDirector> directors = new ArrayList<>();
 }

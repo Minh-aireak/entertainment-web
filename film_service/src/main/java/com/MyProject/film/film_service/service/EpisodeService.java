@@ -89,6 +89,7 @@ public class EpisodeService {
                 .typeNotification("NEW_EPISODE")
                 .userIdSender(SecurityUtils.getCurrentUserId())
                 .toUserIds(followerIds)
+                .filmTitle(film.getTitle())
                 .build();
 
         try {

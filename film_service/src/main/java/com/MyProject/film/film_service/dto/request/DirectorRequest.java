@@ -12,4 +12,5 @@ public class DirectorRequest {
     @NotBlank(message = "NAME_REQUIRED")
     String name;
     String avatarUrl;
+    String avatarFileId;
 }

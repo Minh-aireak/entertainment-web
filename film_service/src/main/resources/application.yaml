@@ -7,9 +7,9 @@ spring:
   application:
     name: film-service
   datasource:
-    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3307}/film-service?createDatabaseIfNotExist=true
-    username: ${MYSQL_ROOT_USERNAME:root}
-    password: ${MYSQL_ROOT_PASSWORD:REDACTED_LEGACY_CREDENTIAL}
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/film-service?createDatabaseIfNotExist=true
+    username: ${MYSQL_ROOT_USERNAME}
+    password: ${MYSQL_ROOT_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
@@ -24,17 +24,17 @@ spring:
       mode: always
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
       password: ${REDIS_PASSWORD}
       repositories:
         enabled: false
   elasticsearch:
-    uris: ${ELASTICSEARCH_URIS:http://localhost:9200}
-    username: ${ELASTICSEARCH_USERNAME:elastic}
-    password: ${ELASTICSEARCH_PASSWORD:changeme}
+    uris: ${ELASTICSEARCH_URIS}
+    username: ${ELASTICSEARCH_USERNAME}
+    password: ${ELASTICSEARCH_PASSWORD}
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -53,7 +53,7 @@ spring:
       ack-mode: manual_immediate
 
 jwt:
- signerKey: ${JWT_SIGNER_KEY:uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0}
+  signerKey: ${JWT_SIGNER_KEY}
 
 resilience4j:
   circuitbreaker:
@@ -145,7 +145,9 @@ logging:
 app:
   services:
     comment:
-      url: ${COMMENT_SERVICE_URL:localhost:8091}
+      url: ${COMMENT_SERVICE_URL}
+    file:
+      url: ${FILE_SERVICE_URL}
   rate-limit:
     film-rating:
       limit-for-period: 30

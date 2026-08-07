@@ -26,13 +26,14 @@ public class FilmRequest {
     String description;
 
     String thumbnailUrl;
+    String thumbnailFileId;
     String trailerUrl;
     int durationMinutes;
     Instant releaseDate;
     Boolean series;
 
-    @NotBlank(message = "DIRECTOR_REQUIRED")
-    String directorId;
+    @NotEmpty(message = "DIRECTOR_REQUIRED")
+    List<String> directorIds;
 
     int season;
 

@@ -12,4 +12,5 @@ public class ActorResponse {
     String id;
     String name;
     String avatarUrl;
+    String avatarFileId;
 }
