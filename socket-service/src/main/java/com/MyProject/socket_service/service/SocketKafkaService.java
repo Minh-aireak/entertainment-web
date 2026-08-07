@@ -2,12 +2,14 @@ package com.MyProject.socket_service.service;
 
 import com.MyProject.common.dto.response.UserProfileResponse;
 import com.MyProject.common.redis.RedisService;
+import com.MyProject.socket_service.dto.event.CommentCreatedEvent;
 import com.MyProject.socket_service.dto.event.ConversationCreatedEvent;
 import com.MyProject.socket_service.dto.event.ConversationSeenEvent;
 import com.MyProject.socket_service.dto.event.MessageCreatedEvent;
 import com.MyProject.socket_service.dto.event.NotificationSocket;
 import com.MyProject.socket_service.dto.event.ProfileSocketUpdatedEvent;
 import com.MyProject.socket_service.dto.response.ChatMessageResponse;
+import com.MyProject.socket_service.dto.response.CommentResponse;
 import com.MyProject.socket_service.dto.response.NotificationUI;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -119,6 +121,30 @@ public class SocketKafkaService {
             ack.acknowledge();
         } catch (Exception e) {
             log.error("Failed to process created conversation event", e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    @KafkaListener(topics = "comment.events")
+    public void consumeCommentEvent(String message, Acknowledgment ack) {
+        try {
+            CommentCreatedEvent event = objectMapper.readValue(message, CommentCreatedEvent.class);
+
+            String socketEvent = switch (event.getEventType()) {
+                case "COMMENT_CREATED" -> "comment:created";
+                case "COMMENT_UPDATED" -> "comment:updated";
+                case "COMMENT_DELETED" -> "comment:deleted";
+                default -> "unknown";
+            };
+
+            CommentResponse comment = event.getComment();
+            log.info("Received event {} for source: {}", socketEvent, comment.getSourceId());
+
+            // Room theo sourceId (postId) - room engine sẵn có, dùng chung với join-room/leave-room của chat
+            webSocketSessionService.sendToRoom(comment.getSourceId(), socketEvent, comment);
+            ack.acknowledge();
+        } catch (Exception e) {
+            log.error("Failed to process comment event", e);
             throw new RuntimeException(e);
         }
     }

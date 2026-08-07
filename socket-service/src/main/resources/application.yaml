@@ -8,17 +8,17 @@ spring:
     name: socket-service
   data:
     mongodb:
-      uri: mongodb://${MONGODB_ROOT_USERNAME:root}:${MONGODB_ROOT_PASSWORD:REDACTED_LEGACY_CREDENTIAL}@${MONGODB_HOST:localhost}:${MONGODB_PORT:27017}/socket-service?authSource=admin
+      uri: mongodb://${MONGODB_ROOT_USERNAME}:${MONGODB_ROOT_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/socket-service?authSource=admin
     redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
       connect-timeout: 5000
       timeout: 5000
-      password: ${REDIS_PASSWORD:REDACTED_LEGACY_CREDENTIAL}
+      password: ${REDIS_PASSWORD}
       repositories:
         enabled: false
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -42,16 +42,16 @@ spring:
       ack-mode: manual_immediate
 
 jwt:
-  signerKey: ${JWT_SIGNER_KEY:uahkQQArjCd/s458SRMXBYTBbV8FiePF7TPREMKeRijTgiD6DOkEdtmxtcGPVGP0}
+  signerKey: ${JWT_SIGNER_KEY}
 
 app:
   services:
     chat:
-      url: ${CHAT_SERVICE_URL:http://localhost:8086}
+      url: ${CHAT_SERVICE_URL}
     profile:
-      url: ${PROFILE_SERVICE_URL:http://localhost:8081}
+      url: ${PROFILE_SERVICE_URL}
     identity:
-      url: ${IDENTITY_SERVICE_URL:http://localhost:8080}
+      url: ${IDENTITY_SERVICE_URL}
 
 resilience4j:
   circuitbreaker:
@@ -88,5 +88,3 @@ resilience4j:
         wait-duration: 500ms
         enable-exponential-backoff: true
         exponential-backoff-multiplier: 2
-
-
