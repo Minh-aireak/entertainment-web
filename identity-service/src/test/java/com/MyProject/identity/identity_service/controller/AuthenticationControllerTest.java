@@ -1,542 +1,225 @@
 package com.MyProject.identity.identity_service.controller;
 
-import static org.mockito.Mockito.*;
-
-import com.MyProject.identity.identity_service.dto.response.IntrospectResponse;
-import com.MyProject.identity.identity_service.configuration.CustomJwtDecoder;
-import com.MyProject.identity.identity_service.configuration.JwtAuthenticationEntryPoint;
+import com.MyProject.common.security.CommonJwtAuthenticationEntryPoint;
+import com.MyProject.common.security.CommonJwtDecoder;
 import com.MyProject.identity.identity_service.configuration.SecurityConfig;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
-import org.springframework.context.annotation.Import;
-import org.springframework.http.MediaType;
-import org.springframework.security.test.context.support.WithMockUser;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
-import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.MyProject.identity.identity_service.configuration.JwtAuthenticationConverterTestConfig;
 import com.MyProject.identity.identity_service.dto.request.AuthenticationRequest;
 import com.MyProject.identity.identity_service.dto.response.AuthenticationResponse;
+import com.MyProject.identity.identity_service.dto.response.IntrospectResponse;
 import com.MyProject.identity.identity_service.exception.AppException;
 import com.MyProject.identity.identity_service.exception.ErrorCode;
 import com.MyProject.identity.identity_service.service.AuthenticationService;
+import com.MyProject.identity.identity_service.service.IdentityApiRateLimitService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.Cookie;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
-import lombok.AccessLevel;
-import lombok.experimental.FieldDefaults;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * AuthenticationController now identifies callers via httpOnly access_token/refresh_token
+ * cookies rather than a JSON token body - every /auth/** route is on SecurityConfig's public
+ * endpoint list (auth itself is what issues the cookies), so none of these requests need a
+ * pre-authenticated JWT.
+ */
 @WebMvcTest(AuthenticationController.class)
-@Import(
-        {SecurityConfig.class,
-        JwtAuthenticationEntryPoint.class,
-        CustomJwtDecoder.class}
-)
-@FieldDefaults(level = AccessLevel.PRIVATE)
+@Import({SecurityConfig.class, CommonJwtAuthenticationEntryPoint.class, CommonJwtDecoder.class,
+        JwtAuthenticationConverterTestConfig.class})
 @AutoConfigureMockMvc
+@ActiveProfiles("test")
 class AuthenticationControllerTest {
+
     @Autowired
     MockMvc mockMvc;
 
     @MockitoBean
     AuthenticationService authenticationService;
 
-    AuthenticationRequest authenticationRequest;
-    AuthenticationResponse authenticationResponse;
-    IntrospectResponse introspectResponse;
-    TokenRequest tokenRequest;
-    ObjectMapper objectMapper;
-    String code;
+    @MockitoBean
+    IdentityApiRateLimitService identityApiRateLimitService;
 
-    @BeforeEach
-    void initData() {
-        objectMapper = new ObjectMapper();
+    final ObjectMapper objectMapper = new ObjectMapper();
 
-        authenticationRequest = AuthenticationRequest.builder()
-                .username("aireak")
-                .password("REDACTED_LEGACY_CREDENTIAL")
-                .build();
-
-        authenticationResponse = AuthenticationResponse.builder()
-                .token("123456789").build();
-
-        tokenRequest = com.MyProject.common.dto.request.TokenRequest.builder().token("123456789").build();
-
-        introspectResponse = IntrospectResponse.builder()
-                .valid(true)
-                .userId("AIREAK")
-                .build();
-
-        tokenRequest = com.MyProject.common.dto.request.TokenRequest.builder().token("123456789").build();
-
-        tokenRequest = TokenRequest.builder().token("123456789").build();
-
-        code = "100";
+    private AuthenticationRequest loginRequest() {
+        return AuthenticationRequest.builder().username("aireak").password("REDACTED_LEGACY_CREDENTIAL").build();
     }
 
-    @Test
-    void login_success() throws Exception {
-        String content = objectMapper.writeValueAsString(authenticationRequest);
+    // ---------- login ----------
 
-        when(authenticationService.authentication(authenticationRequest)).thenReturn(authenticationResponse);
+    @Test
+    void login_success_setsAccessAndRefreshTokenCookies() throws Exception {
+        when(authenticationService.authentication(any())).thenReturn(
+                AuthenticationResponse.builder().token("access-123").refreshToken("refresh-456").build());
 
         mockMvc.perform(MockMvcRequestBuilders.post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(MockMvcResultMatchers.status().isOk())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1000))
-                .andExpect(MockMvcResultMatchers.jsonPath("result.token").value("123456789"));
+                        .content(objectMapper.writeValueAsString(loginRequest())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("code").value(1000))
+                .andExpect(jsonPath("message").value("Login success!"))
+                .andExpect(cookie().value("access_token", "access-123"))
+                .andExpect(cookie().value("refresh_token", "refresh-456"))
+                .andExpect(cookie().httpOnly("access_token", true));
 
-        verify(authenticationService, times(1)).authentication(authenticationRequest);
+        verify(identityApiRateLimitService).checkLogin("aireak");
     }
 
     @Test
-    void login_usernameNull() throws Exception {
-        authenticationRequest.setUsername(null);
-        String content = objectMapper.writeValueAsString(authenticationRequest);
-
-        when(authenticationService.authentication(authenticationRequest)).thenThrow(new AppException(ErrorCode.USERNAME_NOTNULL));
+    void login_missingUsername_returns400WithFieldMessage() throws Exception {
+        AuthenticationRequest request = AuthenticationRequest.builder().password("REDACTED_LEGACY_CREDENTIAL").build();
 
         mockMvc.perform(MockMvcRequestBuilders.post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(MockMvcResultMatchers.status().isBadRequest())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8016))
-                .andExpect(MockMvcResultMatchers.jsonPath("message").value("Username cannot be null!"));
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("code").value(ErrorCode.USERNAME_NOTNULL.getCode()))
+                .andExpect(jsonPath("message").value("Username cannot be null!"));
 
-        verify(authenticationService, never()).authentication(authenticationRequest);
+        verifyNoInteractions(authenticationService);
     }
 
     @Test
-    void login_passwordNull() throws Exception {
-        authenticationRequest.setPassword(null);
-        String content = objectMapper.writeValueAsString(authenticationRequest);
-
-        when(authenticationService.authentication(authenticationRequest)).thenThrow(new AppException(ErrorCode.PASSWORD_NOTNULL));
-
-        mockMvc.perform(MockMvcRequestBuilders.post("/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(MockMvcResultMatchers.status().isBadRequest())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8017))
-                .andExpect(MockMvcResultMatchers.jsonPath("message").value("Password cannot be null!"));
-
-        verify(authenticationService, never()).authentication(authenticationRequest);
-    }
-
-    @Test
-    void login_userNotExisted() throws Exception {
-        String content = objectMapper.writeValueAsString(authenticationRequest);
-
+    void login_userNotExisted_returns404() throws Exception {
         when(authenticationService.authentication(any())).thenThrow(new AppException(ErrorCode.USER_NOT_EXISTED));
 
         mockMvc.perform(MockMvcRequestBuilders.post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(MockMvcResultMatchers.status().isNotFound())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8002))
-                .andExpect(MockMvcResultMatchers.jsonPath("message").value("User not existed!"));
-
-        verify(authenticationService, times(1)).authentication(authenticationRequest);
+                        .content(objectMapper.writeValueAsString(loginRequest())))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("code").value(ErrorCode.USER_NOT_EXISTED.getCode()));
     }
 
     @Test
-    void login_userNotActive() throws Exception {
-        String content = objectMapper.writeValueAsString(authenticationRequest);
-
-        when(authenticationService.authentication(any())).thenThrow(new AppException(ErrorCode.USER_NOT_ACTIVE));
-
-        mockMvc.perform(MockMvcRequestBuilders.post("/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(MockMvcResultMatchers.status().isBadRequest())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8023))
-                .andExpect(MockMvcResultMatchers.jsonPath("message").value("User not existed!"));
-
-        verify(authenticationService, times(1)).authentication(authenticationRequest);
-    }
-
-    @Test
-    void login_passwordIncorrect() throws Exception {
-        String content = objectMapper.writeValueAsString(authenticationRequest);
-
+    void login_passwordIncorrect_returns400() throws Exception {
         when(authenticationService.authentication(any())).thenThrow(new AppException(ErrorCode.PASSWORD_INCORRECT));
 
         mockMvc.perform(MockMvcRequestBuilders.post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(MockMvcResultMatchers.status().isBadRequest())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8010))
-                .andExpect(MockMvcResultMatchers.jsonPath("message").value("Password incorrect!"));
+                        .content(objectMapper.writeValueAsString(loginRequest())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("code").value(ErrorCode.PASSWORD_INCORRECT.getCode()));
+    }
 
-        verify(authenticationService, times(1)).authentication(authenticationRequest);
+    // ---------- introspect ----------
+
+    @Test
+    void introspect_queryParamToken_returnsValidity() throws Exception {
+        when(authenticationService.introspectResponse("token-abc")).thenReturn(
+                IntrospectResponse.builder().valid(true).userId("user-1").build());
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/auth/introspect").param("token", "token-abc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("result.valid").value(true))
+                .andExpect(jsonPath("result.userId").value("user-1"));
     }
 
     @Test
-    void introspect_token_success() throws Exception {
-        String content = objectMapper.writeValueAsString(tokenRequest);
+    void introspect_noTokenParamOrCookie_returns401AccessTokenMissing() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.post("/auth/introspect"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("code").value(ErrorCode.ACCESS_TOKEN_MISSING.getCode()));
 
-        when(authenticationService.introspectResponse(tokenRequest)).thenReturn(introspectResponse);
+        verifyNoInteractions(authenticationService);
+    }
+
+    @Test
+    void introspect_fallsBackToAccessTokenCookieWhenNoQueryParam() throws Exception {
+        when(authenticationService.introspectResponse("cookie-token")).thenReturn(
+                IntrospectResponse.builder().valid(true).userId("user-2").build());
 
         mockMvc.perform(MockMvcRequestBuilders.post("/auth/introspect")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(MockMvcResultMatchers.status().isOk())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1000))
-                .andExpect(MockMvcResultMatchers.jsonPath("result.valid").value("true"))
-                .andExpect(MockMvcResultMatchers.jsonPath("result.userId").value("AIREAK"));
-
-        verify(authenticationService, times(1)).introspectResponse(tokenRequest);
+                        .cookie(new Cookie("access_token", "cookie-token")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("result.userId").value("user-2"));
     }
 
-    @Test
-    void introspect_verifyTokenFailed() throws Exception {
-        String content = objectMapper.writeValueAsString(tokenRequest);
-
-        when(authenticationService.introspectResponse(tokenRequest)).thenThrow(new AppException(ErrorCode.VERIFY_TOKEN_FAILED));
-
-        mockMvc.perform(MockMvcRequestBuilders.post("/auth/introspect")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(MockMvcResultMatchers.status().isBadRequest())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8020))
-                .andExpect(MockMvcResultMatchers.jsonPath("message").value("Verify token failed!"));
-
-        verify(authenticationService, times(1)).introspectResponse(tokenRequest);
-    }
+    // ---------- logout ----------
 
     @Test
-    void introspect_parseException() throws Exception {
-        String content = objectMapper.writeValueAsString(tokenRequest);
-
-        when(authenticationService.introspectResponse(tokenRequest)).thenThrow(new AppException(ErrorCode.PARSE_EXCEPTION));
-
-        mockMvc.perform(MockMvcRequestBuilders.post("/auth/introspect")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(MockMvcResultMatchers.status().isBadRequest())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8021))
-                .andExpect(MockMvcResultMatchers.jsonPath("message").value("Parse exception!"));
-
-        verify(authenticationService, times(1)).introspectResponse(tokenRequest);
-    }
-
-    @Test
-    void introspect_tokenInvalid() throws Exception {
-        String content = objectMapper.writeValueAsString(tokenRequest);
-
-        when(authenticationService.introspectResponse(tokenRequest)).thenThrow(new AppException(ErrorCode.TOKEN_INVALID));
-
-        mockMvc.perform(MockMvcRequestBuilders.post("/auth/introspect")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(MockMvcResultMatchers.status().isUnauthorized())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8014))
-                .andExpect(MockMvcResultMatchers.jsonPath("message").value("Token invalid!"));
-
-        verify(authenticationService, times(1)).introspectResponse(any());
-    }
-
-    @Test
-    void introspect_tokenAlreadyInvalidated() throws Exception {
-        String content = objectMapper.writeValueAsString(tokenRequest);
-
-        when(authenticationService.introspectResponse(tokenRequest))
-                .thenThrow(new AppException(ErrorCode.TOKEN_ALREADY_INVALIDATED));
-
-        mockMvc.perform(MockMvcRequestBuilders.post("/auth/introspect")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(MockMvcResultMatchers.status().isBadRequest())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8015))
-                .andExpect(MockMvcResultMatchers.jsonPath("message").value("Token already invalidated!"));
-
-        verify(authenticationService, times(1)).introspectResponse(any());
-    }
-
-    @Test
-    @WithMockUser
-    void logout_success() throws Exception {
-        String content = objectMapper.writeValueAsString(tokenRequest);
-
-        doNothing().when(authenticationService).logout(tokenRequest);
-
+    void logout_withRefreshTokenCookie_callsServiceAndClearsCookies() throws Exception {
         mockMvc.perform(MockMvcRequestBuilders.post("/auth/logout")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(MockMvcResultMatchers.status().isOk())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1000));
+                        .cookie(new Cookie("refresh_token", "refresh-456")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("message").value("Logout success!"))
+                .andExpect(cookie().maxAge("access_token", 0))
+                .andExpect(cookie().maxAge("refresh_token", 0));
 
-        verify(authenticationService, times(1)).logout(tokenRequest);
+        verify(authenticationService).logout("refresh-456");
     }
 
     @Test
-    @WithMockUser
-    void logout_accessDenied() throws Exception {
-        String content = objectMapper.writeValueAsString(tokenRequest);
+    void logout_noRefreshTokenCookie_skipsServiceButStillReturnsOk() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.post("/auth/logout"))
+                .andExpect(status().isOk());
 
-        doThrow(new AppException(ErrorCode.ACCESS_DENIED)).when(authenticationService).logout(tokenRequest);
-
-        mockMvc.perform(MockMvcRequestBuilders.post("/auth/logout")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(MockMvcResultMatchers.status().isForbidden())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8019))
-                .andExpect(MockMvcResultMatchers.jsonPath("message").value("Token not owned by user!"));
-
-        verify(authenticationService, times(1)).logout(tokenRequest);
+        verifyNoInteractions(authenticationService);
     }
 
-    @Test
-    void logout_unAuthentication() throws Exception {
-        String content = objectMapper.writeValueAsString(tokenRequest);
-        mockMvc.perform(MockMvcRequestBuilders.post("/auth/logout")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(MockMvcResultMatchers.status().isUnauthorized())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8011))
-                .andExpect(MockMvcResultMatchers.jsonPath("message").value("Unauthenticated!"));
-
-        verify(authenticationService, never()).logout(any());
-    }
+    // ---------- refresh-token ----------
 
     @Test
-    @WithMockUser
-    void logout_weakKey() throws Exception {
-        String content = objectMapper.writeValueAsString(tokenRequest);
-
-        doThrow(new AppException(ErrorCode.WEAK_KEY)).when(authenticationService).logout(tokenRequest);
-
-        mockMvc.perform(MockMvcRequestBuilders.post("/auth/logout")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(MockMvcResultMatchers.status().isBadRequest())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8018))
-                .andExpect(MockMvcResultMatchers.jsonPath("message").value("Key length is weak!"));
-
-        verify(authenticationService, times(1)).logout(tokenRequest);
-    }
-
-    @Test
-    @WithMockUser
-    void logout_tokenInvalid() throws Exception {
-        String content = objectMapper.writeValueAsString(tokenRequest);
-
-        doThrow(new AppException(ErrorCode.TOKEN_INVALID)).when(authenticationService).logout(tokenRequest);
-
-        mockMvc.perform(MockMvcRequestBuilders.post("/auth/logout")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(MockMvcResultMatchers.status().isUnauthorized())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8014))
-                .andExpect(MockMvcResultMatchers.jsonPath("message").value("Token invalid!"));
-
-        verify(authenticationService, times(1)).logout(tokenRequest);
-    }
-
-    @Test
-    @WithMockUser
-    void refreshToken_success() throws Exception {
-        String content = objectMapper.writeValueAsString(tokenRequest);
-
-        when(authenticationService.refreshToken(tokenRequest)).thenReturn(authenticationResponse);
+    void refresh_withValidCookie_setsNewCookies() throws Exception {
+        when(authenticationService.refreshToken("old-refresh")).thenReturn(
+                AuthenticationResponse.builder().token("new-access").refreshToken("new-refresh").build());
 
         mockMvc.perform(MockMvcRequestBuilders.post("/auth/refresh-token")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(MockMvcResultMatchers.status().isOk())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1000))
-                .andExpect(MockMvcResultMatchers.jsonPath("result.token").value("123456789"));
-
-        verify(authenticationService, times(1)).refreshToken(tokenRequest);
+                        .cookie(new Cookie("refresh_token", "old-refresh")))
+                .andExpect(status().isOk())
+                .andExpect(cookie().value("access_token", "new-access"))
+                .andExpect(cookie().value("refresh_token", "new-refresh"));
     }
 
     @Test
-    void refreshToken_unAuthentication() throws Exception {
-        String content = objectMapper.writeValueAsString(tokenRequest);
-        mockMvc.perform(MockMvcRequestBuilders.post("/auth/refresh-token")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(MockMvcResultMatchers.status().isUnauthorized())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8011))
-                .andExpect(MockMvcResultMatchers.jsonPath("message").value("Unauthenticated!"));
+    void refresh_noCookie_throwsRefreshTokenMissing() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.post("/auth/refresh-token"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("code").value(ErrorCode.REFRESH_TOKEN_MISSING.getCode()));
 
-        verify(authenticationService, never()).refreshToken(any());
+        verifyNoInteractions(authenticationService);
     }
 
     @Test
-    @WithMockUser
-    void refreshToken_weakKey() throws Exception {
-        String content = objectMapper.writeValueAsString(tokenRequest);
-
-        doThrow(new AppException(ErrorCode.WEAK_KEY)).when(authenticationService).refreshToken(tokenRequest);
+    void refresh_serviceRejectsInvalidToken_returns401() throws Exception {
+        when(authenticationService.refreshToken("bad-token")).thenThrow(new AppException(ErrorCode.TOKEN_INVALID));
 
         mockMvc.perform(MockMvcRequestBuilders.post("/auth/refresh-token")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(MockMvcResultMatchers.status().isBadRequest())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8018))
-                .andExpect(MockMvcResultMatchers.jsonPath("message").value("Key length is weak!"));
+                        .cookie(new Cookie("refresh_token", "bad-token")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("code").value(ErrorCode.TOKEN_INVALID.getCode()));
+    }
 
-        verify(authenticationService, times(1)).refreshToken(tokenRequest);
+    // ---------- outbound google ----------
+
+    @Test
+    void outboundAuthenticate_success_setsCookies() throws Exception {
+        when(authenticationService.outboundAuthenticate("auth-code")).thenReturn(
+                AuthenticationResponse.builder().token("access-1").refreshToken("refresh-1").build());
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/auth/outbound/google").param("code", "auth-code"))
+                .andExpect(status().isOk())
+                .andExpect(cookie().value("access_token", "access-1"));
     }
 
     @Test
-    @WithMockUser
-    void refreshToken_accessDenied() throws Exception {
-        String content = objectMapper.writeValueAsString(tokenRequest);
+    void outboundAuthenticate_roleNotExisted_returns404() throws Exception {
+        when(authenticationService.outboundAuthenticate("auth-code")).thenThrow(new AppException(ErrorCode.ROLE_NOT_EXISTED));
 
-        doThrow(new AppException(ErrorCode.ACCESS_DENIED)).when(authenticationService).refreshToken(tokenRequest);
-
-        mockMvc.perform(MockMvcRequestBuilders.post("/auth/refresh-token")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(MockMvcResultMatchers.status().isForbidden())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8019))
-                .andExpect(MockMvcResultMatchers.jsonPath("message").value("Token not owned by user!"));
-
-        verify(authenticationService, times(1)).refreshToken(tokenRequest);
-    }
-
-    @Test
-    @WithMockUser
-    void refreshToken_tokenInvalid() throws Exception {
-        String content = objectMapper.writeValueAsString(tokenRequest);
-
-        doThrow(new AppException(ErrorCode.TOKEN_INVALID)).when(authenticationService).refreshToken(tokenRequest);
-
-        mockMvc.perform(MockMvcRequestBuilders.post("/auth/refresh-token")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(MockMvcResultMatchers.status().isUnauthorized())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8014))
-                .andExpect(MockMvcResultMatchers.jsonPath("message").value("Token invalid!"));
-
-        verify(authenticationService, times(1)).refreshToken(tokenRequest);
-    }
-
-    @Test
-    @WithMockUser
-    void refreshToken_tokenAlreadyInvalidated() throws Exception {
-        String content = objectMapper.writeValueAsString(tokenRequest);
-
-        when(authenticationService.refreshToken(tokenRequest))
-                .thenThrow(new AppException(ErrorCode.TOKEN_ALREADY_INVALIDATED));
-
-        mockMvc.perform(MockMvcRequestBuilders.post("/auth/refresh-token")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(MockMvcResultMatchers.status().isBadRequest())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8015))
-                .andExpect(MockMvcResultMatchers.jsonPath("message").value("Token already invalidated!"));
-
-        verify(authenticationService, times(1)).refreshToken(tokenRequest);
-    }
-
-    @Test
-    @WithMockUser
-    void refreshToken_verifyTokenFailed() throws Exception {
-        String content = objectMapper.writeValueAsString(tokenRequest);
-
-        when(authenticationService.refreshToken(tokenRequest)).thenThrow(new AppException(ErrorCode.VERIFY_TOKEN_FAILED));
-
-        mockMvc.perform(MockMvcRequestBuilders.post("/auth/refresh-token")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(MockMvcResultMatchers.status().isBadRequest())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8020))
-                .andExpect(MockMvcResultMatchers.jsonPath("message").value("Verify token failed!"));
-
-        verify(authenticationService, times(1)).refreshToken(tokenRequest);
-    }
-
-    @Test
-    @WithMockUser
-    void refreshToken_parseException() throws Exception {
-        String content = objectMapper.writeValueAsString(tokenRequest);
-
-        when(authenticationService.refreshToken(tokenRequest)).thenThrow(new AppException(ErrorCode.PARSE_EXCEPTION));
-
-        mockMvc.perform(MockMvcRequestBuilders.post("/auth/refresh-token")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(MockMvcResultMatchers.status().isBadRequest())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8021))
-                .andExpect(MockMvcResultMatchers.jsonPath("message").value("Parse exception!"));
-
-        verify(authenticationService, times(1)).refreshToken(tokenRequest);
-    }
-
-    @Test
-    @WithMockUser
-    void refreshToken_signerToken() throws Exception {
-        String content = objectMapper.writeValueAsString(tokenRequest);
-
-        doThrow(new AppException(ErrorCode.SIGNER_EXCEPTION))
-                .when(authenticationService)
-                .refreshToken(tokenRequest);
-
-        mockMvc.perform(MockMvcRequestBuilders.post("/auth/refresh-token")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(MockMvcResultMatchers.status().isInternalServerError())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8022))
-                .andExpect(MockMvcResultMatchers.jsonPath("message").value("Signer key invalid!"));
-
-        verify(authenticationService, times(1)).refreshToken(any());
-    }
-
-    @Test
-    void outboundAuthenticate_success() throws Exception {
-
-        when(authenticationService.outboundAuthenticate(code))
-                .thenReturn(authenticationResponse);
-
-        mockMvc.perform(MockMvcRequestBuilders.post("/auth/outbound/google")
-                        .param("code", code)
-                        .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(MockMvcResultMatchers.status().isOk())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1000))
-                .andExpect(MockMvcResultMatchers.jsonPath("result.token").value("123456789"));
-
-        verify(authenticationService, times(1)).outboundAuthenticate(code);
-    }
-
-    @Test
-    void outboundAuthenticate_roleNotExisted() throws Exception {
-
-        doThrow(new AppException(ErrorCode.ROLE_NOT_EXISTED))
-                .when(authenticationService)
-                .outboundAuthenticate(code);
-
-        mockMvc.perform(MockMvcRequestBuilders.post("/auth/outbound/google")
-                        .param("code", code)
-                        .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(MockMvcResultMatchers.status().isNotFound())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8007))
-                .andExpect(MockMvcResultMatchers.jsonPath("message").value("Role not existed!"));
-
-        verify(authenticationService, times(1)).outboundAuthenticate(code);
-    }
-
-    @Test
-    @WithMockUser
-    void outboundAuthenticate_signerToken() throws Exception {
-
-        doThrow(new AppException(ErrorCode.SIGNER_EXCEPTION))
-                .when(authenticationService)
-                .outboundAuthenticate(code);
-
-        mockMvc.perform(MockMvcRequestBuilders.post("/auth/outbound/google")
-                        .param("code", code)
-                        .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(MockMvcResultMatchers.status().isInternalServerError())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8022))
-                .andExpect(MockMvcResultMatchers.jsonPath("message").value("Signer key invalid!"));
-
-        verify(authenticationService, times(1)).outboundAuthenticate(code);
+        mockMvc.perform(MockMvcRequestBuilders.post("/auth/outbound/google").param("code", "auth-code"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("code").value(ErrorCode.ROLE_NOT_EXISTED.getCode()));
     }
 }

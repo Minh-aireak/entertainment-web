@@ -1,491 +1,226 @@
 package com.MyProject.profile.profile_service.controller;
 
 import com.MyProject.common.dto.request.BulkUserProfileRequest;
+import com.MyProject.common.dto.request.ProfileSuggestionRequest;
 import com.MyProject.common.dto.response.PageResponse;
 import com.MyProject.common.dto.response.UserProfileResponse;
-import com.MyProject.profile.profile_service.configuration.CustomJwtDecoder;
-import com.MyProject.profile.profile_service.configuration.JwtAuthenticationEntryPoint;
+import com.MyProject.common.security.CommonJwtAuthenticationEntryPoint;
+import com.MyProject.common.security.CommonJwtDecoder;
 import com.MyProject.profile.profile_service.configuration.SecurityConfig;
-import com.MyProject.profile.profile_service.dto.request.UserProfileCreationRequest;
+import com.MyProject.profile.profile_service.dto.request.UpdateAvatarRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileUpdateRequest;
 import com.MyProject.profile.profile_service.exception.AppException;
 import com.MyProject.profile.profile_service.exception.ErrorCode;
+import com.MyProject.profile.profile_service.repository.elasticsearch.UserProfileElasticRepository;
+import com.MyProject.profile.profile_service.repository.mongo.OutboxRepository;
+import com.MyProject.profile.profile_service.repository.mongo.UserProfileRepository;
 import com.MyProject.profile.profile_service.service.UserProfileService;
-import lombok.AccessLevel;
-import lombok.experimental.FieldDefaults;
-import org.junit.jupiter.api.BeforeEach;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
-import static org.hamcrest.Matchers.hasSize;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(UserProfileController.class)
-@Import(
-        {SecurityConfig.class,
-        JwtAuthenticationEntryPoint.class,
-        CustomJwtDecoder.class}
-)
-@FieldDefaults(level = AccessLevel.PRIVATE)
+@Import({SecurityConfig.class, CommonJwtAuthenticationEntryPoint.class, CommonJwtDecoder.class,
+        UserProfileControllerTest.TestBeans.class})
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class UserProfileControllerTest {
+
+    static class TestBeans {
+        @Bean
+        JwtAuthenticationConverter jwtAuthenticationConverter() {
+            return new JwtAuthenticationConverter();
+        }
+    }
+
     @Autowired
     MockMvc mockMvc;
 
     @MockitoBean
     UserProfileService userProfileService;
 
-    ObjectMapper objectMapper;
-    UserProfileResponse response;
+    @MockitoBean
+    UserProfileRepository userProfileRepository;
 
-    @BeforeEach
-    void initData() {
-        objectMapper = new ObjectMapper();
+    @MockitoBean
+    OutboxRepository outboxRepository;
 
-        response = UserProfileResponse.builder()
-                .userId("123456789")
-                .username("aireak")
-                .email("aireak@gmail.com")
-                .displayName("aireak")
-                .joinDate(LocalDateTime.parse("2025-12-28T19:42:15.123"))
-                .build();
+    @MockitoBean
+    UserProfileElasticRepository userProfileElasticRepository;
+
+    final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Test
+    @WithMockUser
+    void getMyProfile_authenticated_returnsProfile() throws Exception {
+        when(userProfileService.getMyProfile()).thenReturn(
+                UserProfileResponse.builder().userId("user-1").displayName("Aireak").build());
+
+        mockMvc.perform(MockMvcRequestBuilders.get("/my-profile"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("result.userId").value("user-1"))
+                .andExpect(jsonPath("result.displayName").value("Aireak"));
     }
 
     @Test
-    void createProfile_success() throws Exception {
-        UserProfileCreationRequest request = UserProfileCreationRequest.builder()
-                .userId("123456789")
-                .username("aireak")
-                .email("aireak@gmail.com")
-                .displayName("aireak")
-                .joinDate(LocalDateTime.parse("2025-12-28T19:42:15.123"))
-                .build();
-        String content = objectMapper.writeValueAsString(request);
+    void getMyProfile_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.get("/my-profile"))
+                .andExpect(status().isUnauthorized());
 
-        when(userProfileService.createProfile(any(UserProfileCreationRequest.class))).thenReturn(response);
-
-        mockMvc.perform(MockMvcRequestBuilders.post("/internal/registration")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("code").value(1000))
-                .andExpect(jsonPath("result.userId").value("123456789"))
-                .andExpect(jsonPath("result.username").value("aireak"))
-                .andExpect(jsonPath("result.email").value("aireak@gmail.com"))
-                .andExpect(jsonPath("result.displayName").value("aireak"))
-                .andExpect(jsonPath("result.joinDate").value("2025-12-28T19:42:15.123"));
-
-        verify(userProfileService, times(1)).createProfile(any(UserProfileCreationRequest.class));
+        verifyNoInteractions(userProfileService);
     }
 
     @Test
     @WithMockUser
-    void updateProfile_success() throws Exception {
-        UserProfileUpdateRequest updateRequest = UserProfileUpdateRequest.builder()
-                .email("aireakUpdate@gmail.com")
-                .displayName("aireakUpdate")
-                .lastName("aireakUpdate")
-                .dob( LocalDate.parse("18/12/2005",
-                        DateTimeFormatter.ofPattern("dd/MM/yyyy")))
-                .phoneNumber("0865788560")
-                .build();
+    void getMyProfile_notFound_returns404() throws Exception {
+        when(userProfileService.getMyProfile()).thenThrow(new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
-        String content = objectMapper.writeValueAsString(updateRequest);
-
-        when(userProfileService.updateProfile(updateRequest)).thenReturn(response);
-
-        mockMvc.perform(MockMvcRequestBuilders.put("/my-profile")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(jsonPath("code").value(1000))
-                .andExpect(jsonPath("result.userId").value("123456789"))
-                .andExpect(jsonPath("result.username").value("aireak"))
-                .andExpect(jsonPath("result.email").value("aireak@gmail.com"))
-                .andExpect(jsonPath("result.displayName").value("aireak"))
-                .andExpect(jsonPath("result.joinDate").value("2025-12-28T19:42:15.123"));
-
-        verify(userProfileService, times(1)).updateProfile(any(UserProfileUpdateRequest.class));
+        mockMvc.perform(MockMvcRequestBuilders.get("/my-profile"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("code").value(ErrorCode.PROFILE_NOT_FOUND.getCode()));
     }
 
     @Test
-    void updateProfile_unAuthenticated() throws Exception {
-        UserProfileUpdateRequest updateRequest = UserProfileUpdateRequest.builder()
-                .email("aireakUpdategmail.com")
-                .displayName("aireakUpdate")
-                .lastName("aireakUpdate")
-                .dob( LocalDate.parse("18/12/2005",
-                        DateTimeFormatter.ofPattern("dd/MM/yyyy")))
-                .phoneNumber("0865788560")
-                .build();
-
-        String content = objectMapper.writeValueAsString(updateRequest);
-
-        when(userProfileService.updateProfile(updateRequest)).thenThrow(new AppException(ErrorCode.UNAUTHENTICATED));
+    @WithMockUser
+    void updateProfile_validRequest_returnsUpdatedProfile() throws Exception {
+        UserProfileUpdateRequest request = UserProfileUpdateRequest.builder()
+                .displayName("New Name").lastName("Nguyen").phoneNumber("0987654321").build();
+        when(userProfileService.updateProfile(any())).thenReturn(
+                UserProfileResponse.builder().userId("user-1").displayName("New Name").build());
 
         mockMvc.perform(MockMvcRequestBuilders.put("/my-profile")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("code").value(8101))
-                .andExpect(jsonPath("message").value("Unauthenticated!"));
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("result.displayName").value("New Name"));
+    }
+
+    @Test
+    @WithMockUser
+    void updateProfile_blankDisplayName_returns400() throws Exception {
+        UserProfileUpdateRequest request = UserProfileUpdateRequest.builder()
+                .displayName("").lastName("Nguyen").phoneNumber("0987654321").build();
+
+        mockMvc.perform(MockMvcRequestBuilders.put("/my-profile")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("code").value(ErrorCode.DISPLAY_NAME_NOT_BLANK.getCode()));
 
         verify(userProfileService, never()).updateProfile(any());
     }
 
     @Test
     @WithMockUser
-    void updateProfile_emailInvalid() throws Exception {
-        UserProfileUpdateRequest updateRequest = UserProfileUpdateRequest.builder()
-                .email("aireakUpdategmail.com")
-                .displayName("aireakUpdate")
-                .lastName("aireakUpdate")
-                .dob( LocalDate.parse("18/12/2005",
-                        DateTimeFormatter.ofPattern("dd/MM/yyyy")))
-                .phoneNumber("0865788560")
-                .build();
+    void updateAvatar_blankFileId_returns400() throws Exception {
+        UpdateAvatarRequest request = UpdateAvatarRequest.builder().avatarFileId("").build();
 
-        String content = objectMapper.writeValueAsString(updateRequest);
-
-        mockMvc.perform(MockMvcRequestBuilders.put("/my-profile")
+        mockMvc.perform(MockMvcRequestBuilders.put("/my-profile/avatar")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("code").value(8110))
-                .andExpect(jsonPath("message").value("Email invalid!"));
+                .andExpect(jsonPath("code").value(ErrorCode.AVATAR_NOT_BLANK.getCode()));
 
-        verify(userProfileService, never()).updateProfile(any(UserProfileUpdateRequest.class));
+        verifyNoInteractions(userProfileService);
     }
 
     @Test
     @WithMockUser
-    void updateProfile_displayNameEmpty() throws Exception {
-        UserProfileUpdateRequest updateRequest = UserProfileUpdateRequest.builder()
-                .email("aireakUpdate@gmail.com")
-                .displayName("")
-                .lastName("aireakUpdate")
-                .dob( LocalDate.parse("18/12/2005",
-                        DateTimeFormatter.ofPattern("dd/MM/yyyy")))
-                .phoneNumber("0865788560")
-                .build();
+    void updateAvatar_validFileId_delegatesToServiceWithExtractedFileId() throws Exception {
+        UpdateAvatarRequest request = UpdateAvatarRequest.builder().avatarFileId("file-1").build();
+        when(userProfileService.updateAvatar("file-1")).thenReturn(
+                UserProfileResponse.builder().userId("user-1").avatar("https://cdn/file-1").build());
 
-        String content = objectMapper.writeValueAsString(updateRequest);
-
-        mockMvc.perform(MockMvcRequestBuilders.put("/my-profile")
+        mockMvc.perform(MockMvcRequestBuilders.put("/my-profile/avatar")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("code").value(8108))
-                .andExpect(jsonPath("message").value("Display name cannot be blank!"));
-
-        verify(userProfileService, never()).updateProfile(any(UserProfileUpdateRequest.class));
-    }
-
-    @Test
-    @WithMockUser
-    void updateProfile_lastNameEmpty() throws Exception {
-        UserProfileUpdateRequest updateRequest = UserProfileUpdateRequest.builder()
-                .email("aireakUpdate@gmail.com")
-                .displayName("aireakUpdate")
-                .lastName("")
-                .dob(LocalDate.parse("18/12/2005",
-                        DateTimeFormatter.ofPattern("dd/MM/yyyy")))
-                .phoneNumber("0865788560")
-                .build();
-
-        String content = objectMapper.writeValueAsString(updateRequest);
-
-        mockMvc.perform(MockMvcRequestBuilders.put("/my-profile")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("code").value(8103))
-                .andExpect(jsonPath("message").value("Name cannot be blank!"));
-
-        verify(userProfileService, never()).updateProfile(any(UserProfileUpdateRequest.class));
-    }
-
-    @Test
-    @WithMockUser
-    void updateProfile_invalidDob() throws Exception {
-        UserProfileUpdateRequest updateRequest = UserProfileUpdateRequest.builder()
-                .email("aireakUpdate@gmail.com")
-                .displayName("aireakUpdate")
-                .lastName("aireakUpdate")
-                .dob(LocalDate.parse("18/12/2024",
-                        DateTimeFormatter.ofPattern("dd/MM/yyyy")))
-                .phoneNumber("0865788560")
-                .build();
-
-        String content = objectMapper.writeValueAsString(updateRequest);
-
-        mockMvc.perform(MockMvcRequestBuilders.put("/my-profile")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("code").value(8105))
-                .andExpect(jsonPath("message").value("You must be at least 16 years old!"));
-
-        verify(userProfileService, never()).updateProfile(any(UserProfileUpdateRequest.class));
-    }
-
-    @Test
-    @WithMockUser
-    void updateProfile_invalidPhoneNumber() throws Exception {
-        UserProfileUpdateRequest updateRequest = UserProfileUpdateRequest.builder()
-                .email("aireakUpdate@gmail.com")
-                .displayName("aireakUpdate")
-                .lastName("aireakUpdate")
-                .dob(LocalDate.parse("18/12/2005",
-                        DateTimeFormatter.ofPattern("dd/MM/yyyy")))
-                .phoneNumber("086578856")
-                .build();
-
-        String content = objectMapper.writeValueAsString(updateRequest);
-
-        mockMvc.perform(MockMvcRequestBuilders.put("/my-profile")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("code").value(8109))
-                .andExpect(jsonPath("message").value("Phone number invalid!"));
-
-        verify(userProfileService, never()).updateProfile(any(UserProfileUpdateRequest.class));
-    }
-
-    @Test
-    @WithMockUser
-    void getMyInfo_success() throws Exception {
-        when(userProfileService.getMyInfo()).thenReturn(response);
-
-        mockMvc.perform(MockMvcRequestBuilders.get("/my-profile"))
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("code").value(1000))
-                .andExpect(jsonPath("result.userId").value("123456789"))
-                .andExpect(jsonPath("result.username").value("aireak"))
-                .andExpect(jsonPath("result.email").value("aireak@gmail.com"))
-                .andExpect(jsonPath("result.displayName").value("aireak"))
-                .andExpect(jsonPath("result.joinDate").value("2025-12-28T19:42:15.123"));
-
-        verify(userProfileService, times(1)).getMyInfo();
+                .andExpect(jsonPath("result.avatar").value("https://cdn/file-1"));
     }
 
     @Test
-    @WithMockUser(roles = "ADMIN")
-    void getAllProfiles_success() throws Exception {
-        when(userProfileService.getAllProfiles()).thenReturn(List.of(response));
+    @WithMockUser
+    void getProfile_notFound_returns404() throws Exception {
+        when(userProfileService.getProfile("missing")).thenThrow(new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
-        mockMvc.perform(MockMvcRequestBuilders.get(""))
+        mockMvc.perform(MockMvcRequestBuilders.get("/missing"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @WithMockUser
+    void getAllProfiles_returnsPage() throws Exception {
+        when(userProfileService.getAllProfiles(0, 10)).thenReturn(
+                PageResponse.<UserProfileResponse>builder().currentPage(0).pageSize(10)
+                        .data(List.of(UserProfileResponse.builder().userId("u1").build())).build());
+
+        mockMvc.perform(MockMvcRequestBuilders.get("/suggestions"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("code").value(1000))
-                .andExpect(jsonPath("result", hasSize(1)))
-                .andExpect(jsonPath("result[0].userId").value("123456789"))
-                .andExpect(jsonPath("result[0].username").value("aireak"))
-                .andExpect(jsonPath("result[0].email").value("aireak@gmail.com"))
-                .andExpect(jsonPath("result[0].displayName").value("aireak"))
-                .andExpect(jsonPath("result[0].joinDate").value("2025-12-28T19:42:15.123"));
-
-        verify(userProfileService, times(1)).getAllProfiles();
-    }
-
-    @Test
-    @WithMockUser(roles = "OtherRoles")
-    void getAllProfiles_otherRoles() throws Exception {
-        when(userProfileService.getAllProfiles()).thenReturn(List.of(response));
-
-        mockMvc.perform(MockMvcRequestBuilders.get(""))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("code").value(8102))
-                .andExpect(jsonPath("message").value("You don't have permission!"));
-
-        verify(userProfileService, never()).getAllProfiles();
-    }
-
-    @Test
-    void getAllProfiles_unAuthenticated() throws Exception {
-        when(userProfileService.getAllProfiles()).thenThrow(new AppException(ErrorCode.UNAUTHENTICATED));
-
-        mockMvc.perform(MockMvcRequestBuilders.get(""))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("code").value(8101))
-                .andExpect(jsonPath("message").value("Unauthenticated!"));
-
-        verify(userProfileService, never()).getAllProfiles();
+                .andExpect(jsonPath("result.data[0].userId").value("u1"));
     }
 
     @Test
     @WithMockUser
-    void getProfile_byId_success() throws Exception {
-        when(userProfileService.getProfile("123456789")).thenReturn(response);
+    void searchProfile_returnsMatchingPage() throws Exception {
+        when(userProfileService.searchProfile("aireak", 0, 10)).thenReturn(
+                PageResponse.<UserProfileResponse>builder().currentPage(0).pageSize(10)
+                        .data(List.of(UserProfileResponse.builder().userId("u1").username("aireak").build())).build());
 
-        mockMvc.perform(MockMvcRequestBuilders.get("/internal/user-profile/123456789"))
+        mockMvc.perform(MockMvcRequestBuilders.post("/search/aireak"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("code").value(1000))
-                .andExpect(jsonPath("result.userId").value("123456789"))
-                .andExpect(jsonPath("result.username").value("aireak"))
-                .andExpect(jsonPath("result.email").value("aireak@gmail.com"))
-                .andExpect(jsonPath("result.displayName").value("aireak"))
-                .andExpect(jsonPath("result.joinDate").value("2025-12-28T19:42:15.123"));
-
-        verify(userProfileService, times(1)).getProfile(anyString());
+                .andExpect(jsonPath("result.data[0].username").value("aireak"));
     }
 
     @Test
-    void getProfile_byId_unAuthenticated() throws Exception {
-        when(userProfileService.getProfile("123456789")).thenThrow(new AppException(ErrorCode.UNAUTHENTICATED));
-
-        mockMvc.perform(MockMvcRequestBuilders.get(""))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("code").value(8101))
-                .andExpect(jsonPath("message").value("Unauthenticated!"));
-
-        verify(userProfileService, never()).getProfile(any());
+    void getBulkProfiles_internalEndpointStillRequiresAuthentication() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.post("/internal/bulk-user-profiles")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(BulkUserProfileRequest.builder().userIds(java.util.Set.of("u1")).build())))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
     @WithMockUser
-    void getProfile_byId_profileNotFound() throws Exception {
-        when(userProfileService.getProfile("123456789")).thenThrow(new AppException(ErrorCode.PROFILE_NOT_FOUND));
-
-        mockMvc.perform(MockMvcRequestBuilders.get("/internal/user-profile/123456789"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("code").value(8107))
-                .andExpect(jsonPath("message").value("Profile not existed!"));
-
-        verify(userProfileService, times(1)).getProfile(anyString());
-    }
-
-    @Test
-    @WithMockUser
-    void bulkProfiles_success() throws Exception {
-        BulkUserProfileRequest req = BulkUserProfileRequest.builder()
-                .userIds(Set.of("123456789"))
-                .build();
-
-        when(userProfileService.getBulkProfiles(any(BulkUserProfileRequest.class))).thenReturn(Map.of("123456789", response));
-
-        String content = objectMapper.writeValueAsString(req);
+    void getBulkProfiles_authenticated_returnsMap() throws Exception {
+        when(userProfileService.getBulkProfiles(any())).thenReturn(
+                Map.of("u1", UserProfileResponse.builder().userId("u1").build()));
 
         mockMvc.perform(MockMvcRequestBuilders.post("/internal/bulk-user-profiles")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
+                        .content(objectMapper.writeValueAsString(BulkUserProfileRequest.builder().userIds(java.util.Set.of("u1")).build())))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("code").value(1000))
-                .andExpect(jsonPath("result['123456789'].userId").value("123456789"))
-                .andExpect(jsonPath("result['123456789'].username").value("aireak"))
-                .andExpect(jsonPath("result['123456789'].email").value("aireak@gmail.com"))
-                .andExpect(jsonPath("result['123456789'].displayName").value("aireak"))
-                .andExpect(jsonPath("result['123456789'].joinDate").value("2025-12-28T19:42:15.123"));
-
-        verify(userProfileService, times(1)).getBulkProfiles(any(BulkUserProfileRequest.class));
-    }
-
-    @Test
-    void bulkProfiles_unAuthenticated() throws Exception {
-        BulkUserProfileRequest req = BulkUserProfileRequest.builder()
-                .userIds(List.of("123456789"))
-                .build();
-
-        String content = objectMapper.writeValueAsString(req);
-
-        when(userProfileService.getBulkProfiles(any(BulkUserProfileRequest.class))).thenThrow(new AppException(ErrorCode.UNAUTHENTICATED));
-
-        mockMvc.perform(MockMvcRequestBuilders.post("/internal/bulk-user-profiles")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("code").value(8101))
-                .andExpect(jsonPath("message").value("Unauthenticated!"));
-
-        verify(userProfileService, never()).getAllProfiles();
+                .andExpect(jsonPath("result.u1.userId").value("u1"));
     }
 
     @Test
     @WithMockUser
-    void uploadAvatar_success() throws Exception {
-        MockMultipartFile file = new MockMultipartFile("file", "avatar.png",
-                MediaType.IMAGE_PNG_VALUE, "dummy-image-bytes".getBytes());
+    void getSuggestionProfiles_authenticated_returnsPage() throws Exception {
+        when(userProfileService.getSuggestionProfiles(any())).thenReturn(
+                PageResponse.<UserProfileResponse>builder().currentPage(0).pageSize(10).data(List.of()).build());
 
-        response.setAvatar("https://host/avatar/u1.png");
-
-        when(userProfileService.updateAvatar(any())).thenReturn(response);
-
-        mockMvc.perform(MockMvcRequestBuilders.multipart("/avatar")
-                        .file(file))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("code").value(1000))
-                .andExpect(jsonPath("result.avatar").value("https://host/avatar/u1.png"));
-
-        verify(userProfileService, times(1)).updateAvatar(any());
-    }
-
-    @Test
-    @WithMockUser
-    void searchProfile_success() throws Exception {
-        SearchUserProfileRequest req = new SearchUserProfileRequest("aireak", 1, 10);
-
-        PageResponse<UserProfileResponse> pageResp = PageResponse.<UserProfileResponse>builder()
-                .currentPage(1)
-                .pageSize(10)
-                .totalPages(1)
-                .totalElement(1L)
-                .data(List.of(response))
-                .build();
-
-        when(userProfileService.searchProfile(any(SearchUserProfileRequest.class))).thenReturn(pageResp);
-
-        String content = objectMapper.writeValueAsString(req);
-
-        mockMvc.perform(MockMvcRequestBuilders.post("/search")
+        mockMvc.perform(MockMvcRequestBuilders.post("/internal/suggestions")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("code").value(1000))
-                .andExpect(jsonPath("result.data", hasSize(1)))
-                .andExpect(jsonPath("result.data[0].userId").value("123456789"))
-                .andExpect(jsonPath("result.data[0].username").value("aireak"))
-                .andExpect(jsonPath("result.data[0].email").value("aireak@gmail.com"))
-                .andExpect(jsonPath("result.data[0].displayName").value("aireak"))
-                .andExpect(jsonPath("result.data[0].joinDate").value("2025-12-28T19:42:15.123"));
-
-        verify(userProfileService, times(1)).searchProfile(any(SearchUserProfileRequest.class));
-    }
-
-    @Test
-    void searchProfile_unAuthenticated() throws Exception {
-        SearchUserProfileRequest req = new SearchUserProfileRequest("aireak", 1, 10);
-
-        String content = objectMapper.writeValueAsString(req);
-
-        when(userProfileService.searchProfile(any(SearchUserProfileRequest.class))).thenThrow(new AppException(ErrorCode.UNAUTHENTICATED));
-
-        mockMvc.perform(MockMvcRequestBuilders.post("/search")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("code").value(8101))
-                .andExpect(jsonPath("message").value("Unauthenticated!"));
-
-        verify(userProfileService, never()).searchProfile(any());
+                        .content(objectMapper.writeValueAsString(ProfileSuggestionRequest.builder().page(0).size(10).build())))
+                .andExpect(status().isOk());
     }
 }

@@ -8,6 +8,7 @@ import com.MyProject.identity.identity_service.exception.AppException;
 import com.MyProject.identity.identity_service.exception.ErrorCode;
 import com.MyProject.identity.identity_service.mapper.RoleMapper;
 import com.MyProject.identity.identity_service.repository.RoleRepository;
+import com.MyProject.identity.identity_service.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,6 +34,9 @@ class RoleServiceTest {
 
     @Mock
     RoleRepository roleRepository;
+
+    @Mock
+    UserRepository userRepository;
 
     Role role;
     Role role2;
@@ -144,6 +148,17 @@ class RoleServiceTest {
 
         verify(roleRepository, times(1)).findById(any());
         verify(roleRepository, times(1)).delete(any());
+    }
+
+    @Test
+    void deleteRole_roleInUse_throwsAndDoesNotDelete(){
+        when(roleRepository.findById("USER")).thenReturn(Optional.of(role));
+        when(userRepository.existsByRolesContaining(role)).thenReturn(true);
+
+        var exception = assertThrows(AppException.class, () -> roleService.deleteRole("USER"));
+
+        assertEquals(ErrorCode.ROLE_IS_IN_USE, exception.getErrorCode());
+        verify(roleRepository, never()).delete(any());
     }
 
     @Test

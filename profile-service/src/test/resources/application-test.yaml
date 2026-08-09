@@ -10,10 +10,26 @@ spring:
       - org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration
       - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
 
+  main:
+    lazy-initialization: true
+
   mongodb:
     uri: mongodb://localhost:27017/profile-test
   kafka:
     bootstrap-servers: localhost:9092
+    listener:
+      auto-startup: false
 
 jwt:
   signerKey: "z7vB9pL2kR5xN8mQ1wJ4hG7sA0dF3gH6jK9lP2oI5uY8tR1eW4qZ7xX0cM3vB6nN"
+
+app:
+  services:
+    file:
+      url: http://localhost:8082
+    post:
+      url: http://localhost:8083
+    friend:
+      url: http://localhost:8084
+    notification:
+      url: http://localhost:8085

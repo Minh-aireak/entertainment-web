@@ -287,6 +287,18 @@
 				<version>${spotless.version}</version>
 			</plugin>
 
+			<!-- JDK chạy máy này đã lên Java 25 nhưng Byte Buddy (Mockito inline mock maker) mới
+			     chính thức hỗ trợ tới Java 24 -> mock bất kỳ class nào cũng throw
+			     "Java 25 (69) is not supported by the current version of Byte Buddy". Cờ experimental
+			     là workaround chính thức được Byte Buddy khuyến nghị trong thông báo lỗi. -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<argLine>-Dnet.bytebuddy.experimental=true</argLine>
+				</configuration>
+			</plugin>
+
 		</plugins>
 	</build>
 

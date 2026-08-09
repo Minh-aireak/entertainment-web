@@ -4,20 +4,23 @@ import static org.mockito.Mockito.*;
 
 import java.util.List;
 
-import com.MyProject.identity.identity_service.configuration.CustomJwtDecoder;
-import com.MyProject.identity.identity_service.configuration.JwtAuthenticationEntryPoint;
+import com.MyProject.common.security.CommonJwtDecoder;
+import com.MyProject.common.security.CommonJwtAuthenticationEntryPoint;
 import com.MyProject.identity.identity_service.configuration.SecurityConfig;
+import com.MyProject.identity.identity_service.configuration.JwtAuthenticationConverterTestConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -26,16 +29,20 @@ import com.MyProject.identity.identity_service.dto.request.RoleUpdateRequest;
 import com.MyProject.identity.identity_service.dto.response.RoleResponse;
 import com.MyProject.identity.identity_service.exception.AppException;
 import com.MyProject.identity.identity_service.exception.ErrorCode;
+import com.MyProject.identity.identity_service.service.IdentityApiRateLimitService;
 import com.MyProject.identity.identity_service.service.RoleService;
 
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+
 @WebMvcTest(RoleController.class)
 @Import(
         {SecurityConfig.class,
-        JwtAuthenticationEntryPoint.class,
-        CustomJwtDecoder.class}
+        CommonJwtAuthenticationEntryPoint.class,
+        CommonJwtDecoder.class,
+        JwtAuthenticationConverterTestConfig.class}
 )
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @AutoConfigureMockMvc
@@ -46,11 +53,19 @@ class RoleControllerTest {
     @MockitoBean
     RoleService roleService;
 
+    @MockitoBean
+    IdentityApiRateLimitService identityApiRateLimitService;
+
     RoleCreationRequest creationRequest;
     RoleUpdateRequest updateRequest;
     RoleResponse roleResponse;
     ObjectMapper objectMapper;
     String nameRoleForDelete;
+
+    private RequestPostProcessor asAdmin() {
+        return jwt().jwt(builder -> builder.claim("userId", "admin-1"))
+                .authorities(new SimpleGrantedAuthority("ROLE_ADMIN"));
+    }
 
     @BeforeEach
     void initData() {
@@ -75,13 +90,13 @@ class RoleControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "ADMIN")
     void createRole_validRequest_success() throws Exception {
         String content = objectMapper.writeValueAsString(creationRequest);
 
         when(roleService.createRole(creationRequest)).thenReturn(roleResponse);
 
         mockMvc.perform(MockMvcRequestBuilders.post("/roles")
+                        .with(asAdmin())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isOk())
@@ -115,20 +130,20 @@ class RoleControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isUnauthorized())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8011))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1401))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Unauthenticated!"));
 
         verify(roleService, never()).createRole(any());
     }
 
     @Test
-    @WithMockUser(roles = "ADMIN")
     void createRole_roleExisted() throws Exception {
         String content = objectMapper.writeValueAsString(creationRequest);
 
         when(roleService.createRole(creationRequest)).thenThrow(new AppException(ErrorCode.ROLE_EXISTED));
 
         mockMvc.perform(MockMvcRequestBuilders.post("/roles")
+                        .with(asAdmin())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isBadRequest())
@@ -139,7 +154,6 @@ class RoleControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "ADMIN")
     void updateRole_success() throws Exception {
         String content = objectMapper.writeValueAsString(updateRequest);
 
@@ -148,6 +162,7 @@ class RoleControllerTest {
         when(roleService.updateRole(updateRequest)).thenReturn(roleResponse);
 
         mockMvc.perform(MockMvcRequestBuilders.put("/roles")
+                        .with(asAdmin())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isOk())
@@ -181,20 +196,20 @@ class RoleControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isUnauthorized())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8011))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1401))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Unauthenticated!"));
 
         verify(roleService, never()).updateRole(any());
     }
 
     @Test
-    @WithMockUser(roles = "ADMIN")
     void updateRole_roleNotExisted() throws Exception {
         String content = objectMapper.writeValueAsString(updateRequest);
 
         when(roleService.updateRole(updateRequest)).thenThrow(new AppException(ErrorCode.ROLE_NOT_EXISTED));
 
         mockMvc.perform(MockMvcRequestBuilders.put("/roles")
+                        .with(asAdmin())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isNotFound())
@@ -205,11 +220,10 @@ class RoleControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "ADMIN")
     void deleteRole_success() throws Exception {
         doNothing().when(roleService).deleteRole(nameRoleForDelete);
 
-        mockMvc.perform(MockMvcRequestBuilders.delete("/roles/TEST_ROLE"))
+        mockMvc.perform(MockMvcRequestBuilders.delete("/roles/TEST_ROLE").with(asAdmin()))
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(1000))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Deleted role success!"));
@@ -232,18 +246,17 @@ class RoleControllerTest {
     void deleteRole_unAuthentication() throws Exception {
         mockMvc.perform(MockMvcRequestBuilders.delete("/roles/TEST_ROLE"))
                 .andExpect(MockMvcResultMatchers.status().isUnauthorized())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8011))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1401))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Unauthenticated!"));
 
         verify(roleService, never()).deleteRole(any());
     }
 
     @Test
-    @WithMockUser(roles = "ADMIN")
     void deleteRole_roleNotExisted() throws Exception {
         doThrow(new AppException(ErrorCode.ROLE_NOT_EXISTED)).when(roleService).deleteRole(nameRoleForDelete);
 
-        mockMvc.perform(MockMvcRequestBuilders.delete("/roles/TEST_ROLE"))
+        mockMvc.perform(MockMvcRequestBuilders.delete("/roles/TEST_ROLE").with(asAdmin()))
                 .andExpect(MockMvcResultMatchers.status().isNotFound())
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(8007))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Role not existed!"));
@@ -252,11 +265,10 @@ class RoleControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "ADMIN")
     void getAllRoles_success() throws Exception {
         when(roleService.getAllRoles()).thenReturn(List.of(roleResponse));
 
-        mockMvc.perform(MockMvcRequestBuilders.get("/roles"))
+        mockMvc.perform(MockMvcRequestBuilders.get("/roles").with(asAdmin()))
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(1000))
                 .andExpect(MockMvcResultMatchers.jsonPath("result[0].name").value("TEST_ROLE"))
@@ -282,7 +294,7 @@ class RoleControllerTest {
     void getAllRoles_unAuthentication() throws Exception {
         mockMvc.perform(MockMvcRequestBuilders.get("/roles"))
                 .andExpect(MockMvcResultMatchers.status().isUnauthorized())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8011))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1401))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Unauthenticated!"));
 
         verify(roleService, never()).getAllRoles();

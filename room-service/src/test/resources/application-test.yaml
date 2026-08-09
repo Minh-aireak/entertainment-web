@@ -1,0 +1,37 @@
+spring:
+  kafka:
+    listener:
+      auto-startup: false
+  main:
+    lazy-initialization: true
+
+app:
+  services:
+    profile:
+      url: http://localhost:0
+    film:
+      url: http://localhost:0
+  room:
+    max-participants: 50
+    invite-code-length: 8
+  rate-limit:
+    room-create:
+      limit-for-period: 10
+      limit-refresh-period: 60s
+    room-read:
+      limit-for-period: 100
+      limit-refresh-period: 10s
+    room-playback:
+      limit-for-period: 20
+      limit-refresh-period: 1s
+    room-message:
+      limit-for-period: 20
+      limit-refresh-period: 10s
+
+jwt:
+  signerKey: test-only-signer-key-not-for-production-use-0000
+
+logging:
+  level:
+    org.springframework: WARN
+    com.MyProject: WARN

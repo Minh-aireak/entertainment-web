@@ -1,29 +1,37 @@
 package com.MyProject.identity.identity_service.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 import java.util.List;
 import java.util.Set;
 
-import com.MyProject.identity.identity_service.configuration.CustomJwtDecoder;
-import com.MyProject.identity.identity_service.configuration.JwtAuthenticationEntryPoint;
+import com.MyProject.common.dto.response.PageResponse;
+import com.MyProject.common.security.CommonJwtDecoder;
+import com.MyProject.common.security.CommonJwtAuthenticationEntryPoint;
 import com.MyProject.identity.identity_service.configuration.SecurityConfig;
+import com.MyProject.identity.identity_service.configuration.JwtAuthenticationConverterTestConfig;
 import com.MyProject.identity.identity_service.dto.request.ForgotPasswordRequest;
 import com.MyProject.identity.identity_service.dto.request.ResetPasswordRequest;
 import com.MyProject.identity.identity_service.exception.AppException;
 import com.MyProject.identity.identity_service.exception.ErrorCode;
+import com.MyProject.identity.identity_service.service.IdentityApiRateLimitService;
+import com.MyProject.identity.identity_service.service.PasswordResetService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 import com.MyProject.identity.identity_service.dto.request.UserCreationRequest;
 import com.MyProject.identity.identity_service.dto.request.ChangePasswordRequest;
@@ -35,11 +43,20 @@ import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+
+/**
+ * Controller now derives the caller from a JWT (SecurityUtils.getCurrentUserId()) for every
+ * non-public route, so @WithMockUser alone is only good enough for tests that never reach the
+ * method body (validation failures, @PreAuthorize role rejections) - anything that exercises the
+ * real service call needs a genuine JwtAuthenticationToken via the jwt() post-processor.
+ */
 @WebMvcTest(UserController.class)
 @Import(
         {SecurityConfig.class,
-        JwtAuthenticationEntryPoint.class,
-        CustomJwtDecoder.class}
+        CommonJwtAuthenticationEntryPoint.class,
+        CommonJwtDecoder.class,
+        JwtAuthenticationConverterTestConfig.class}
 )
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @AutoConfigureMockMvc
@@ -50,12 +67,27 @@ class UserControllerTest {
     @MockitoBean
     UserService userService;
 
+    @MockitoBean
+    PasswordResetService passwordResetService;
+
+    @MockitoBean
+    IdentityApiRateLimitService identityApiRateLimitService;
+
     UserCreationRequest creationRequest;
     ChangePasswordRequest changePasswordRequest;
     UserResponse userResponse;
     ObjectMapper objectMapper;
     ResetPasswordRequest resetPasswordRequest;
     ForgotPasswordRequest forgotPasswordRequest;
+
+    private RequestPostProcessor asUser(String userId) {
+        return jwt().jwt(builder -> builder.claim("userId", userId));
+    }
+
+    private RequestPostProcessor asAdmin(String userId) {
+        return jwt().jwt(builder -> builder.claim("userId", userId))
+                .authorities(new SimpleGrantedAuthority("ROLE_ADMIN"));
+    }
 
     @BeforeEach
     void initData() {
@@ -175,13 +207,13 @@ class UserControllerTest {
     }
 
     @Test
-    @WithMockUser
     void changePassword_success() throws Exception {
         String content = objectMapper.writeValueAsString(changePasswordRequest);
 
         doNothing().when(userService).changePassword(changePasswordRequest);
 
         mockMvc.perform(MockMvcRequestBuilders.put("/users/password")
+                        .with(asUser("user-1"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isOk())
@@ -189,26 +221,27 @@ class UserControllerTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Change password success!"));
 
         verify(userService, times(1)).changePassword(changePasswordRequest);
+        verify(identityApiRateLimitService).checkChangePassword("user-1");
     }
 
     @Test
     void changePassword_unAuthentication() throws Exception {
         mockMvc.perform(MockMvcRequestBuilders.put("/users/password"))
                 .andExpect(MockMvcResultMatchers.status().isUnauthorized())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8011))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1401))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Unauthenticated!"));
 
         verify(userService, never()).changePassword(any());
     }
 
     @Test
-    @WithMockUser
     void changePassword_oldPasswordIncorrect() throws Exception {
         String content = objectMapper.writeValueAsString(changePasswordRequest);
 
         doThrow(new AppException(ErrorCode.PASSWORD_INCORRECT)).when(userService).changePassword(changePasswordRequest);
 
         mockMvc.perform(MockMvcRequestBuilders.put("/users/password")
+                        .with(asUser("user-1"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(content))
                 .andExpect(MockMvcResultMatchers.status().isBadRequest())
@@ -217,7 +250,6 @@ class UserControllerTest {
 
         verify(userService, times(1)).changePassword(changePasswordRequest);
     }
-
 
     @Test
     @WithMockUser
@@ -252,20 +284,21 @@ class UserControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "ADMIN")
-    void disableUser_success() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.put("/users/{id}", "aireak"))
+    void toggleAccount_success() throws Exception {
+        when(userService.toggleAccount("aireak")).thenReturn("Account deactivated successfully!");
+
+        mockMvc.perform(MockMvcRequestBuilders.put("/users/{id}/toggle-account", "aireak").with(asAdmin("admin-1")))
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(1000))
-                .andExpect(MockMvcResultMatchers.jsonPath("message").value("User disabled successfully!"));
+                .andExpect(MockMvcResultMatchers.jsonPath("message").value("Account deactivated successfully!"));
 
-        verify(userService, times(1)).disableUser("aireak");
+        verify(userService, times(1)).toggleAccount("aireak");
     }
 
     @Test
     @WithMockUser(authorities = "OtherRoles")
-    void disableUser_unAuthority() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.put("/users/{id}", "aireak"))
+    void toggleAccount_unAuthority() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.put("/users/{id}/toggle-account", "aireak"))
                 .andExpect(MockMvcResultMatchers.status().isForbidden())
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(8012))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("You don't have permission!"));
@@ -274,61 +307,61 @@ class UserControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "ADMIN")
-    void disableUser_userNotExisted() throws Exception {
-        doThrow(new AppException(ErrorCode.USER_NOT_EXISTED)).when(userService).disableUser("test_userId");
+    void toggleAccount_userNotExisted() throws Exception {
+        doThrow(new AppException(ErrorCode.USER_NOT_EXISTED)).when(userService).toggleAccount("test_userId");
 
-        mockMvc.perform(MockMvcRequestBuilders.put("/users/{id}", "test_userId"))
+        mockMvc.perform(MockMvcRequestBuilders.put("/users/{id}/toggle-account", "test_userId").with(asAdmin("admin-1")))
                 .andExpect(MockMvcResultMatchers.status().isNotFound())
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(8002))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("User not existed!"));
 
-        verify(userService, times(1)).disableUser("test_userId");
+        verify(userService, times(1)).toggleAccount("test_userId");
     }
 
     @Test
-    @WithMockUser(roles = "ADMIN")
-    void getAllUsers_success() throws Exception {
-        when(userService.getAllUsers()).thenReturn(List.of(userResponse));
+    void getUsers_success() throws Exception {
+        when(userService.getUsers(0, 10)).thenReturn(
+                PageResponse.<UserResponse>builder()
+                        .currentPage(0).pageSize(10).totalPages(1).totalElement(1)
+                        .data(List.of(userResponse))
+                        .build());
 
-        mockMvc.perform(MockMvcRequestBuilders.get("/users"))
+        mockMvc.perform(MockMvcRequestBuilders.get("/users").with(asAdmin("admin-1")))
                 .andExpect(MockMvcResultMatchers.status().isOk())
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(1000))
-                .andExpect(MockMvcResultMatchers.jsonPath("result[0].id").value("123456789"))
-                .andExpect(MockMvcResultMatchers.jsonPath("result[0].username").value("aireak"))
-                .andExpect(MockMvcResultMatchers.jsonPath("result[0].email").value("aireak@gmail.com"))
-                .andExpect(MockMvcResultMatchers.jsonPath("result[0].roles[0].name").value("USER"))
-                .andExpect(MockMvcResultMatchers.jsonPath("result[0].roles[0].description").value("User role"));
+                .andExpect(MockMvcResultMatchers.jsonPath("result.data[0].id").value("123456789"))
+                .andExpect(MockMvcResultMatchers.jsonPath("result.data[0].username").value("aireak"))
+                .andExpect(MockMvcResultMatchers.jsonPath("result.data[0].roles[0].name").value("USER"));
 
-        verify(userService, times(1)).getAllUsers();
+        verify(userService, times(1)).getUsers(0, 10);
     }
 
     @Test
     @WithMockUser(authorities = "OtherRoles")
-    void getAllUsers_unAuthority() throws Exception {
+    void getUsers_unAuthority() throws Exception {
         mockMvc.perform(MockMvcRequestBuilders.get("/users"))
                 .andExpect(MockMvcResultMatchers.status().isForbidden())
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(8012))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("You don't have permission!"));
 
-        verify(userService, never()).getAllUsers();
+        verify(userService, never()).getUsers(anyInt(), anyInt());
     }
 
     @Test
-    void getAllUsers_unAuthentication() throws Exception {
+    void getUsers_unAuthentication() throws Exception {
         mockMvc.perform(MockMvcRequestBuilders.get("/users"))
                 .andExpect(MockMvcResultMatchers.status().isUnauthorized())
-                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8011))
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(1401))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Unauthenticated!"));
 
-        verify(userService, never()).getAllUsers();
+        verify(userService, never()).getUsers(anyInt(), anyInt());
     }
 
     @Test
     void forgotPassword_success() throws Exception {
         String content = objectMapper.writeValueAsString(forgotPasswordRequest);
 
-        when(userService.forgotPassword(forgotPasswordRequest)).thenReturn("Check your email: aireak@gmail.com");
+        when(passwordResetService.forgotPassword(forgotPasswordRequest)).thenReturn("Check your email: aireak@gmail.com");
 
         mockMvc.perform(MockMvcRequestBuilders.post("/users/forgot-password")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -337,7 +370,7 @@ class UserControllerTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(1000))
                 .andExpect(MockMvcResultMatchers.jsonPath("result").value("Check your email: aireak@gmail.com"));
 
-        verify(userService, times(1)).forgotPassword(forgotPasswordRequest);
+        verify(passwordResetService, times(1)).forgotPassword(forgotPasswordRequest);
     }
 
     @Test
@@ -352,14 +385,14 @@ class UserControllerTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(8027))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Email invalid!"));
 
-        verify(userService, never()).forgotPassword(forgotPasswordRequest);
+        verify(passwordResetService, never()).forgotPassword(forgotPasswordRequest);
     }
 
     @Test
     void forgotPassword_emailNotExisted() throws Exception {
         String content = objectMapper.writeValueAsString(forgotPasswordRequest);
 
-        when(userService.forgotPassword(forgotPasswordRequest)).thenThrow(new AppException(ErrorCode.EMAIL_NOT_EXISTED));
+        when(passwordResetService.forgotPassword(forgotPasswordRequest)).thenThrow(new AppException(ErrorCode.EMAIL_NOT_EXISTED));
 
         mockMvc.perform(MockMvcRequestBuilders.post("/users/forgot-password")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -368,14 +401,14 @@ class UserControllerTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(8024))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Email not existed!"));
 
-        verify(userService, times(1)).forgotPassword(forgotPasswordRequest);
+        verify(passwordResetService, times(1)).forgotPassword(forgotPasswordRequest);
     }
 
     @Test
     void resetPassword_success() throws Exception {
         String content = objectMapper.writeValueAsString(resetPasswordRequest);
 
-        doNothing().when(userService).resetPassword(resetPasswordRequest);
+        doNothing().when(passwordResetService).resetPassword(resetPasswordRequest);
 
         mockMvc.perform(MockMvcRequestBuilders.post("/users/reset-password")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -384,7 +417,20 @@ class UserControllerTest {
                 .andExpect(MockMvcResultMatchers.jsonPath("code").value(1000))
                 .andExpect(MockMvcResultMatchers.jsonPath("message").value("Reset password success!"));
 
-        verify(userService, times(1)).resetPassword(resetPasswordRequest);
+        verify(passwordResetService, times(1)).resetPassword(resetPasswordRequest);
     }
 
+    @Test
+    void resetPassword_invalidTokenReset() throws Exception {
+        String content = objectMapper.writeValueAsString(resetPasswordRequest);
+
+        doThrow(new AppException(ErrorCode.INVALID_TOKEN_RESET)).when(passwordResetService).resetPassword(resetPasswordRequest);
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/users/reset-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(content))
+                .andExpect(MockMvcResultMatchers.status().isBadRequest())
+                .andExpect(MockMvcResultMatchers.jsonPath("code").value(8025))
+                .andExpect(MockMvcResultMatchers.jsonPath("message").value("Invalid token reset!"));
+    }
 }

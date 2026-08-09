@@ -43,9 +43,9 @@ class RefreshTokenRotationTest {
 
     @Test
     void refreshRotatesOnlyPresentedSession() {
-        ReflectionTestUtils.setField(authenticationService, signerKey, Character.toString('a').repeat(64));
-        ReflectionTestUtils.setField(authenticationService, validDuration, 3600L);
-        ReflectionTestUtils.setField(authenticationService, refreshableDuration, 360000L);
+        ReflectionTestUtils.setField(authenticationService, "signerKey", Character.toString('a').repeat(64));
+        ReflectionTestUtils.setField(authenticationService, "validDuration", 3600L);
+        ReflectionTestUtils.setField(authenticationService, "refreshableDuration", 360000L);
 
         User user = User.builder()
                 .id(UUID.randomUUID().toString())

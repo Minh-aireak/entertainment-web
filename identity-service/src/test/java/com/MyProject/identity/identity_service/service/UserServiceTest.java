@@ -1,18 +1,16 @@
 package com.MyProject.identity.identity_service.service;
 
-import com.MyProject.identity.identity_service.dto.request.EmailRequest;
 import com.MyProject.identity.identity_service.dto.request.*;
 import com.MyProject.identity.identity_service.dto.response.RoleResponse;
 import com.MyProject.identity.identity_service.dto.response.UserResponse;
-import com.MyProject.identity.identity_service.entity.ResetPassword;
 import com.MyProject.identity.identity_service.entity.Role;
 import com.MyProject.identity.identity_service.entity.User;
 import com.MyProject.identity.identity_service.exception.AppException;
 import com.MyProject.identity.identity_service.exception.ErrorCode;
 import com.MyProject.identity.identity_service.mapper.UserMapper;
-import com.MyProject.identity.identity_service.repository.ResetPasswordRepository;
 import com.MyProject.identity.identity_service.repository.RoleRepository;
 import com.MyProject.identity.identity_service.repository.UserRepository;
+import com.MyProject.common.dto.response.PageResponse;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,24 +19,27 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceTest {
@@ -55,22 +56,16 @@ class UserServiceTest {
     RoleRepository roleRepository;
 
     @Mock
-    ResetPasswordRepository resetPasswordRepository;
-
-    @Mock
     PasswordEncoder passwordEncoder;
 
     @Mock
-    KafkaTemplate<String, Object> kafkaTemplate;
+    OutboxEventPublisher outboxEventPublisher;
 
     User user;
     UserResponse userResponse;
     Role role1;
     UserCreationRequest creationRequest;
     ChangePasswordRequest changePasswordRequest;
-    ForgotPasswordRequest forgotPasswordRequest;
-    ResetPasswordRequest resetPasswordRequest;
-    ResetPassword resetPassword;
     List<User> users;
     List<UserResponse> userResponses;
 
@@ -94,7 +89,6 @@ class UserServiceTest {
                 .active(true)
                 .build();
 
-
         userResponse = UserResponse.builder()
                 .id("123456789")
                 .username("aireak")
@@ -114,21 +108,6 @@ class UserServiceTest {
 
         users = List.of(user);
         userResponses = List.of(userResponse);
-
-        forgotPasswordRequest = ForgotPasswordRequest.builder()
-                .email("aireak@gmail.com")
-                .build();
-
-        resetPasswordRequest = ResetPasswordRequest.builder()
-                .token("token")
-                .password("1801062010")
-                .build();
-
-        resetPassword = ResetPassword.builder()
-                .token("token")
-                .user(user)
-                .expiryDate(LocalDateTime.now().plusSeconds(3600))
-                .build();
     }
 
     private void mockAuthenticatedUser() {
@@ -159,13 +138,12 @@ class UserServiceTest {
 
         assertNotNull(response);
         assertThat(response).isSameAs(userResponse);
-        assertThat(response).usingRecursiveComparison().isEqualTo(userResponse);
 
         verify(roleRepository, times(1)).findById("USER");
         verify(userMapper, times(1)).toUser(creationRequest);
         verify(passwordEncoder, times(1)).encode("REDACTED_LEGACY_CREDENTIAL");
         verify(userRepository, times(1)).save(user);
-        verify(kafkaTemplate, times(2)).send(anyString(), any());
+        verify(outboxEventPublisher, times(1)).publish(eq(user.getId()), eq("user.registered"), any());
         verify(userMapper, times(1)).toUserResponse(any());
     }
 
@@ -195,7 +173,7 @@ class UserServiceTest {
 
         assertEquals(ErrorCode.USERNAME_EXISTED, exception.getErrorCode());
 
-        verify(kafkaTemplate, never()).send(anyString(), any());
+        verify(outboxEventPublisher, never()).publish(any(), any(), any());
     }
 
     @Test
@@ -267,115 +245,54 @@ class UserServiceTest {
     }
 
     @Test
-    void getAllUsers_success() {
-        when(userRepository.findAll()).thenReturn(users);
+    void getUsers_success() {
+        Page<User> page = new PageImpl<>(users, PageRequest.of(0, 10), 1);
+        when(userRepository.findAll(PageRequest.of(0, 10))).thenReturn(page);
         when(userMapper.toListUserResponse(users)).thenReturn(userResponses);
 
-        List<UserResponse> response = userService.getAllUsers();
+        PageResponse<UserResponse> response = userService.getUsers(0, 10);
 
-        assertEquals(1, response.size());
-        assertThat(response).isSameAs(userResponses);
-        assertThat(response).usingRecursiveComparison().isEqualTo(userResponses);
+        assertEquals(1, response.getData().size());
+        assertEquals(1, response.getTotalElement());
+        assertThat(response.getData()).isSameAs(userResponses);
 
-        verify(userRepository, times(1)).findAll();
+        verify(userRepository, times(1)).findAll(PageRequest.of(0, 10));
         verify(userMapper, times(1)).toListUserResponse(users);
     }
 
     @Test
-    void disableUser_success() {
-        when(userRepository.findByUsername("aireak")).thenReturn(Optional.of(user));
+    void toggleAccount_activeUser_deactivatesAndReturnsMessage() {
+        when(userRepository.findById("123456789")).thenReturn(Optional.of(user));
         when(userRepository.save(user)).thenReturn(user);
 
-        userService.disableUser("aireak");
+        String message = userService.toggleAccount("123456789");
 
         assertFalse(user.isActive());
-
-        verify(userRepository, times(1)).findByUsername("aireak");
+        assertEquals("Account deactivated successfully!", message);
+        verify(userRepository, times(1)).findById("123456789");
         verify(userRepository, times(1)).save(user);
     }
 
     @Test
-    void disableUser_userNotExisted() {
-        when(userRepository.findByUsername("aireak")).thenReturn(Optional.empty());
+    void toggleAccount_inactiveUser_activatesAndReturnsMessage() {
+        user.setActive(false);
+        when(userRepository.findById("123456789")).thenReturn(Optional.of(user));
+        when(userRepository.save(user)).thenReturn(user);
+
+        String message = userService.toggleAccount("123456789");
+
+        assertTrue(user.isActive());
+        assertEquals("Account activated successfully!", message);
+    }
+
+    @Test
+    void toggleAccount_userNotExisted() {
+        when(userRepository.findById("missing")).thenReturn(Optional.empty());
 
         AppException exception = assertThrows(AppException.class,
-                () -> userService.disableUser("aireak"));
+                () -> userService.toggleAccount("missing"));
 
         assertEquals(ErrorCode.USER_NOT_EXISTED, exception.getErrorCode());
-
         verify(userRepository, never()).save(any());
-    }
-
-    @Test
-    void forgotPassword_success() {
-        when(userRepository.findByEmail(forgotPasswordRequest.getEmail())).thenReturn(Optional.of(user));
-        when(resetPasswordRepository.save(any())).thenReturn(resetPassword);
-
-        String message = userService.forgotPassword(forgotPasswordRequest);
-
-        assertEquals("Check your email: aireak@gmail.com", message);
-
-        verify(userRepository, times(1)).findByEmail(forgotPasswordRequest.getEmail());
-        verify(resetPasswordRepository, times(1)).save(any());
-        verify(kafkaTemplate, times(1)).send(eq("send-email"), any(EmailRequest.class));
-    }
-
-    @Test
-    void forgotPassword_emailNotExisted() {
-        when(userRepository.findByEmail(forgotPasswordRequest.getEmail())).thenReturn(Optional.empty());
-
-        AppException exception = assertThrows(AppException.class,
-                () -> userService.forgotPassword(forgotPasswordRequest));
-
-        assertEquals(ErrorCode.EMAIL_NOT_EXISTED, exception.getErrorCode());
-
-        verify(userRepository, times(1)).findByEmail(any());
-        verify(resetPasswordRepository, never()).save(any());
-        verify(kafkaTemplate, never()).send(anyString(), any());
-    }
-
-    @Test
-    void resetPassword_success() {
-        when(resetPasswordRepository.findByToken(resetPasswordRequest.getToken())).thenReturn(Optional.of(resetPassword));
-        when(passwordEncoder.encode(resetPasswordRequest.getPassword())).thenReturn("encode!");
-
-        userService.resetPassword(resetPasswordRequest);
-
-        verify(resetPasswordRepository, times(1)).findByToken(resetPassword.getToken());
-        verify(passwordEncoder, times(1)).encode(resetPasswordRequest.getPassword());
-        verify(userRepository, times(1)).save(resetPassword.getUser());
-        verify(resetPasswordRepository, times(1)).delete(resetPassword);
-
-    }
-
-    @Test
-    void resetPassword_invalidTokenReset() {
-        when(resetPasswordRepository.findByToken(resetPasswordRequest.getToken())).thenReturn(Optional.empty());
-
-        AppException exception = assertThrows(AppException.class,
-                () -> userService.resetPassword(resetPasswordRequest));
-
-        assertEquals(ErrorCode.INVALID_TOKEN_RESET, exception.getErrorCode());
-
-        verify(resetPasswordRepository, times(1)).findByToken(resetPasswordRequest.getToken());
-        verify(passwordEncoder, never()).encode(anyString());
-        verify(userRepository, never()).save(any());
-        verify(resetPasswordRepository, never()).delete(any());
-    }
-
-    @Test
-    void resetPassword_tokenExpired() {
-        when(resetPasswordRepository.findByToken(resetPasswordRequest.getToken())).thenReturn(Optional.of(resetPassword));
-        resetPassword.setExpiryDate(LocalDateTime.now().minusMinutes(1));
-
-        AppException exception = assertThrows(AppException.class,
-                () -> userService.resetPassword(resetPasswordRequest));
-
-        assertEquals(ErrorCode.TOKEN_EXPIRED, exception.getErrorCode());
-
-        verify(resetPasswordRepository, times(1)).findByToken(resetPasswordRequest.getToken());
-        verify(passwordEncoder, never()).encode(anyString());
-        verify(userRepository, never()).save(any());
-        verify(resetPasswordRepository, never()).delete(any());
     }
 }

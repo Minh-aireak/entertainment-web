@@ -1,22 +1,20 @@
 package com.MyProject.notification.notification_service.service;
 
+import com.MyProject.notification.notification_service.dto.request.EmailRequest;
 import com.MyProject.notification.notification_service.dto.request.Recipient;
-import com.MyProject.notification.notification_service.dto.request.SendEmailRequest;
-import com.MyProject.notification.notification_service.exception.AppException;
-import com.MyProject.notification.notification_service.exception.ErrorCode;
-import com.MyProject.notification.notification_service.repository.httpclient.EmailClient;
 import feign.FeignException;
+import feign.Request;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
@@ -25,45 +23,58 @@ import static org.mockito.Mockito.*;
 class EmailServiceTest {
 
     @Mock
-    EmailClient emailClient;
+    EmailExternalService emailExternalService;
 
-    @InjectMocks
     EmailService emailService;
 
     final String mockApiKey = "test-api-key";
 
     @BeforeEach
     void setUp() {
+        emailService = new EmailService(emailExternalService);
         ReflectionTestUtils.setField(emailService, "apiKey", mockApiKey);
+        ReflectionTestUtils.setField(emailService, "senderName", "AIREAK");
+        ReflectionTestUtils.setField(emailService, "senderEmail", "no-reply@aireak.test");
     }
 
-    @Test
-    void sendEmail_success() {
-        SendEmailRequest request = SendEmailRequest.builder()
-                .to(List.of(Recipient.builder().email("user@gmail.com").build()))
+    private EmailRequest request(String toEmail) {
+        return EmailRequest.builder()
+                .to(List.of(Recipient.builder().email(toEmail).build()))
                 .subject("Welcome")
                 .htmlContent("<p>Hello</p>")
                 .build();
-
-        emailService.sendEmail(request);
-
-        verify(emailClient, times(1)).sendEmail(eq(mockApiKey), any());
     }
 
     @Test
-    void sendEmail_failure_throwsAppException() {
-        SendEmailRequest request = SendEmailRequest.builder()
-                .to(List.of(Recipient.builder().email("error@gmail.com").build()))
-                .build();
+    void sendEmail_happyPath_buildsRequestWithSenderAndDelegatesToExternalService() {
+        emailService.sendEmail(request("user@gmail.com"));
 
-        when(emailClient.sendEmail(anyString(), any()))
-                .thenThrow(mock(FeignException.class));
+        verify(emailExternalService).sendEmail(eq(mockApiKey), argThat(req ->
+                req.getSender().getName().equals("AIREAK")
+                        && req.getSender().getEmail().equals("no-reply@aireak.test")
+                        && req.getTo().get(0).getEmail().equals("user@gmail.com")
+                        && req.getSubject().equals("Welcome")));
+    }
 
-        AppException exception = assertThrows(AppException.class, () -> {
-            emailService.sendEmail(request);
-        });
+    @Test
+    void sendEmail_externalServiceThrowsFeignException_isSwallowedAndLoggedRatherThanPropagated() {
+        FeignException feignException = mock(FeignException.class);
+        Request feignRequest = Request.create(Request.HttpMethod.POST, "https://brevo/send",
+                java.util.Map.of(), null, java.nio.charset.StandardCharsets.UTF_8, null);
+        when(feignException.status()).thenReturn(500);
+        when(feignException.contentUTF8()).thenReturn("{\"error\":\"down\"}");
+        when(feignException.request()).thenReturn(feignRequest);
+        doThrow(feignException).when(emailExternalService).sendEmail(eq(mockApiKey), any());
 
-        assertEquals(ErrorCode.CANNOT_SEND_EMAIL, exception.getErrorCode());
-        verify(emailClient, times(1)).sendEmail(anyString(), any());
+        assertThatCode(() -> emailService.sendEmail(request("user@gmail.com"))).doesNotThrowAnyException();
+    }
+
+    @Test
+    void sendEmail_externalServiceThrowsNonFeignException_propagatesInsteadOfBeingSwallowed() {
+        doThrow(new RuntimeException("unexpected failure")).when(emailExternalService).sendEmail(eq(mockApiKey), any());
+
+        assertThatThrownBy(() -> emailService.sendEmail(request("user@gmail.com")))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("unexpected failure");
     }
 }

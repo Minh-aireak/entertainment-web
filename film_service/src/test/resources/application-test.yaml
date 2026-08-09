@@ -15,6 +15,18 @@ spring:
   task:
     scheduling:
       enabled: false
+  main:
+    lazy-initialization: true
+
+app:
+  services:
+    comment:
+      url: http://localhost:0
+    file:
+      url: http://localhost:0
+
+jwt:
+  signerKey: test-only-signer-key-not-for-production-use-0000
 
 logging:
   level:

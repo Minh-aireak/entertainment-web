@@ -1,344 +1,304 @@
 package com.MyProject.profile.profile_service.service;
 
 import com.MyProject.common.dto.request.BulkUserProfileRequest;
+import com.MyProject.common.dto.request.ProfileSuggestionRequest;
+import com.MyProject.common.dto.response.PageResponse;
 import com.MyProject.common.dto.response.UserProfileResponse;
 import com.MyProject.common.redis.RedisService;
+import com.MyProject.common.security.SecurityUtils;
+import com.MyProject.profile.profile_service.document.UserProfileDoc;
 import com.MyProject.profile.profile_service.dto.request.UserProfileCreationRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileUpdateRequest;
-import com.MyProject.profile.profile_service.dto.response.FileResponse;
 import com.MyProject.profile.profile_service.entity.UserProfile;
 import com.MyProject.profile.profile_service.exception.AppException;
 import com.MyProject.profile.profile_service.exception.ErrorCode;
 import com.MyProject.profile.profile_service.mapper.UserProfileMapper;
+import com.MyProject.profile.profile_service.repository.elasticsearch.UserProfileElasticRepository;
+import com.MyProject.profile.profile_service.repository.httpClient.FileClient;
+import com.MyProject.profile.profile_service.repository.mongo.OutboxRepository;
 import com.MyProject.profile.profile_service.repository.mongo.UserProfileRepository;
-import com.MyProject.profile.profile_service.client.httpclient.FileClient;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.*;
-import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
-import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
 class UserProfileServiceTest {
-    @InjectMocks
+
+    private static final String USER_ID = "user-1";
+
+    @Mock UserProfileRepository userProfileRepository;
+    @Mock UserProfileElasticRepository userProfileElasticRepository;
+    @Mock UserProfileMapper userProfileMapper;
+    @Mock RedisService redisService;
+    @Mock OutboxRepository outboxRepository;
+    @Mock FileClient fileClient;
+
     UserProfileService userProfileService;
-
-    @Mock
-    PlatformTransactionManager platformTransactionManager;
-
-    @Mock
-    UserProfileMapper userProfileMapper;
-
-    @Mock
-    FileClient client;
-
-    @Mock
-    UserProfileRepository userProfileRepository;
-
-    @Mock
-    RedisService redisService;
-
-    UserProfile profile;
-    UserProfile profile2;
-    UserProfileResponse response;
-    UserProfileResponse response2;
+    MockedStatic<SecurityUtils> securityUtils;
 
     @BeforeEach
-    void initData() {
-         profile = UserProfile.builder()
-                .userId("123456789")
-                .username("aireak")
-                .email("aireak@gmail.com")
-                .displayName("aireak")
-                .joinDate(LocalDateTime.parse("2025-12-28T19:42:15.123"))
-                .avatar("https://host/avatar/u1.png")
-                .build();
+    void setUp() {
+        userProfileService = new UserProfileService(userProfileRepository, userProfileElasticRepository,
+                userProfileMapper, redisService, outboxRepository, fileClient, new ObjectMapper());
 
-         profile2 = UserProfile.builder()
-                .userId("123456789")
-                .username("aireak")
-                .email("aireakUpdate@gmail.com")
-                .displayName("aireakUpdate")
-                .lastName("aireakUpdate")
-                .dob(LocalDate.parse("18/12/2005",
-                      DateTimeFormatter.ofPattern("dd/MM/yyyy")))
-                .joinDate(LocalDateTime.parse("2025-12-28T19:42:15.123"))
-                .phoneNumber("0865788560")
-                .avatar("https://host/avatar/u1.png")
-                .build();
+        securityUtils = mockStatic(SecurityUtils.class);
+        securityUtils.when(SecurityUtils::getCurrentUserId).thenReturn(USER_ID);
 
-        response = UserProfileResponse.builder()
-                .userId("123456789")
-                .username("aireak")
-                .email("aireak@gmail.com")
-                .displayName("aireak")
-                .joinDate(LocalDateTime.parse("2025-12-28T19:42:15.123"))
-                .build();
-
-        response2 = UserProfileResponse.builder()
-                .userId("123456789")
-                .username("aireak")
-                .email("aireakUpdate@gmail.com")
-                .displayName("aireakUpdate")
-                .lastName("aireakUpdate")
-                .dob(LocalDate.parse("18/12/2005",
-                        DateTimeFormatter.ofPattern("dd/MM/yyyy")))
-                .joinDate(LocalDateTime.parse("2025-12-28T19:42:15.123"))
-                .phoneNumber("0865788560")
-                .avatar("https://host/avatar/u1.png")
-                .build();
+        lenient().when(userProfileMapper.toUserProfileResponse(any(UserProfile.class))).thenAnswer(inv -> {
+            UserProfile p = inv.getArgument(0);
+            return UserProfileResponse.builder().userId(p.getUserId()).username(p.getUsername())
+                    .displayName(p.getDisplayName()).build();
+        });
+        lenient().when(userProfileRepository.save(any(UserProfile.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 
-    private void mockAuthenticatedUser() {
-        Authentication authentication = mock(Authentication.class);
-        SecurityContext securityContext = mock(SecurityContext.class);
+    @AfterEach
+    void tearDown() {
+        securityUtils.close();
+    }
 
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-        when(authentication.getName()).thenReturn("aireak");
+    // ---------- createProfile ----------
 
-        SecurityContextHolder.setContext(securityContext);
+    @Test
+    void createProfile_newProfile_savesAndIndexesToElasticsearch() {
+        UserProfileCreationRequest request = UserProfileCreationRequest.builder().userId(USER_ID).username("aireak").build();
+        when(userProfileRepository.existsById(USER_ID)).thenReturn(false);
+        UserProfile mapped = UserProfile.builder().userId(USER_ID).username("aireak").build();
+        when(userProfileRepository.findById(USER_ID)).thenReturn(Optional.empty());
+        when(userProfileMapper.toUserProfile(request)).thenReturn(mapped);
+
+        UserProfileResponse response = userProfileService.createProfile(request);
+
+        assertThat(response.getUserId()).isEqualTo(USER_ID);
+        verify(userProfileElasticRepository).save(any());
+        verify(redisService).setWithExpiration(eq("profile:user:" + USER_ID), any(), eq(1L), any());
     }
 
     @Test
-    void createProfile_success() {
-        UserProfileCreationRequest request = UserProfileCreationRequest.builder()
-                .userId("123456789")
-                .username("aireak")
-                .email("aireak@gmail.com")
-                .displayName("aireak")
-                .joinDate(LocalDateTime.parse("2025-12-28T19:42:15.123"))
-                .build();
+    void createProfile_alreadyExists_doesNotReindexToElasticsearch() {
+        UserProfileCreationRequest request = UserProfileCreationRequest.builder().userId(USER_ID).build();
+        UserProfile existing = UserProfile.builder().userId(USER_ID).username("aireak").build();
+        when(userProfileRepository.existsById(USER_ID)).thenReturn(true);
+        when(userProfileRepository.findById(USER_ID)).thenReturn(Optional.of(existing));
 
-        when(userProfileMapper.toUserProfile(request)).thenReturn(profile);
-        when(userProfileRepository.save(profile)).thenReturn(profile);
-        when(userProfileMapper.toUserProfileResponse(profile)).thenReturn(response);
+        userProfileService.createProfile(request);
 
-        var result = userProfileService.createProfile(request);
+        verifyNoInteractions(userProfileElasticRepository);
+    }
 
-        assertThat(result).usingRecursiveComparison().isEqualTo(response);
+    // ---------- updateProfile ----------
 
-        verify(userProfileMapper, times(1)).toUserProfile(any());
-        verify(userProfileRepository, times(1)).save(any());
-        verify(userProfileMapper, times(1)).toUserProfileResponse(any());
+    @Test
+    void updateProfile_notFound_throws() {
+        when(userProfileRepository.findById(USER_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userProfileService.updateProfile(UserProfileUpdateRequest.builder().build()))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PROFILE_NOT_FOUND);
     }
 
     @Test
-    void updateProfile_success() {
-        mockAuthenticatedUser();
-        UserProfileUpdateRequest updateRequest = UserProfileUpdateRequest.builder()
-                .email("aireakUpdate@gmail.com")
-                .displayName("aireakUpdate")
-                .lastName("aireakUpdate")
-                .dob(LocalDate.parse("18/12/2005",
-                        DateTimeFormatter.ofPattern("dd/MM/yyyy")))
-                .phoneNumber("0865788560")
-                .build();
+    void updateProfile_displayNameChanged_publishesSearchAndSocketEvents() {
+        UserProfile profile = UserProfile.builder().userId(USER_ID).displayName("Old Name").build();
+        when(userProfileRepository.findById(USER_ID)).thenReturn(Optional.of(profile));
+        doAnswer(inv -> {
+            UserProfileUpdateRequest req = inv.getArgument(1);
+            profile.setDisplayName(req.getDisplayName());
+            return null;
+        }).when(userProfileMapper).update(eq(profile), any());
 
-        when(userProfileRepository.findByUsername("aireak")).thenReturn(profile);
+        userProfileService.updateProfile(UserProfileUpdateRequest.builder().displayName("New Name").build());
 
-        when(userProfileRepository.save(profile)).thenReturn(profile2);
-        when(userProfileMapper.toUserProfileResponse(profile2)).thenReturn(response2);
-
-        var result = userProfileService.updateProfile(updateRequest);
-
-        assertThat(result).usingRecursiveComparison().isEqualTo(response2);
-
-        verify(userProfileRepository, times(1)).findByUsername(any());
-        verify(userProfileMapper, times(1)).update(any(), any());
-        verify(userProfileRepository, times(1)).save(any());
-        verify(redisService, times(1)).delete(anyString());
-        verify(userProfileMapper, times(1)).toUserProfileResponse(any());
+        verify(outboxRepository).save(argThat(o -> o.getTopic().equals("search.sync")));
+        verify(outboxRepository).save(argThat(o -> o.getTopic().equals("socket.events")));
     }
 
     @Test
-    void updateProfile_unAuthenticated() {
-        SecurityContext securityContext = mock(SecurityContext.class);
-        when(securityContext.getAuthentication()).thenReturn(null);
+    void updateProfile_noRelevantFieldChanged_doesNotPublishEvents() {
+        UserProfile profile = UserProfile.builder().userId(USER_ID).displayName("Same Name").city("Old City").build();
+        when(userProfileRepository.findById(USER_ID)).thenReturn(Optional.of(profile));
+        doAnswer(inv -> {
+            profile.setCity("New City");
+            return null;
+        }).when(userProfileMapper).update(eq(profile), any());
 
-        SecurityContextHolder.setContext(securityContext);
+        userProfileService.updateProfile(UserProfileUpdateRequest.builder().displayName("Same Name").build());
 
-        UserProfileUpdateRequest request = new UserProfileUpdateRequest();
-        var exception = assertThrows(AppException.class,
-                () -> userProfileService.updateProfile(request));
+        verifyNoInteractions(outboxRepository);
+    }
 
-        assertEquals(ErrorCode.UNAUTHENTICATED, exception.getErrorCode());
+    // ---------- updateAvatar ----------
 
-        verify(userProfileRepository, never()).findByUsername(any());
-        verify(userProfileMapper, never()).update(any(), any());
+    @Test
+    void updateAvatar_notFound_throws() {
+        when(userProfileRepository.findById(USER_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userProfileService.updateAvatar("file-1"))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PROFILE_NOT_FOUND);
+    }
+
+    @Test
+    void updateAvatar_sameFileId_shortCircuitsWithoutSavingOrPublishing() {
+        UserProfile profile = UserProfile.builder().userId(USER_ID).avatarFileId("file-1").build();
+        when(userProfileRepository.findById(USER_ID)).thenReturn(Optional.of(profile));
+
+        userProfileService.updateAvatar("file-1");
+
         verify(userProfileRepository, never()).save(any());
-        verify(redisService, never()).delete(anyString());
-        verify(userProfileMapper, never()).toUserProfileResponse(any());
+        verifyNoInteractions(outboxRepository);
     }
 
     @Test
-    void getMyInfo_success() {
-        mockAuthenticatedUser();
+    void updateAvatar_newFileId_savesAndPublishesEvents() {
+        UserProfile profile = UserProfile.builder().userId(USER_ID).avatarFileId("old-file").build();
+        when(userProfileRepository.findById(USER_ID)).thenReturn(Optional.of(profile));
 
-        when(userProfileRepository.findByUsername("aireak")).thenReturn(profile);
-        when(userProfileMapper.toUserProfileResponse(profile)).thenReturn(response);
+        userProfileService.updateAvatar("new-file");
 
-        var result = userProfileService.getMyInfo();
+        assertThat(profile.getAvatarFileId()).isEqualTo("new-file");
+        verify(userProfileRepository).save(profile);
+        verify(outboxRepository, times(2)).save(any());
+    }
 
-        assertThat(result).usingRecursiveComparison().isEqualTo(response);
+    // ---------- getMyProfile ----------
 
-        verify(userProfileRepository, times(1)).findByUsername(any());
-        verify(userProfileMapper, times(1)).toUserProfileResponse(any());
+    @Test
+    void getMyProfile_notFound_throws() {
+        when(userProfileRepository.findById(USER_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userProfileService.getMyProfile())
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PROFILE_NOT_FOUND);
     }
 
     @Test
-    void getMyInfo_unAuthenticated() {
-        SecurityContext securityContext = mock(SecurityContext.class);
-        when(securityContext.getAuthentication()).thenReturn(null);
+    void getMyProfile_cacheHit_returnsCachedWithoutRebuilding() {
+        UserProfile profile = UserProfile.builder().userId(USER_ID).build();
+        when(userProfileRepository.findById(USER_ID)).thenReturn(Optional.of(profile));
+        UserProfileResponse cached = UserProfileResponse.builder().userId(USER_ID).displayName("Cached").build();
+        when(redisService.get(eq("profile:user:" + USER_ID), any())).thenReturn(cached);
 
-        SecurityContextHolder.setContext(securityContext);
+        UserProfileResponse response = userProfileService.getMyProfile();
 
-        var exception = assertThrows(AppException.class, () -> userProfileService.getMyInfo());
-
-        assertEquals(ErrorCode.UNAUTHENTICATED, exception.getErrorCode());
-
-        verify(userProfileRepository, never()).findByUsername(any());
-        verify(userProfileMapper, never()).toUserProfileResponse(any());
+        assertThat(response).isSameAs(cached);
+        verify(redisService, never()).setWithExpiration(any(), any(), anyLong(), any());
     }
 
     @Test
-    void getAllProfiles_success() {
-        when(userProfileRepository.findAll()).thenReturn(List.of(profile));
-        when(userProfileMapper.toUserProfileResponse(profile)).thenReturn(response);
+    void getMyProfile_cacheMiss_buildsAndCaches() {
+        UserProfile profile = UserProfile.builder().userId(USER_ID).displayName("Fresh").build();
+        when(userProfileRepository.findById(USER_ID)).thenReturn(Optional.of(profile));
+        when(redisService.get(eq("profile:user:" + USER_ID), any())).thenReturn(null);
 
-        var result = userProfileService.getAllProfiles();
+        UserProfileResponse response = userProfileService.getMyProfile();
 
-        assertThat(result).usingRecursiveComparison().isEqualTo(List.of(response));
+        assertThat(response.getDisplayName()).isEqualTo("Fresh");
+        verify(redisService).setWithExpiration(eq("profile:user:" + USER_ID), any(), eq(1L), any());
+    }
 
-        verify(userProfileRepository, times(1)).findAll();
-        verify(userProfileMapper).toUserProfileResponse(any());
+    // ---------- getAllProfiles(page, size) ----------
+
+    @Test
+    void getAllProfiles_excludesCurrentUser() {
+        Page<UserProfile> page = new PageImpl<>(List.of(UserProfile.builder().userId("other").build()));
+        when(userProfileRepository.findByUserIdNot(eq(USER_ID), any(Pageable.class))).thenReturn(page);
+
+        PageResponse<UserProfileResponse> response = userProfileService.getAllProfiles(0, 10);
+
+        assertThat(response.getData()).hasSize(1);
+        verify(userProfileRepository).findByUserIdNot(eq(USER_ID), any(Pageable.class));
+    }
+
+    // ---------- getSuggestionProfiles ----------
+
+    @Test
+    void getSuggestionProfiles_excludesGivenUserIds() {
+        Set<String> excluded = Set.of("a", "b");
+        ProfileSuggestionRequest request = ProfileSuggestionRequest.builder()
+                .excludedUserIds(excluded).page(0).size(10).build();
+        Page<UserProfile> page = new PageImpl<>(List.of());
+        when(userProfileRepository.findByUserIdNotIn(eq(excluded), any(Pageable.class))).thenReturn(page);
+
+        PageResponse<UserProfileResponse> response = userProfileService.getSuggestionProfiles(request);
+
+        assertThat(response.getData()).isEmpty();
+        verify(userProfileRepository).findByUserIdNotIn(eq(excluded), any(Pageable.class));
+    }
+
+    // ---------- getBulkProfiles ----------
+
+    @Test
+    void getBulkProfiles_mapsResponsesByUserId() {
+        UserProfile p1 = UserProfile.builder().userId("u1").build();
+        UserProfile p2 = UserProfile.builder().userId("u2").build();
+        when(userProfileRepository.findAllById(Set.of("u1", "u2"))).thenReturn(List.of(p1, p2));
+
+        var result = userProfileService.getBulkProfiles(BulkUserProfileRequest.builder().userIds(Set.of("u1", "u2")).build());
+
+        assertThat(result).containsOnlyKeys("u1", "u2");
+    }
+
+    // ---------- getProfile ----------
+
+    @Test
+    void getProfile_notFound_throws() {
+        when(redisService.get(eq("profile:user:missing"), any())).thenReturn(null);
+        when(userProfileRepository.findById("missing")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userProfileService.getProfile("missing"))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PROFILE_NOT_FOUND);
     }
 
     @Test
-    void getProfile_success() {
-        when(userProfileRepository.findById("123456789")).thenReturn(Optional.of(profile));
-        when(userProfileMapper.toUserProfileResponse(profile)).thenReturn(response);
+    void getProfile_cacheHit_returnsCachedWithoutDbLookup() {
+        UserProfileResponse cached = UserProfileResponse.builder().userId("u1").build();
+        when(redisService.get(eq("profile:user:u1"), any())).thenReturn(cached);
 
-        var result = userProfileService.getProfile("123456789");
+        UserProfileResponse response = userProfileService.getProfile("u1");
 
-        assertThat(result).usingRecursiveComparison().isEqualTo(response);
-
-        verify(userProfileRepository, times(1)).findById(any());
-        verify(userProfileMapper, times(1)).toUserProfileResponse(any());
+        assertThat(response).isSameAs(cached);
+        verifyNoInteractions(userProfileRepository);
     }
 
+    // ---------- searchProfile ----------
+
     @Test
-    void getProfile_profileNotFound() {
-        when(userProfileRepository.findById("123456789")).thenReturn(Optional.empty());
-        var exception = assertThrows(AppException.class, () -> userProfileService.getProfile("123456789"));
+    void searchProfile_mapsElasticDocsToResponses() {
+        UserProfileDoc doc = UserProfileDoc.builder().userId("u1").username("aireak").displayName("Aireak").build();
+        Page<UserProfileDoc> page = new PageImpl<>(List.of(doc));
+        when(userProfileElasticRepository.searchByUsernameContaining(eq("aireak"), any(Pageable.class))).thenReturn(page);
 
-        assertEquals(ErrorCode.PROFILE_NOT_FOUND, exception.getErrorCode());
+        PageResponse<UserProfileResponse> response = userProfileService.searchProfile("aireak", 1, 10);
 
-        verify(userProfileRepository, times(1)).findById(any());
-        verify(userProfileMapper, never()).toUserProfileResponse(any());
+        assertThat(response.getData()).hasSize(1);
+        assertThat(response.getData().get(0).getUserId()).isEqualTo("u1");
     }
 
-    @Test
-    void getBulkProfiles_success() {
-        BulkUserProfileRequest req = BulkUserProfileRequest.builder()
-                .userIds(Set.of("123456789"))
-                .build();
-
-        when(userProfileRepository.findAllById(req.getUserIds())).thenReturn(List.of(profile));
-        when(userProfileMapper.toUserProfileResponse(profile)).thenReturn(response);
-
-        var result = userProfileService.getBulkProfiles(req);
-
-        assertThat(result).containsEntry("123456789", response);
-
-        verify(userProfileRepository, times(1)).findAllById(any());
-        verify(userProfileMapper).toUserProfileResponse(any());
-    }
-
-    @Test
-    void updateAvatar_success() {
-        mockAuthenticatedUser();
-        MockMultipartFile multipartFile = new MockMultipartFile("file", "u1.png",
-                "image/png", "data".getBytes());
-
-        FileResponse fileResponse = new FileResponse("https://host/avatar/u1.png");
-
-        when(userProfileRepository.findByUsername(any())).thenReturn(profile);
-        when(client.uploadAvatar(any())).thenReturn(ApiResponse.<FileResponse>builder()
-                .result(fileResponse).build());
-        when(userProfileRepository.save(any())).thenReturn(profile);
-        when(userProfileMapper.toUserProfileResponse(any())).thenReturn(response);
-
-        var result = userProfileService.updateAvatar(multipartFile);
-
-        assertThat(result).usingRecursiveComparison().isEqualTo(response);
-
-        verify(userProfileRepository, times(1)).findByUsername(any());
-        verify(client, times(1)).uploadAvatar(any());
-        verify(userProfileRepository, times(1)).save(any());
-        verify(redisService, times(1)).delete(anyString());
-        verify(userProfileMapper, times(1)).toUserProfileResponse(any());
-    }
-
-    @Test
-    void updateAvatar_unAuthenticated(){
-        MockMultipartFile multipartFile = new MockMultipartFile("file", "u1.png",
-                "image/png", "data".getBytes());
-
-        SecurityContext securityContext = mock(SecurityContext.class);
-        when(securityContext.getAuthentication()).thenReturn(null);
-
-        SecurityContextHolder.setContext(securityContext);
-
-        var exception = assertThrows(AppException.class, () -> userProfileService.updateAvatar(multipartFile));
-
-        assertEquals(ErrorCode.UNAUTHENTICATED, exception.getErrorCode());
-
-        verify(userProfileRepository, never()).findByUsername(any());
-        verify(client, never()).uploadAvatar(any());
-        verify(userProfileRepository, never()).save(any());
-        verify(redisService, never()).delete(anyString());
-        verify(userProfileMapper, never()).toUserProfileResponse(any());
-    }
-
-    @Test
-    void searchProfile_success() {
-        SearchUserProfileRequest request = new SearchUserProfileRequest("aireak", 1, 5);
-
-        List<UserProfile> profiles = List.of(profile);
-        Pageable pageable = PageRequest.of(request.getPage() - 1, request.getSize(), Sort.by("joinDate").ascending());
-        Page<UserProfile> pageData = new PageImpl<>(profiles, pageable, 1);
-
-        when(userProfileRepository.findAllByDisplayName(request.getDisplayName(), pageable)).thenReturn(pageData);
-        when(userProfileMapper.toUserProfileResponse(profile)).thenReturn(response);
-        var result = userProfileService.searchProfile(request);
-
-        assertNotNull(result);
-        assertEquals(1, result.getCurrentPage());
-        assertEquals(1, result.getTotalElement());
-        assertEquals(1, result.getData().size());
-        assertEquals("aireak", result.getData().getFirst().getDisplayName());
-
-        verify(userProfileRepository).findAllByDisplayName(any(), any());
-        verify(userProfileMapper).toUserProfileResponse(any());
+    private static long anyLong() {
+        return org.mockito.ArgumentMatchers.anyLong();
     }
 }

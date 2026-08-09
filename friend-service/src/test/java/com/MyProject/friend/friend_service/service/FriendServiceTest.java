@@ -33,6 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -199,5 +200,145 @@ class FriendServiceTest {
         assertEquals("current-user", event.getUserIdSender());
         assertEquals(List.of("requester"), event.getToUserIds());
         verify(friendRequestRepository).deleteByHashFriendRequest("current-user_requester");
+    }
+
+    @Test
+    void sendFriendRequest_toSelf_throwsCannotSendToSelf() {
+        AppException exception = assertThrows(AppException.class,
+                () -> friendService.sendFriendRequest("current-user"));
+
+        assertEquals(ErrorCode.CANNOT_SEND_REQUEST_TO_SELF, exception.getErrorCode());
+        verify(userRelationshipRepository, never()).existsByHashFriend(any());
+    }
+
+    @Test
+    void sendFriendRequest_alreadyPending_throwsAlreadySendRequest() {
+        when(userRelationshipRepository.existsByHashFriend("current-user_friend-one")).thenReturn(false);
+        when(friendRequestRepository.findByHashFriendRequest("current-user_friend-one"))
+                .thenReturn(java.util.Optional.of(FriendRequest.builder().build()));
+
+        AppException exception = assertThrows(AppException.class,
+                () -> friendService.sendFriendRequest("friend-one"));
+
+        assertEquals(ErrorCode.ALREADY_SEND_REQUEST, exception.getErrorCode());
+        verify(friendRequestRepository, never()).save(any());
+    }
+
+    @Test
+    void sendFriendRequest_happyPath_savesRequestAndPublishesNotification() {
+        when(userRelationshipRepository.existsByHashFriend("current-user_friend-one")).thenReturn(false);
+        when(friendRequestRepository.findByHashFriendRequest("current-user_friend-one"))
+                .thenReturn(java.util.Optional.empty());
+        when(friendRequestRepository.save(any(FriendRequest.class))).thenAnswer(inv -> {
+            FriendRequest req = inv.getArgument(0);
+            req.setId("req-1");
+            return req;
+        });
+
+        friendService.sendFriendRequest("friend-one");
+
+        verify(friendRequestRepository).save(argThat(r ->
+                r.getSenderId().equals("current-user") && r.getReceiverId().equals("friend-one")
+                        && r.getFriendRequestStatus() == FriendRequestStatus.PENDING));
+        verify(outboxEventPublisher).publish(eq("req-1"), eq("notification.events"), any());
+    }
+
+    @Test
+    void friendRequestStatus_hashNotFound_throwsHashFriendRequest() {
+        when(friendRequestRepository.findByHashFriendRequest("current-user_requester"))
+                .thenReturn(java.util.Optional.empty());
+
+        AppException exception = assertThrows(AppException.class,
+                () -> friendService.friendRequestStatus("requester", FriendRequestStatus.ACCEPTED));
+
+        assertEquals(ErrorCode.HASH_FRIEND_REQUEST, exception.getErrorCode());
+    }
+
+    @Test
+    void friendRequestStatus_currentUserNotReceiver_throwsUnauthorized() {
+        FriendRequest request = FriendRequest.builder()
+                .senderId("current-user").receiverId("someone-else")
+                .friendRequestStatus(FriendRequestStatus.PENDING).build();
+        when(friendRequestRepository.findByHashFriendRequest("current-user_requester"))
+                .thenReturn(java.util.Optional.of(request));
+
+        AppException exception = assertThrows(AppException.class,
+                () -> friendService.friendRequestStatus("requester", FriendRequestStatus.ACCEPTED));
+
+        assertEquals(ErrorCode.UNAUTHORIZED, exception.getErrorCode());
+    }
+
+    @Test
+    void friendRequestStatus_alreadyProcessed_throws() {
+        FriendRequest request = FriendRequest.builder()
+                .senderId("requester").receiverId("current-user")
+                .friendRequestStatus(FriendRequestStatus.ACCEPTED).build();
+        when(friendRequestRepository.findByHashFriendRequest("current-user_requester"))
+                .thenReturn(java.util.Optional.of(request));
+
+        AppException exception = assertThrows(AppException.class,
+                () -> friendService.friendRequestStatus("requester", FriendRequestStatus.ACCEPTED));
+
+        assertEquals(ErrorCode.FRIEND_REQUEST_ALREADY_PROCESSED, exception.getErrorCode());
+    }
+
+    @Test
+    void friendRequestStatus_invalidStatus_throws() {
+        FriendRequest request = FriendRequest.builder()
+                .senderId("requester").receiverId("current-user")
+                .hashFriendRequest("current-user_requester")
+                .friendRequestStatus(FriendRequestStatus.PENDING).build();
+        when(friendRequestRepository.findByHashFriendRequest("current-user_requester"))
+                .thenReturn(java.util.Optional.of(request));
+
+        AppException exception = assertThrows(AppException.class,
+                () -> friendService.friendRequestStatus("requester", FriendRequestStatus.PENDING));
+
+        assertEquals(ErrorCode.INVALID_STATUS, exception.getErrorCode());
+        verify(userRelationshipRepository, never()).save(any());
+    }
+
+    @Test
+    void friendRequestStatus_cancel_deletesWithoutCreatingRelationship() {
+        FriendRequest request = FriendRequest.builder()
+                .senderId("requester").receiverId("current-user")
+                .hashFriendRequest("current-user_requester")
+                .friendRequestStatus(FriendRequestStatus.PENDING).build();
+        when(friendRequestRepository.findByHashFriendRequest("current-user_requester"))
+                .thenReturn(java.util.Optional.of(request));
+
+        friendService.friendRequestStatus("requester", FriendRequestStatus.CANCEL);
+
+        verify(userRelationshipRepository, never()).save(any());
+        verify(friendRequestRepository).deleteByHashFriendRequest("current-user_requester");
+    }
+
+    // Note: updateRelationshipStatus's "not found" guard checks Objects.isNull(current) on the
+    // result of a Spring Data Optional-returning finder, which never returns null (only
+    // Optional.empty()) - that branch is currently unreachable, so no test asserts ErrorCode.HASH_FRIEND
+    // here. Flagged for the team; not fixed as part of writing tests for existing behavior.
+
+    @Test
+    void updateRelationshipStatus_unfriend_deletesRelationship() {
+        UserRelationship relationship = UserRelationship.builder().hashFriend("current-user_friend-one").build();
+        when(userRelationshipRepository.findByHashFriend("current-user_friend-one"))
+                .thenReturn(java.util.Optional.of(relationship));
+
+        friendService.updateRelationshipStatus("friend-one", RelationshipStatus.UNFRIEND);
+
+        verify(userRelationshipRepository).deleteByHashFriend("current-user_friend-one");
+        verify(userRelationshipRepository, never()).updateRelationshipStatus(any(), any());
+    }
+
+    @Test
+    void updateRelationshipStatus_block_updatesStatusWithoutDeleting() {
+        UserRelationship relationship = UserRelationship.builder().hashFriend("current-user_friend-one").build();
+        when(userRelationshipRepository.findByHashFriend("current-user_friend-one"))
+                .thenReturn(java.util.Optional.of(relationship));
+
+        friendService.updateRelationshipStatus("friend-one", RelationshipStatus.BLOCKED_FROM_SENDER);
+
+        verify(userRelationshipRepository).updateRelationshipStatus("current-user_friend-one", RelationshipStatus.BLOCKED_FROM_SENDER);
+        verify(userRelationshipRepository, never()).deleteByHashFriend(any());
     }
 }
