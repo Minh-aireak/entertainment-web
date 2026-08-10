@@ -54,6 +54,11 @@ jwt:
   grant-type: ${GRANT_TYPE}
 
 app:
+  bootstrap-admin:
+    enabled: ${BOOTSTRAP_ADMIN_ENABLED:false}
+    username: ${BOOTSTRAP_ADMIN_USERNAME:}
+    email: ${BOOTSTRAP_ADMIN_EMAIL:}
+    password: ${BOOTSTRAP_ADMIN_PASSWORD:}
   services:
     debezium:
       connect-url: ${DEBEZIUM_CONNECT_URL}

@@ -5,6 +5,7 @@ target/
 out/
 !**/src/main/**/out/
 !**/src/test/**/out/
+.idea/
 *.iml
 
 ### Eclipse ###
@@ -29,9 +30,65 @@ bin/
 ### VS Code ###
 .vscode/
 
+### JavaScript / frontend ###
+node_modules/
+dist/
+coverage/
+.nyc_output/
+*.tsbuildinfo
+
 ### Mac OS ###
 .DS_Store
 
+### Windows ###
+Thumbs.db
+Desktop.ini
+
+### Logs ###
+*.log
+logs/
+
 ### Local secrets (never commit real credentials) ###
-/.env
+.env
+.env.*
+!.env.example
+!**/.env.example
+**/secret.env
+**/secrets.env
+**/secret.yaml
+**/secret.yml
+**/secrets.yaml
+**/secrets.yml
+**/values-secret.yaml
+**/values-secret.yml
+**/secret*.local.yaml
+**/secret*.local.yml
+secrets/
+.secrets/
+.npmrc
+**/.npmrc
+!.npmrc.example
+!**/.npmrc.example
+.netrc
+_netrc
+.pypirc
+credentials.json
+service-account*.json
+id_rsa
+id_ed25519
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.kubeconfig
+kubeconfig
+kubeconfig.*
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+!**/*.tfvars.example
+.terraform/
 cookies.txt

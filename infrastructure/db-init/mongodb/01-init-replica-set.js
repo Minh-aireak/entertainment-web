@@ -38,20 +38,35 @@ if (!isMaster.ismaster) {
   quit(1);
 }
 
-// Create Debezium User with necessary roles for CDC (idempotent)
-print("Checking/Creating debezium user...");
-var existing = db.getSiblingDB('admin').getUser('debezium');
+// Create or rotate the Debezium user with least-privilege CDC roles.
+// Credentials are injected at runtime; never store them in this tracked script.
+var debeziumUsername = process.env.DEBEZIUM_DB_USERNAME;
+var debeziumPassword = process.env.DEBEZIUM_DB_PASSWORD;
+var debeziumRoles = [
+  { role: 'readAnyDatabase', db: 'admin' },
+  { role: 'clusterMonitor', db: 'admin' },
+  { role: 'read', db: 'local' }
+];
+
+if (!debeziumUsername || !debeziumPassword) {
+  print('ERROR: DEBEZIUM_DB_USERNAME and DEBEZIUM_DB_PASSWORD are required.');
+  quit(1);
+}
+
+print("Checking/Creating Debezium user...");
+var adminDb = db.getSiblingDB('admin');
+var existing = adminDb.getUser(debeziumUsername);
 if (existing) {
-  print("Debezium user already exists, skipping creation.");
+  adminDb.updateUser(debeziumUsername, {
+    pwd: debeziumPassword,
+    roles: debeziumRoles
+  });
+  print("Debezium user credentials and roles updated.");
 } else {
-  db.getSiblingDB('admin').createUser({
-    user: 'debezium',
-    pwd: 'REDACTED_DBZ_CREDENTIAL',
-    roles: [
-      { role: 'readAnyDatabase', db: 'admin' },
-      { role: 'clusterMonitor', db: 'admin' },
-      { role: 'read', db: 'local' }
-    ]
+  adminDb.createUser({
+    user: debeziumUsername,
+    pwd: debeziumPassword,
+    roles: debeziumRoles
   });
   print("Debezium user created.");
 }

@@ -5,6 +5,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -34,41 +35,51 @@ public class ApplicationInitConfig {
     @Bean
     @Profile("!test")
     @Transactional
-    ApplicationRunner applicationRunner(UserRepository userRepository) {
+    ApplicationRunner applicationRunner(
+            UserRepository userRepository,
+            @Value("${app.bootstrap-admin.enabled:false}") boolean bootstrapAdminEnabled,
+            @Value("${app.bootstrap-admin.username:}") String bootstrapAdminUsername,
+            @Value("${app.bootstrap-admin.email:}") String bootstrapAdminEmail,
+            @Value("${app.bootstrap-admin.password:}") String bootstrapAdminPassword) {
         return args -> {
-            if (userRepository.findByUsername("admin").isEmpty()) {
+            if (bootstrapAdminEnabled) {
+                if (bootstrapAdminUsername.isBlank()
+                        || bootstrapAdminEmail.isBlank()
+                        || bootstrapAdminPassword.isBlank()) {
+                    throw new IllegalStateException(
+                            "Bootstrap admin is enabled but username, email or password is missing");
+                }
 
-                Role role = roleRepository
-                        .findById("ADMIN")
-                        .orElseGet(() -> roleRepository.save(Role.builder()
-                                .name("ADMIN")
-                                .description("Admin role")
-                                .build()));
+                if (userRepository.findByUsername(bootstrapAdminUsername).isEmpty()) {
+                    Role role = roleRepository
+                            .findById("ADMIN")
+                            .orElseGet(() -> roleRepository.save(Role.builder()
+                                    .name("ADMIN")
+                                    .description("Admin role")
+                                    .build()));
 
-                Set<Role> roles = new HashSet<>();
-                roles.add(role);
+                    Set<Role> roles = new HashSet<>();
+                    roles.add(role);
 
-                User user = User.builder()
-                        .username("admin")
-                        .email("admin@aireak.local")
-                        .password(passwordEncoder.encode(System.getenv("BOOTSTRAP_ADMIN_PASSWORD")))
-                        .roles(roles)
-                        .build();
-                user = userRepository.save(user);
+                    User user = User.builder()
+                            .username(bootstrapAdminUsername)
+                            .email(bootstrapAdminEmail)
+                            .password(passwordEncoder.encode(bootstrapAdminPassword))
+                            .roles(roles)
+                            .build();
+                    user = userRepository.save(user);
 
-                // Other services (profile-service, ...) bootstrap their own state off this
-                // event when a user registers normally; the seeded admin bypasses that
-                // registration endpoint, so it must be published here too or admin ends up
-                // with no profile and every profile-dependent call (e.g. login) 404s.
-                UserRegisteredEvent userRegisteredEvent = UserRegisteredEvent.builder()
-                        .eventId(UUID.randomUUID().toString())
-                        .userId(user.getId())
-                        .username(user.getUsername())
-                        .email(user.getEmail())
-                        .displayName(user.getUsername())
-                        .joinDate(LocalDateTime.now())
-                        .build();
-                outboxEventPublisher.publish(user.getId(), "user.registered", userRegisteredEvent);
+                    // Other services bootstrap their own state from this registration event.
+                    UserRegisteredEvent userRegisteredEvent = UserRegisteredEvent.builder()
+                            .eventId(UUID.randomUUID().toString())
+                            .userId(user.getId())
+                            .username(user.getUsername())
+                            .email(user.getEmail())
+                            .displayName(user.getUsername())
+                            .joinDate(LocalDateTime.now())
+                            .build();
+                    outboxEventPublisher.publish(user.getId(), "user.registered", userRegisteredEvent);
+                }
             }
             if (roleRepository.findById("USER").isEmpty()) {
                 roleRepository.save(

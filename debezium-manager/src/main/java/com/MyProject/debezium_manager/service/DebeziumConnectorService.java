@@ -8,6 +8,8 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -27,6 +29,12 @@ public class DebeziumConnectorService {
 
     @Value("${spring.kafka.bootstrap-servers:kafka:9092}")
     String kafkaBootstrapServers;
+
+    @Value("${app.services.debezium.database-username}")
+    String databaseUsername;
+
+    @Value("${app.services.debezium.database-password}")
+    String databasePassword;
 
     // Đọc bởi HealthController để báo cáo readiness qua Docker healthcheck.
     // Business service nào depends_on: condition: service_healthy vào
@@ -102,8 +110,8 @@ public class DebeziumConnectorService {
         config.put("tasks.max", "1");
         config.put("database.hostname", "mysql");
         config.put("database.port", "3306");
-        config.put("database.user", "debezium");
-        config.put("database.password", "REDACTED_DBZ_CREDENTIAL");
+        config.put("database.user", databaseUsername);
+        config.put("database.password", databasePassword);
         config.put("database.server.id", serverId);
         config.put("topic.prefix", topicPrefix);
         config.put("database.include.list", dbName);
@@ -134,8 +142,12 @@ public class DebeziumConnectorService {
         Map<String, Object> config = new HashMap<>();
         config.put("connector.class", "io.debezium.connector.mongodb.MongoDbConnector");
         config.put("tasks.max", "1");
-        config.put("mongodb.connection.string",
-                "mongodb://debezium:REDACTED_DBZ_CREDENTIAL@mongodb:27017/?authSource=admin&replicaSet=rs0");
+        String encodedUsername = URLEncoder.encode(databaseUsername, StandardCharsets.UTF_8);
+        String encodedPassword = URLEncoder.encode(databasePassword, StandardCharsets.UTF_8);
+        config.put(
+                "mongodb.connection.string",
+                "mongodb://" + encodedUsername + ":" + encodedPassword
+                        + "@mongodb:27017/?authSource=admin&replicaSet=rs0");
         config.put("topic.prefix", dbName);
         config.put("collection.include.list", dbName + "." + collectionName);
 

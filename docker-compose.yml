@@ -18,6 +18,8 @@ services:
       - '${MYSQL_PORT}:3306'
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      DEBEZIUM_DB_USERNAME: ${DEBEZIUM_DB_USERNAME:?Set DEBEZIUM_DB_USERNAME in .env}
+      DEBEZIUM_DB_PASSWORD: ${DEBEZIUM_DB_PASSWORD:?Set DEBEZIUM_DB_PASSWORD in .env}
       TZ: ${TZ}
     volumes:
       - mysql_data:/var/lib/mysql
@@ -638,7 +640,7 @@ services:
         VITE_SOCKET_URL: ws://localhost:8888/api/v1/sockets/ws
     container_name: web-app
     ports:
-      - '5173:80'
+      - '5173:8080'
     depends_on:
       - gateway
 

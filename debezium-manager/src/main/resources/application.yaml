@@ -11,3 +11,5 @@ app:
   services:
     debezium:
       connect-url: ${DEBEZIUM_CONNECT_URL}
+      database-username: ${DEBEZIUM_DB_USERNAME}
+      database-password: ${DEBEZIUM_DB_PASSWORD}
