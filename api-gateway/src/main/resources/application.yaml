@@ -12,13 +12,6 @@ spring:
   cloud:
     gateway:
       routes:
-        - id: block-api-internal-identities
-          uri: ${IDENTITY_SERVICE_URL}
-          predicates:
-            - Path=/api/v1/identities/users/internal/**
-          filters:
-            - SetStatus=FORBIDDEN
-            - StripPrefix=2
         - id: identity-service
           uri: ${IDENTITY_SERVICE_URL}
           predicates:
@@ -43,6 +36,13 @@ spring:
           predicates:
             - Path=/api/v1/notifications/**
           filters:
+            - StripPrefix=2
+        - id: block-api-internal-posts
+          uri: ${POST_SERVICE_URL}
+          predicates:
+            - Path=/api/v1/posts/internal/**,/api/v1/posts/count
+          filters:
+            - SetStatus=FORBIDDEN
             - StripPrefix=2
         - id: post-service
           uri: ${POST_SERVICE_URL}
@@ -140,11 +140,6 @@ app:
           path-pattern: /api/v1/films/**
           method: GET
           limit: 120
-          window-seconds: 60
-        - name: public-media-download
-          path-pattern: /api/v1/files/media/download/**
-          method: GET
-          limit: 60
           window-seconds: 60
         - name: public-media-info
           path-pattern: /api/v1/files/media/info/**

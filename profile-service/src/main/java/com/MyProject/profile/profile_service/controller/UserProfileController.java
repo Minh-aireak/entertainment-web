@@ -6,7 +6,6 @@ import com.MyProject.common.dto.response.ApiResponse;
 import com.MyProject.common.dto.response.PageResponse;
 import com.MyProject.common.dto.response.UserProfileResponse;
 import com.MyProject.profile.profile_service.dto.request.UpdateAvatarRequest;
-import com.MyProject.profile.profile_service.dto.request.UserProfileCreationRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileUpdateRequest;
 import com.MyProject.profile.profile_service.service.UserProfileService;
 import jakarta.validation.Valid;
@@ -63,13 +62,6 @@ public class UserProfileController {
             @RequestParam(defaultValue = "10") int size){
         return ApiResponse.<PageResponse<UserProfileResponse>>builder()
                 .result(userProfileService.searchProfile(displayName, page, size))
-                .build();
-    }
-
-    @PostMapping("/internal/registration")
-    ApiResponse<UserProfileResponse> createProfile(@RequestBody UserProfileCreationRequest request){
-        return ApiResponse.<UserProfileResponse>builder()
-                .result(userProfileService.createProfile(request))
                 .build();
     }
 
