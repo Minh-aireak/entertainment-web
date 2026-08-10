@@ -4,6 +4,7 @@ import lombok.Getter;
 
 @Getter
 public enum PostType {
-    BUSINESS_SCHEDULE,
-    TRAVEL_ITINERARY
+    TEXT,
+    IMAGE,
+    WATCH_TOGETHER
 }

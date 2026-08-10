@@ -78,6 +78,10 @@ app:
   services:
     profile:
       url: ${PROFILE_SERVICE_URL}/profiles
+    file:
+      url: ${FILE_SERVICE_URL}
+  notification:
+    like-debounce-seconds: ${LIKE_DEBOUNCE_SECONDS:3}
   rate-limit:
     post-write:
       limit-for-period: 15
@@ -138,6 +142,8 @@ resilience4j:
         wait-duration-in-open-state: 20s
       profileService:
         base-config: downstream
+      fileService:
+        base-config: downstream
   ratelimiter:
     configs:
       default:
@@ -146,6 +152,10 @@ resilience4j:
       profileService:
         base-config: default
         limit-for-period: 60
+        limit-refresh-period: 1s
+      fileService:
+        base-config: default
+        limit-for-period: 120
         limit-refresh-period: 1s
   retry:
     configs:
@@ -174,6 +184,8 @@ resilience4j:
           - io.github.resilience4j.circuitbreaker.CallNotPermittedException
     instances:
       profileService:
+        base-config: downstream
+      fileService:
         base-config: downstream
 
 management:

@@ -1,48 +1,43 @@
-package com.MyProject.post.post_service.entity;
+package com.MyProject.post.post_service.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-import lombok.experimental.SuperBuilder;
-import org.springframework.data.mongodb.core.index.Indexed;
-import org.springframework.data.mongodb.core.mapping.Document;
-import org.springframework.data.mongodb.core.mapping.MongoId;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
-@Getter
-@Setter
-@SuperBuilder(toBuilder = true)
+@JsonInclude(JsonInclude.Include.NON_NULL)
+@Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Document(value = "post")
+@Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class Post {
-    @MongoId
+public class PostResponse {
     String id;
-    PostType postType;
-
-    @Indexed
+    String postType;
     String userId;
+    String displayName;
+    String avatar;
     String title;
     String content;
     String backgroundColor;
     String feeling;
     LocalDateTime startTime;
     LocalDateTime endTime;
-    LocalDateTime createdDate;
-    LocalDateTime modifiedDate;
+    String createdDate;
+    String modifiedDate;
     String status;
-    List<String> listUsersJoin;
     long likeCount;
-
+    boolean liked;
     List<String> imageFileIds;
-
+    List<String> imageUrls;
     String watchRoomId;
     String watchFilmId;
     String watchEpisodeId;
     String watchInviteCode;
     String watchFilmTitle;
     String watchFilmThumbnailFileId;
+    String watchFilmThumbnailUrl;
     int watchParticipantCount;
 }

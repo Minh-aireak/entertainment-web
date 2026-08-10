@@ -2,22 +2,20 @@ package com.MyProject.post.post_service.service;
 
 import com.MyProject.common.dto.response.PageResponse;
 import com.MyProject.common.dto.response.UserProfileResponse;
-import com.MyProject.post.post_service.dto.request.ScheduleRequest;
-import com.MyProject.post.post_service.dto.request.ScheduleUpdateRequest;
+import com.MyProject.post.post_service.dto.request.PostRequest;
+import com.MyProject.post.post_service.dto.request.PostUpdateRequest;
 import com.MyProject.post.post_service.dto.response.LikeResponse;
-import com.MyProject.post.post_service.dto.response.ScheduleResponse;
+import com.MyProject.post.post_service.dto.response.PostResponse;
 import com.MyProject.post.post_service.dto.response.StatusResponse;
 import com.MyProject.post.post_service.entity.Post;
 import com.MyProject.post.post_service.entity.PostLike;
 import com.MyProject.post.post_service.entity.PostType;
-import com.MyProject.post.post_service.entity.TravelItinerary;
 import com.MyProject.post.post_service.exception.AppException;
 import com.MyProject.post.post_service.exception.ErrorCode;
 import com.MyProject.post.post_service.mapper.PostMapper;
 import com.MyProject.post.post_service.repository.PostElasticRepository;
 import com.MyProject.post.post_service.repository.PostLikeRepository;
 import com.MyProject.post.post_service.repository.PostRepository;
-import com.MyProject.post.post_service.repository.TravelItineraryRepository;
 import com.MyProject.common.security.SecurityUtils;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -34,11 +32,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -47,109 +41,120 @@ import java.util.stream.Collectors;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class PostService {
     PostRepository postRepository;
-    TravelItineraryRepository travelItineraryRepository;
     PostElasticRepository postElasticRepository;
     PostLikeRepository postLikeRepository;
     PostMapper postMapper;
-    PostJobManagementService postJobManagementService;
     PostCacheService postCacheService;
     OutboxEventPublisher outboxEventPublisher;
     MongoTemplate mongoTemplate;
     PostProfileExternalService postProfileExternalService;
+    PostFileExternalService postFileExternalService;
+    PostLikeNotificationService postLikeNotificationService;
 
     private static final String STATUS_ONGOING = "On going";
     private static final String STATUS_UPCOMING = "Up coming";
-    private static final String STATUS_COMPLETED = "Completed";
     private static final String POST_COLLECTION = "post";
-    private static final String BUSINESS_SCHEDULE_CLASS = "business-schedule";
     private static final int MAX_RANDOM_LIMIT = 20;
 
-    private String calculateStatus(LocalDateTime start, LocalDateTime end, LocalDateTime now) {
-        String status = STATUS_ONGOING;
-        if (start.isAfter(now)) {
-            status = STATUS_UPCOMING;
-        } else if (end.isBefore(now)) {
-            status = STATUS_COMPLETED;
+    private PostType parsePostType(String rawType) {
+        if (rawType == null || rawType.isBlank()) {
+            throw new AppException(ErrorCode.INVALID_POST_TYPE);
         }
-        return status;
+        try {
+            return PostType.valueOf(rawType.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new AppException(ErrorCode.INVALID_POST_TYPE);
+        }
     }
 
-    private Post buildBasePost(ScheduleRequest request) {
+    private void validateTypedData(PostType postType, PostRequest request) {
+        switch (postType) {
+            case IMAGE:
+                if (request.getImageFileIds() == null || request.getImageFileIds().isEmpty()) {
+                    throw new AppException(ErrorCode.IMAGE_POST_EMPTY_IDS);
+                }
+                break;
+            case WATCH_TOGETHER:
+                if (request.getWatchRoomId() == null || request.getWatchInviteCode() == null
+                        || request.getWatchRoomId().isBlank() || request.getWatchInviteCode().isBlank()) {
+                    throw new AppException(ErrorCode.WATCH_POST_MISSING_ROOM);
+                }
+                break;
+            case TEXT:
+            default:
+                break;
+        }
+    }
+
+    private Post buildBasePost(PostRequest request, PostType postType) {
         String userId = SecurityUtils.getCurrentUserId();
         List<String> listJoins = request.getListUsersJoin();
         if (listJoins == null) {
-            listJoins = new java.util.ArrayList<>();
+            listJoins = new ArrayList<>();
         }
-        listJoins.add(userId);
-
+        if (!listJoins.contains(userId)) {
+            listJoins.add(userId);
+        }
         return Post.builder()
                 .id(UUID.randomUUID().toString())
                 .userId(userId)
+                .postType(postType)
                 .title(request.getTitle())
                 .content(request.getContent())
+                .backgroundColor(postType == PostType.TEXT ? request.getBackgroundColor() : null)
+                .feeling(request.getFeeling())
                 .startTime(request.getStartTime())
                 .endTime(request.getEndTime())
                 .createdDate(LocalDateTime.now())
                 .modifiedDate(null)
-                .status(calculateStatus(request.getStartTime(), request.getEndTime(), LocalDateTime.now()))
-                .startJobKey(null)
-                .endJobKey(null)
+                .status(null)
                 .listUsersJoin(listJoins)
+                .imageFileIds(request.getImageFileIds())
+                .watchRoomId(request.getWatchRoomId())
+                .watchFilmId(request.getWatchFilmId())
+                .watchEpisodeId(request.getWatchEpisodeId())
+                .watchInviteCode(request.getWatchInviteCode())
+                .watchFilmTitle(request.getWatchFilmTitle())
+                .watchFilmThumbnailFileId(request.getWatchFilmThumbnailFileId())
+                .watchParticipantCount(1)
+                .likeCount(0)
                 .build();
     }
 
     @Transactional
-    public ScheduleResponse createPost(ScheduleRequest request) {
+    public PostResponse createPost(PostRequest request) {
         String userId = SecurityUtils.getCurrentUserId();
-        var basePost = buildBasePost(request);
-        if (request.getPostType().equals(PostType.BUSINESS_SCHEDULE.name())) {
-            basePost.setPostType(PostType.BUSINESS_SCHEDULE);
-            var savedPost = postRepository.save(basePost);
-            postJobManagementService.scheduleStatusJobs(savedPost);
-            outboxEventPublisher.publish("post.sync", savedPost.getId(), postMapper.toPostDoc(savedPost));
-            postCacheService.invalidateAllUserPosts(userId);
-            return postMapper.toScheduleResponse(savedPost);
-        } else {
-            var travelItinerary = TravelItinerary.fromPost(basePost).build();
-            var savedTravelItinerary = travelItineraryRepository.save(travelItinerary);
-            postJobManagementService.scheduleStatusJobs(savedTravelItinerary);
-            outboxEventPublisher.publish("post.sync", savedTravelItinerary.getId(), postMapper.toPostDoc(savedTravelItinerary));
-            postCacheService.invalidateAllUserPosts(userId);
-            return postMapper.toTravelItineraryResponse(savedTravelItinerary);
-        }
+        PostType postType = parsePostType(request.getPostType());
+        validateTypedData(postType, request);
+
+        Post post = buildBasePost(request, postType);
+        Post saved = postRepository.save(post);
+        outboxEventPublisher.publish("post.sync", saved.getId(), postMapper.toPostDoc(saved));
+        postCacheService.invalidateAllUserPosts(userId);
+        return enrichSingle(postMapper.toPostResponse(saved));
     }
 
     @Transactional
-    public PageResponse<ScheduleResponse> getMyPosts(int page, int size, String type) {
+    public PageResponse<PostResponse> getMyPosts(int page, int size) {
         String userId = SecurityUtils.getCurrentUserId();
 
-        PageResponse<ScheduleResponse> cached = postCacheService.getCachedPosts(userId, type, page, size);
+        PageResponse<PostResponse> cached = postCacheService.getCachedPosts(userId, page, size);
         if (cached != null) {
             return cached;
         }
 
         Sort sort = Sort.by("createdDate").descending();
-        Pageable pageable = PageRequest.of(page - 1, size, sort);
+        Pageable pageable = PageRequest.of(Math.max(page - 1, 0), size, sort);
 
-        Page<? extends Post> pageData;
-        if (type.equals(PostType.BUSINESS_SCHEDULE.name())) {
-            pageData = postRepository.findAllByUserId(userId, pageable);
-        } else {
-            pageData = travelItineraryRepository.findAllByUserId(userId, pageable);
-        }
+        Page<Post> pageData = postRepository.findAllByUserId(userId, pageable);
 
-        List<ScheduleResponse> postList = pageData.getContent().stream().map(post -> {
-            ScheduleResponse response;
-            if (post instanceof TravelItinerary travelItinerary) {
-                response = postMapper.toTravelItineraryResponse(travelItinerary);
-            } else {
-                response = postMapper.toScheduleResponse(post);
-            }
-            response.setPostType(post.getPostType().toString());
+        List<PostResponse> postList = pageData.getContent().stream().map(post -> {
+            PostResponse response = postMapper.toPostResponse(post);
+            response.setPostType(post.getPostType().name());
             return response;
         }).toList();
 
-        List<String> postIds = postList.stream().map(ScheduleResponse::getId).toList();
+        List<String> postIds = postList.stream().map(PostResponse::getId).toList();
         if (!postIds.isEmpty()) {
             Set<String> likedPostIds = postLikeRepository.findByPostIdInAndUserId(postIds, userId).stream()
                     .map(PostLike::getPostId)
@@ -157,43 +162,36 @@ public class PostService {
             postList.forEach(response -> response.setLiked(likedPostIds.contains(response.getId())));
         }
 
-        PageResponse<ScheduleResponse> result = PageResponse.<ScheduleResponse>builder()
+        List<PostResponse> enriched = enrichFileUrls(postList);
+
+        PageResponse<PostResponse> result = PageResponse.<PostResponse>builder()
                 .currentPage(page)
                 .pageSize(size)
                 .totalPages(pageData.getTotalPages())
                 .totalElement(pageData.getTotalElements())
-                .data(postList)
+                .data(enriched)
                 .build();
 
-        postCacheService.cachePosts(userId, type, page, size, result);
-
+        postCacheService.cachePosts(userId, page, size, result);
         return result;
     }
 
     @Transactional
-    public ScheduleResponse getMyPost(String id, String type) {
+    public PostResponse getMyPost(String id) {
         String userId = SecurityUtils.getCurrentUserId();
-        ScheduleResponse response;
-        if (type.equals(PostType.BUSINESS_SCHEDULE.name())) {
-            var schedule = postRepository.findById(id).orElseThrow(() ->
-                    new AppException(ErrorCode.BUSINESS_SCHEDULE_NOT_EXISTED));
-            response = postMapper.toScheduleResponse(schedule);
-        } else {
-            var schedule = travelItineraryRepository.findById(id).orElseThrow(() ->
-                    new AppException(ErrorCode.TRAVEL_ITINERARY_NOT_EXISTED));
-            response = postMapper.toTravelItineraryResponse(schedule);
-        }
+        Post post = postRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.POST_NOT_FOUND));
+        PostResponse response = postMapper.toPostResponse(post);
+        response.setPostType(post.getPostType().name());
         response.setLiked(postLikeRepository.existsByPostIdAndUserId(id, userId));
-        return response;
+        return enrichSingle(response);
     }
 
     @Transactional
-    public LikeResponse toggleLike(String id, String type) {
+    public LikeResponse toggleLike(String id) {
         String userId = SecurityUtils.getCurrentUserId();
-        Post post = postRepository.findById(id).orElseThrow(() ->
-                new AppException(type.equals(PostType.BUSINESS_SCHEDULE.name())
-                        ? ErrorCode.BUSINESS_SCHEDULE_NOT_EXISTED
-                        : ErrorCode.TRAVEL_ITINERARY_NOT_EXISTED));
+        Post post = postRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.POST_NOT_FOUND));
 
         boolean alreadyLiked = postLikeRepository.existsByPostIdAndUserId(id, userId);
         if (alreadyLiked) {
@@ -211,57 +209,36 @@ public class PostService {
         postRepository.save(post);
         postCacheService.invalidateAllUserPosts(userId);
 
+        boolean isNowLiked = !alreadyLiked;
+        if (!userId.equals(post.getUserId())) {
+            postLikeNotificationService.scheduleNotification(id, userId);
+        }
+
         return LikeResponse.builder()
-                .liked(!alreadyLiked)
+                .liked(isNowLiked)
                 .likeCount(post.getLikeCount())
                 .build();
     }
 
     @Transactional
-    public ScheduleResponse updatePost(String id, String type, ScheduleUpdateRequest request) {
+    public PostResponse updatePost(String id, PostUpdateRequest request) {
         String userId = SecurityUtils.getCurrentUserId();
-        postJobManagementService.cancelPost(id);
-
-        if (type.equals(PostType.BUSINESS_SCHEDULE.name())) {
-            var schedule = postRepository.findById(id).orElseThrow(() ->
-                    new AppException(ErrorCode.BUSINESS_SCHEDULE_NOT_EXISTED));
-            postMapper.updateBusinessSchedule(schedule, request);
-            schedule.setStatus(calculateStatus(request.getStartTime(), request.getEndTime(), LocalDateTime.now()));
-            schedule.setModifiedDate(LocalDateTime.now());
-            postJobManagementService.scheduleStatusJobs(schedule);
-            var saved = postRepository.save(schedule);
-            outboxEventPublisher.publish("post.sync", saved.getId(), postMapper.toPostDoc(saved));
-            postCacheService.invalidateAllUserPosts(userId);
-            return postMapper.toScheduleResponse(saved);
-        } else {
-            var schedule = travelItineraryRepository.findById(id).orElseThrow(() ->
-                    new AppException(ErrorCode.TRAVEL_ITINERARY_NOT_EXISTED));
-            postMapper.updateBusinessSchedule(schedule, request);
-            schedule.setStatus(calculateStatus(request.getStartTime(), request.getEndTime(), LocalDateTime.now()));
-            schedule.setModifiedDate(LocalDateTime.now());
-            postJobManagementService.scheduleStatusJobs(schedule);
-            var saved = travelItineraryRepository.save(schedule);
-            outboxEventPublisher.publish("post.sync", saved.getId(), postMapper.toPostDoc(saved));
-            postCacheService.invalidateAllUserPosts(userId);
-            return postMapper.toTravelItineraryResponse(saved);
-        }
+        Post post = postRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.POST_NOT_FOUND));
+        postMapper.updatePost(post, request);
+        post.setModifiedDate(LocalDateTime.now());
+        Post saved = postRepository.save(post);
+        outboxEventPublisher.publish("post.sync", saved.getId(), postMapper.toPostDoc(saved));
+        postCacheService.invalidateAllUserPosts(userId);
+        return enrichSingle(postMapper.toPostResponse(saved));
     }
 
     @Transactional
-    public void deletePost(String id, String type) {
+    public void deletePost(String id) {
         String userId = SecurityUtils.getCurrentUserId();
-        postJobManagementService.cancelPost(id);
-
-        if (type.equals(PostType.BUSINESS_SCHEDULE.name())) {
-            var businessSchedule = postRepository.findByIdType(id).orElseThrow(() ->
-                    new AppException(ErrorCode.BUSINESS_SCHEDULE_NOT_EXISTED));
-            postRepository.delete(businessSchedule);
-        } else {
-            var travelItinerary = travelItineraryRepository.findByIdType(id).orElseThrow(() ->
-                    new AppException(ErrorCode.TRAVEL_ITINERARY_NOT_EXISTED));
-            travelItineraryRepository.delete(travelItinerary);
-        }
-
+        Post post = postRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.POST_NOT_FOUND));
+        postRepository.delete(post);
         postCacheService.invalidateAllUserPosts(userId);
     }
 
@@ -272,23 +249,25 @@ public class PostService {
                 .build();
     }
 
-    public PageResponse<ScheduleResponse> searchPosts(String query, int page, int size) {
-        Pageable pageable = PageRequest.of(page - 1, size);
+    public PageResponse<PostResponse> searchPosts(String query, int page, int size) {
+        Pageable pageable = PageRequest.of(Math.max(page - 1, 0), size);
         var searchResult = postElasticRepository.searchByTitleOrContent(query, pageable);
 
-        return PageResponse.<ScheduleResponse>builder()
+        List<PostResponse> data = searchResult.getContent().stream()
+                .map(doc -> PostResponse.builder()
+                        .id(doc.getId())
+                        .title(doc.getTitle())
+                        .content(doc.getContent())
+                        .postType(doc.getPostType())
+                        .build())
+                .toList();
+
+        return PageResponse.<PostResponse>builder()
                 .currentPage(page)
                 .pageSize(size)
                 .totalPages(searchResult.getTotalPages())
                 .totalElement(searchResult.getTotalElements())
-                .data(searchResult.getContent().stream()
-                        .map(doc -> ScheduleResponse.builder()
-                                .id(doc.getId())
-                                .title(doc.getTitle())
-                                .content(doc.getContent())
-                                .postType(doc.getPostType())
-                                .build())
-                        .toList())
+                .data(data)
                 .build();
     }
 
@@ -296,7 +275,13 @@ public class PostService {
         return postRepository.countByUserId(SecurityUtils.getCurrentUserId());
     }
 
-    public List<ScheduleResponse> getRandomPosts(int limit, List<String> excludeIds) {
+    public String getPostOwner(String postId) {
+        return postRepository.findById(postId)
+                .map(Post::getUserId)
+                .orElse(null);
+    }
+
+    public List<PostResponse> getRandomPosts(int limit, List<String> excludeIds) {
         String userId = SecurityUtils.getCurrentUserId();
         int safeLimit = Math.min(Math.max(limit, 1), MAX_RANDOM_LIMIT);
 
@@ -313,11 +298,10 @@ public class PostService {
         Set<String> authorIds = posts.stream().map(Post::getUserId).collect(Collectors.toSet());
         Map<String, UserProfileResponse> profiles = postProfileExternalService.getBulkUserProfiles(authorIds);
 
-        return posts.stream().map(post -> {
-            ScheduleResponse response = postMapper.toScheduleResponse(post);
-            response.setPostType(post.getPostType().toString());
+        List<PostResponse> responses = posts.stream().map(post -> {
+            PostResponse response = postMapper.toPostResponse(post);
+            response.setPostType(post.getPostType().name());
             response.setLiked(likedPostIds.contains(post.getId()));
-
             UserProfileResponse profile = profiles.get(post.getUserId());
             if (profile != null) {
                 response.setDisplayName(profile.getDisplayName());
@@ -325,45 +309,60 @@ public class PostService {
             }
             return response;
         }).toList();
+
+        return enrichFileUrls(responses);
     }
 
-    // Pulls a random sample across ALL users via Mongo's $sample aggregation stage (first use of the
-    // aggregation framework in post-service - no repository-level pagination concept applies to "random").
-    // When excludeIds (posts the caller already has on screen) leaves too few candidates behind, we
-    // backfill by re-sampling without the exclusion filter so infinite scroll never dead-ends on a small
-    // dataset - occasional repeats are an acceptable trade-off for a feed that should never feel "stuck".
     private List<Post> sampleRandomPosts(int limit, List<String> excludeIds) {
-        Criteria criteria = Criteria.where("_class").is(BUSINESS_SCHEDULE_CLASS);
+        Criteria criteria = Criteria.where("postType").in(Arrays.stream(PostType.values()).toList());
         if (excludeIds != null && !excludeIds.isEmpty()) {
             criteria = criteria.and("_id").nin(excludeIds);
         }
-
-        List<Post> sampled = new ArrayList<>(mongoTemplate.aggregate(
+        return new ArrayList<>(mongoTemplate.aggregate(
                 Aggregation.newAggregation(Aggregation.match(criteria), Aggregation.sample(limit)),
                 POST_COLLECTION,
                 Post.class
         ).getMappedResults());
+    }
 
-        if (sampled.size() < limit && excludeIds != null && !excludeIds.isEmpty()) {
-            Set<String> pickedIds = sampled.stream().map(Post::getId).collect(Collectors.toSet());
-            int remaining = limit - sampled.size();
-
-            List<Post> refill = mongoTemplate.aggregate(
-                    Aggregation.newAggregation(
-                            Aggregation.match(Criteria.where("_class").is(BUSINESS_SCHEDULE_CLASS)),
-                            Aggregation.sample(remaining)
-                    ),
-                    POST_COLLECTION,
-                    Post.class
-            ).getMappedResults();
-
-            for (Post post : refill) {
-                if (pickedIds.add(post.getId())) {
-                    sampled.add(post);
-                }
+    private List<PostResponse> enrichFileUrls(List<PostResponse> posts) {
+        if (posts == null || posts.isEmpty()) return posts;
+        List<String> allFileIds = new ArrayList<>();
+        for (PostResponse p : posts) {
+            if (p.getImageFileIds() != null) allFileIds.addAll(p.getImageFileIds());
+            if (p.getWatchFilmThumbnailFileId() != null) allFileIds.add(p.getWatchFilmThumbnailFileId());
+        }
+        if (allFileIds.isEmpty()) return posts;
+        Map<String, String> resolved;
+        try {
+            resolved = postFileExternalService.resolvePresignedUrls(allFileIds);
+        } catch (Exception e) {
+            log.warn("Resolve file URLs failed for {} files", allFileIds.size(), e);
+            return posts;
+        }
+        for (PostResponse p : posts) {
+            if (p.getImageFileIds() != null) {
+                List<String> urls = p.getImageFileIds().stream()
+                        .map(resolved::get)
+                        .filter(Objects::nonNull)
+                        .toList();
+                p.setImageUrls(urls);
+            }
+            if (p.getWatchFilmThumbnailFileId() != null) {
+                p.setWatchFilmThumbnailUrl(resolved.get(p.getWatchFilmThumbnailFileId()));
             }
         }
+        return posts;
+    }
 
-        return sampled;
+    private PostResponse enrichSingle(PostResponse post) {
+        Map<String, UserProfileResponse> profiles = postProfileExternalService.getBulkUserProfiles(Set.of(post.getUserId()));
+        UserProfileResponse profile = profiles.get(post.getUserId());
+        if (profile != null) {
+            post.setDisplayName(profile.getDisplayName());
+            post.setAvatar(profile.getAvatar());
+        }
+        List<PostResponse> enriched = enrichFileUrls(List.of(post));
+        return enriched.get(0);
     }
 }

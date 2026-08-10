@@ -5,13 +5,14 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class ScheduleUpdateRequest {
+public class PostUpdateRequest {
     @DataUpdatePostConstraint(message = "INVALID_UPDATE_POST", attribute = "Title")
     String title;
 
@@ -20,4 +21,5 @@ public class ScheduleUpdateRequest {
 
     LocalDateTime startTime;
     LocalDateTime endTime;
+    List<String> imageFileIds;
 }

@@ -1,7 +1,7 @@
 package com.MyProject.post.post_service.service;
 
 import com.MyProject.common.redis.RedisService;
-import com.MyProject.post.post_service.dto.response.ScheduleResponse;
+import com.MyProject.post.post_service.dto.response.PostResponse;
 import com.MyProject.common.dto.response.PageResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.AccessLevel;
@@ -19,14 +19,14 @@ import java.util.concurrent.TimeUnit;
 public class PostCacheService {
     RedisService redisService;
 
-    private String getPostsCacheKey(String userId, String type, int page, int size) {
-        return String.format("user:%s:posts:%s:%d:%d", userId, type, page, size);
+    private String getPostsCacheKey(String userId, int page, int size) {
+        return String.format("user:%s:posts:%d:%d", userId, page, size);
     }
 
-    public PageResponse<ScheduleResponse> getCachedPosts(String userId, String type, int page, int size) {
-        String cacheKey = getPostsCacheKey(userId, type, page, size);
+    public PageResponse<PostResponse> getCachedPosts(String userId, int page, int size) {
+        String cacheKey = getPostsCacheKey(userId, page, size);
         try {
-            PageResponse<ScheduleResponse> cached = redisService.get(cacheKey, new TypeReference<PageResponse<ScheduleResponse>>() {});
+            PageResponse<PostResponse> cached = redisService.get(cacheKey, new TypeReference<PageResponse<PostResponse>>() {});
             if (cached != null) {
                 log.info("Returning cached posts for user {}", userId);
                 return cached;
@@ -37,8 +37,8 @@ public class PostCacheService {
         return null;
     }
 
-    public void cachePosts(String userId, String type, int page, int size, PageResponse<ScheduleResponse> result) {
-        String cacheKey = getPostsCacheKey(userId, type, page, size);
+    public void cachePosts(String userId, int page, int size, PageResponse<PostResponse> result) {
+        String cacheKey = getPostsCacheKey(userId, page, size);
         try {
             redisService.setWithExpiration(cacheKey, result, 10, TimeUnit.MINUTES);
         } catch (Exception e) {
