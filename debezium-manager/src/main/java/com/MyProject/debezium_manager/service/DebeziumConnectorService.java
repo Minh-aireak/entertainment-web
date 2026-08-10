@@ -10,6 +10,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
@@ -26,6 +27,18 @@ public class DebeziumConnectorService {
 
     @Value("${spring.kafka.bootstrap-servers:kafka:9092}")
     String kafkaBootstrapServers;
+
+    // Đọc bởi HealthController để báo cáo readiness qua Docker healthcheck.
+    // Business service nào depends_on: condition: service_healthy vào
+    // debezium-manager sẽ chỉ khởi động SAU khi connector của nó đã được đăng
+    // ký với Kafka Connect — tránh race giữa ApplicationRunner seed dữ liệu
+    // (ví dụ admin seed của identity-service) và outbox event bị rơi mất vì
+    // connector chưa tồn tại lúc row được insert.
+    final AtomicBoolean connectorsRegistered = new AtomicBoolean(false);
+
+    public boolean isReady() {
+        return connectorsRegistered.get();
+    }
 
     @Retryable(
             retryFor = {ResourceAccessException.class, Exception.class},
@@ -78,6 +91,8 @@ public class DebeziumConnectorService {
 
         // 9. MongoDB Connector (Room Service)
         registerMongoConnector("room-service-connector", "room-service", "outbox");
+
+        connectorsRegistered.set(true);
     }
 
     private void registerMySQLConnector(String topicPrefix, String dbName, String tableName, String serverId) {

@@ -231,6 +231,8 @@ services:
         condition: service_started
       elasticsearch:
         condition: service_started
+      debezium-manager:
+        condition: service_healthy
     networks:
       - backend
 
@@ -572,6 +574,16 @@ services:
         condition: service_started
       kafka:
         condition: service_started
+    healthcheck:
+      # Healthy chỉ sau khi TẤT CẢ connector đã đăng ký xong với Kafka Connect
+      # (xem DebeziumConnectorService#isReady) — service nào seed dữ liệu qua
+      # outbox lúc khởi động (vd. identity-service) phải chờ tới đây mới start,
+      # tránh outbox event bị rơi mất vì connector chưa tồn tại.
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9000/health/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+      start_period: 60s
     networks:
       - backend
 
