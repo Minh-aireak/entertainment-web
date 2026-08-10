@@ -73,6 +73,15 @@ public class CommentController {
                 .build();
     }
 
+    @GetMapping("/count")
+    @RateLimiter(name = "commentReadApi")
+    ApiResponse<Long> countComments(@RequestParam(value = "sourceId") String sourceId) {
+        commentApiRateLimitService.checkCommentRead(sourceId);
+        return ApiResponse.<Long>builder()
+                .result(commentService.countAllComments(sourceId))
+                .build();
+    }
+
     @GetMapping("/{commentId}/replies")
     @RateLimiter(name = "commentReadApi")
     ApiResponse<PageResponse<CommentResponse>> getReplies(

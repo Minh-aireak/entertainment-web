@@ -22,6 +22,10 @@ app:
   services:
     profile:
       url: ${PROFILE_SERVICE_URL}
+    post:
+      url: ${POST_SERVICE_URL}
+  notification:
+    like-debounce-seconds: ${LIKE_DEBOUNCE_SECONDS:3}
   rate-limit:
     comment-write:
       limit-for-period: 30
@@ -79,6 +83,8 @@ resilience4j:
         base-config: default
       profileService:
         base-config: downstream
+      postService:
+        base-config: downstream
   ratelimiter:
     configs:
       default:
@@ -100,6 +106,10 @@ resilience4j:
         base-config: default
         limit-for-period: 60
         limit-refresh-period: 1s
+      postService:
+        base-config: default
+        limit-for-period: 60
+        limit-refresh-period: 1s
   retry:
     configs:
       downstream:
@@ -118,6 +128,8 @@ resilience4j:
           - io.github.resilience4j.circuitbreaker.CallNotPermittedException
     instances:
       profileService:
+        base-config: downstream
+      postService:
         base-config: downstream
 management:
   health:

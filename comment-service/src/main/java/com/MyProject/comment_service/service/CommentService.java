@@ -24,11 +24,14 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.bson.Document;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
+import org.springframework.data.mongodb.core.aggregation.AggregationResults;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
@@ -46,10 +49,12 @@ import java.util.stream.Collectors;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class CommentService {
     private static final int MAX_CONTENT_LENGTH = 2000;
+    private static final String COMMENT_COLLECTION = "comments";
 
     CommentRepository commentRepository;
     CommentMapper commentMapper;
     CommentProfileExternalService commentProfileExternalService;
+    CommentPostExternalService commentPostExternalService;
     CommentReactionService commentReactionService;
     RedisService redisService;
     DateTimeFormatter formatter;
@@ -140,6 +145,8 @@ public class CommentService {
         // Không emit socket trực tiếp ở đây - Debezium CDC sẽ đọc collection "outbox"
         // và relay qua Kafka topic "comment.events" -> socket-service broadcast.
         publishCommentEvent("COMMENT_CREATED", response);
+
+        publishInteractionNotifications(comment);
 
         return response;
     }
@@ -301,6 +308,31 @@ public class CommentService {
         return response;
     }
 
+    /**
+     * Total comment count for a post INCLUDING replies - unlike getComments' totalElement
+     * (top-level only, used to paginate the root-comment list), this is the number meant for
+     * display next to a "comment" icon/badge. replyCount on each top-level comment is kept in
+     * sync on every reply create/delete (see createComment/deleteComment), so summing it avoids
+     * a second query against the replies themselves.
+     */
+    public long countAllComments(String sourceId) {
+        Aggregation aggregation = Aggregation.newAggregation(
+                Aggregation.match(Criteria.where("sourceId").is(sourceId)
+                        .and("parentId").isNull()
+                        .and("status").ne(CommentStatus.DELETED)),
+                Aggregation.group()
+                        .count().as("topLevelCount")
+                        .sum("replyCount").as("totalReplies")
+        );
+        AggregationResults<Document> results = mongoTemplate.aggregate(aggregation, COMMENT_COLLECTION, Document.class);
+        Document doc = results.getUniqueMappedResult();
+        if (doc == null) return 0;
+        long topLevelCount = ((Number) doc.get("topLevelCount")).longValue();
+        Object totalRepliesObj = doc.get("totalReplies");
+        long totalReplies = totalRepliesObj != null ? ((Number) totalRepliesObj).longValue() : 0;
+        return topLevelCount + totalReplies;
+    }
+
     public PageResponse<CommentResponse> getReplies(String parentId, int page, int size) {
         String viewerId = getCurrentUserIdOrNull();
 
@@ -391,6 +423,70 @@ public class CommentService {
             redisService.deletePattern("comment:" + comment.getSourceId() + ":*");
         } catch (Exception e) {
             log.error("Failed to delete cache", e);
+        }
+    }
+
+    private void publishInteractionNotifications(Comment comment) {
+        String actorId = comment.getUserId();
+        String postId = comment.getSourceId();
+
+        String postOwnerId = commentPostExternalService.getPostOwner(postId);
+        if (postOwnerId == null) {
+            return;
+        }
+
+        String parentOwnerId = null;
+        if (comment.getParentId() != null) {
+            parentOwnerId = commentRepository.findById(comment.getParentId())
+                    .map(Comment::getUserId)
+                    .orElse(null);
+        }
+
+        Set<String> postCommentRecipients = new LinkedHashSet<>();
+        if (!actorId.equals(postOwnerId)) {
+            postCommentRecipients.add(postOwnerId);
+        }
+
+        Set<String> replyRecipients = new LinkedHashSet<>();
+        if (parentOwnerId != null
+                && !actorId.equals(parentOwnerId)
+                && !parentOwnerId.equals(postOwnerId)) {
+            replyRecipients.add(parentOwnerId);
+        }
+
+        if (!postCommentRecipients.isEmpty()) {
+            saveNotificationEventOutbox(
+                    UUID.randomUUID().toString(),
+                    "SOCIAL_COMMENT",
+                    actorId,
+                    new ArrayList<>(postCommentRecipients)
+            );
+        }
+        if (!replyRecipients.isEmpty()) {
+            saveNotificationEventOutbox(
+                    UUID.randomUUID().toString(),
+                    "COMMENT_REPLY",
+                    actorId,
+                    new ArrayList<>(replyRecipients)
+            );
+        }
+    }
+
+    private void saveNotificationEventOutbox(String aggregateId, String type, String sender, List<String> toUserIds) {
+        try {
+            Map<String, Object> event = new HashMap<>();
+            event.put("eventId", UUID.randomUUID().toString());
+            event.put("typeNotification", type);
+            event.put("userIdSender", sender);
+            event.put("toUserIds", toUserIds);
+
+            outboxRepository.save(Outbox.builder()
+                    .aggregateId(aggregateId)
+                    .topic("notification.events")
+                    .payload(objectMapper.writeValueAsString(event))
+                    .build());
+        } catch (Exception e) {
+            log.error("Failed to save notification outbox type={}", type, e);
         }
     }
 }

@@ -41,6 +41,16 @@ public enum TypeNotification {
             "{sender} commented on your post"
     ),
 
+    COMMENT_REPLY(
+            "Reply to your comment",
+            "{sender} replied to your comment"
+    ),
+
+    COMMENT_LIKE(
+            "Comment liked",
+            "{sender} liked your comment"
+    ),
+
     SOCIAL_SHARE(
             "Post shared",
             "{sender} shared your post"

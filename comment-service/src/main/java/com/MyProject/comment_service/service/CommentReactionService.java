@@ -1,6 +1,7 @@
 package com.MyProject.comment_service.service;
 
 import com.MyProject.comment_service.dto.response.CommentReactionResponse;
+import com.MyProject.comment_service.entity.Comment;
 import com.MyProject.comment_service.enums.CommentReactionType;
 import com.MyProject.comment_service.enums.ErrorCode;
 import com.MyProject.comment_service.exception.AppException;
@@ -32,6 +33,7 @@ public class CommentReactionService {
     CommentRepository commentRepository;
     RedisService redisService;
     RedisTemplate<String, String> redisTemplate;
+    CommentReactionNotificationService commentReactionNotificationService;
 
     private String userReactionKey(String commentId) {
         return "comment:reaction:user:" + commentId;
@@ -45,9 +47,8 @@ public class CommentReactionService {
         if (type == null) {
             throw new AppException(ErrorCode.INVALID_REACTION_TYPE);
         }
-        if (!commentRepository.existsById(commentId)) {
-            throw new AppException(ErrorCode.COMMENT_NOT_FOUND);
-        }
+        Comment comment = commentRepository.findById(commentId)
+                .orElseThrow(() -> new AppException(ErrorCode.COMMENT_NOT_FOUND));
 
         String userKey = userReactionKey(commentId);
         String countKey = countKey(commentId);
@@ -74,6 +75,10 @@ public class CommentReactionService {
             redisService.addSet(DIRTY_SET_KEY, commentId);
         } catch (Exception e) {
             log.warn("Failed to mark comment {} dirty for reaction flush", commentId, e);
+        }
+
+        if (!userId.equals(comment.getUserId())) {
+            commentReactionNotificationService.scheduleNotification(commentId, userId);
         }
 
         Map<Object, Object> counts = redisService.hashGetAll(countKey);
