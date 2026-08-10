@@ -27,6 +27,12 @@ public class RedisConfig {
     }
 
     @Bean
+    @ConditionalOnMissingBean
+    public ToggleDebounceService toggleDebounceService(RedisTemplate<String, String> redisTemplate) {
+        return new ToggleDebounceService(redisTemplate);
+    }
+
+    @Bean
     public CacheManager cacheManager(RedisConnectionFactory connectionFactory) {
         RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
                 .entryTtl(Duration.ofHours(1))
