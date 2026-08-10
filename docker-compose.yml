@@ -416,6 +416,7 @@ services:
       - SPRING_DATA_REDIS_PORT=${REDIS_PORT}
       - SPRING_ELASTICSEARCH_URIS=http://${ELASTICSEARCH_HOST}:${ELASTICSEARCH_PORT}
       - PROFILE_SERVICE_URL=http://profile:8081
+      - FILE_SERVICE_URL=http://file:8084
       - JWT_SIGNER_KEY=${JWT_SIGNER_KEY}
       - TZ=${TZ}
     depends_on:
@@ -512,6 +513,7 @@ services:
       - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD}
       - SPRING_DATA_REDIS_PORT=${REDIS_PORT}
       - PROFILE_SERVICE_URL=http://profile:8081
+      - POST_SERVICE_URL=http://post:8083
       - JWT_SIGNER_KEY=${JWT_SIGNER_KEY}
       - TZ=${TZ}
     depends_on:
@@ -617,7 +619,7 @@ services:
 
   web-app:
     build:
-      context: ./aireak-entertainment-app
+      context: ./frontend
       dockerfile: Dockerfile
       args:
         VITE_API_BASE_URL: http://localhost:8888/api/v1

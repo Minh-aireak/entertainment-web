@@ -1,0 +1,142 @@
+@import "tailwindcss";
+
+:root {
+  /* Primary Colors - Green (Cinema Theme) */
+  --primary: #00A84E;
+  --primary-light: #00C853;
+  --primary-dark: #008F41;
+
+  /* Status Colors */
+  --error: #FF4757;
+  --success: #00A84E;
+  --warning: #FFA502;
+  --info: #00A84E;
+
+  --accent-green: #00A84E;
+  --accent-orange: #e67e22;
+  --accent-red: #dc3545;
+
+  /* Shadows */
+  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 12px 48px rgba(0, 0, 0, 0.6);
+  --shadow-glow: 0 0 20px rgba(0, 168, 78, 0.2);
+}
+
+/* Mirrors the MUI theme mode (synced from React via document.documentElement.dataset.theme)
+   so browser-native chrome that MUI's theme can't reach — form control color-scheme,
+   autofill highlight, scrollbar track — follows the light/dark toggle too. Dark is the
+   fallback since it's the app's default mode. */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-primary: #0A0A0A;
+  --bg-secondary: #141414;
+  --autofill-bg: #1a1a1a;
+  --autofill-text: #ffffff;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg-primary: #F4F7FE;
+  --bg-secondary: #ffffff;
+  --autofill-bg: #ffffff;
+  --autofill-text: #1B2559;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 168, 78, 0.3);
+  border-radius: 4px;
+  transition: background 0.3s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 168, 78, 0.5);
+}
+
+/* Selection Color */
+::selection {
+  background-color: rgba(0, 168, 78, 0.3);
+  color: var(--autofill-text);
+}
+
+::-moz-selection {
+  background-color: rgba(0, 168, 78, 0.3);
+  color: var(--autofill-text);
+}
+
+/* Fix Autofill background color */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px var(--autofill-bg) inset !important;
+  -webkit-text-fill-color: var(--autofill-text) !important;
+  caret-color: var(--autofill-text);
+}
+
+/* Animations */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(0, 168, 78, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(0, 168, 78, 0.4);
+  }
+}
+

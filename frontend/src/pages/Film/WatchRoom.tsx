@@ -1,0 +1,633 @@
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate, useParams, useSearchParams, Link as RouterLink } from 'react-router-dom';
+import { useSelector } from 'react-redux';
+import {
+  Avatar,
+  AvatarGroup,
+  Box,
+  Chip,
+  CircularProgress,
+  Container,
+  Grid,
+  IconButton,
+  Link,
+  ListItemIcon,
+  ListItemText,
+  Menu,
+  MenuItem,
+  Paper,
+  TextField,
+  Tooltip,
+  Typography,
+  alpha,
+} from '@mui/material';
+import { useTheme } from '@mui/material/styles';
+import {
+  ArrowBack,
+  Close as CloseIcon,
+  ContentCopy,
+  ExitToApp,
+  Groups,
+  PostAdd as PostAddIcon,
+  Send as SendIcon,
+  ShareOutlined as ShareIcon,
+} from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
+import toast from 'react-hot-toast';
+import { roomService } from '../../api/roomService';
+import { filmService } from '../../api/filmService';
+import { fileService } from '../../api/fileService';
+import { postService } from '../../api/postService';
+import { useRoomSocket } from '../../hooks/useRoomSocket';
+import VideoPlayer, { type VideoPlayerHandle, type PlaybackActionPayload } from '../../components/Film/VideoPlayer';
+import type {
+  EpisodeResponse,
+  PlaybackUpdateRequest,
+  RoomMessageResponse,
+  RoomParticipantResponse,
+  RoomPlaybackChangedEvent,
+  RoomResponse,
+} from '../../models';
+import type { RootState } from '../../store';
+
+// Chat feed mixes real persisted messages with ephemeral join/leave notices derived from
+// "room:participants" broadcasts - the latter are never persisted/fetched from history, just
+// appended locally as they happen.
+type ChatFeedItem =
+  | { kind: 'message'; id: string; data: RoomMessageResponse }
+  | { kind: 'system'; id: string; text: string };
+
+const INITIALS = (name?: string) =>
+  (name ?? '?')
+    .split(' ')
+    .filter(Boolean)
+    .slice(-2)
+    .map((s) => s[0])
+    .join('')
+    .toUpperCase();
+
+const computeLivePosition = (event: RoomPlaybackChangedEvent): number => {
+  if (!event.playing) return event.positionSeconds;
+  const elapsedSeconds = (Date.now() - new Date(event.at).getTime()) / 1000;
+  return Math.max(0, event.positionSeconds + elapsedSeconds * event.playbackRate);
+};
+
+const WatchRoom: React.FC = () => {
+  const { t } = useTranslation();
+  const theme = useTheme();
+  const { roomId } = useParams<{ roomId: string }>();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const currentUser = useSelector((state: RootState) => state.auth.user);
+
+  const [room, setRoom] = useState<RoomResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const [episodes, setEpisodes] = useState<EpisodeResponse[]>([]);
+  const [videoSrc, setVideoSrc] = useState<string | null>(null);
+  const [videoError, setVideoError] = useState<string | null>(null);
+
+  const [participants, setParticipants] = useState<RoomParticipantResponse[]>([]);
+  const [participantCount, setParticipantCount] = useState(0);
+  const [messages, setMessages] = useState<ChatFeedItem[]>([]);
+  const [messageInput, setMessageInput] = useState('');
+
+  const [shareAnchorEl, setShareAnchorEl] = useState<null | HTMLElement>(null);
+  const [sharingPost, setSharingPost] = useState(false);
+
+  const viewerPlayerRef = useRef<VideoPlayerHandle>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const isHost = !!room?.host;
+  // Read inside the unmount cleanup below, which only depends on [roomId]. Set directly from the
+  // join response (not derived from `isHost` via a second effect) so the cleanup can never fire
+  // with a stale "not host yet" default before the async join resolves - that race let an
+  // instant mount+unmount (e.g. React StrictMode's dev double-invoke) call leaveRoom for a host
+  // who hadn't been marked as host yet, which the backend reads as "host left" and auto-closes
+  // the room. hasJoinedRef gates the cleanup until we have a definitive join result at all.
+  const isHostRef = useRef(false);
+  const hasJoinedRef = useRef(false);
+
+  // Join on mount (idempotent if already a participant) - the invite code from a shared link
+  // arrives as ?code=, the same field a private room's ensureCanJoin check accepts server-side.
+  useEffect(() => {
+    if (!roomId) return;
+    let cancelled = false;
+    setLoading(true);
+    setErrorMessage(null);
+
+    roomService
+      .joinRoom(roomId, { inviteCode: searchParams.get('code') ?? undefined })
+      .then((res) => {
+        if (cancelled) return;
+        setRoom(res.result);
+        hasJoinedRef.current = true;
+        isHostRef.current = !!res.result.host;
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setErrorMessage(err?.response?.data?.message || 'Không thể vào phòng này.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId]);
+
+  // Leave on unmount (route change, tab navigation, etc.) - but never for the host: leaving
+  // auto-closes the room server-side, and the host should be able to freely navigate away (e.g.
+  // to paste the invite link somewhere) and come back without destroying the room. Only the
+  // explicit "Đóng phòng" button (handleCloseRoom) may close it. Idempotent no-op server-side if
+  // this user was never a participant.
+  useEffect(() => {
+    return () => {
+      if (roomId && hasJoinedRef.current && !isHostRef.current) roomService.leaveRoom(roomId).catch(() => {});
+    };
+  }, [roomId]);
+
+  useEffect(() => {
+    if (!room?.filmId) return;
+    let cancelled = false;
+    filmService
+      .getEpisodesByFilm(room.filmId)
+      .then((res) => {
+        if (!cancelled) setEpisodes(res.result ?? []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [room?.filmId]);
+
+  // Bucket B2 private nên FileInfo.url là presigned GET có hạn dùng - resolve lại mỗi khi vào
+  // phòng/đổi tập, giống hệt FilmWatch.tsx.
+  useEffect(() => {
+    if (!room || episodes.length === 0) return;
+    const episode = episodes.find((e) => e.id === room.episodeId) ?? episodes[0];
+
+    setVideoSrc(null);
+    setVideoError(null);
+
+    if (!episode.videoFileId) {
+      setVideoError('Tập phim này chưa có video.');
+      return;
+    }
+
+    let cancelled = false;
+    fileService
+      .getFileInfo(episode.videoFileId)
+      .then((res) => {
+        if (!cancelled) setVideoSrc(res.result.url);
+      })
+      .catch(() => {
+        if (!cancelled) setVideoError('Không thể tải video, vui lòng thử lại sau.');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [room, episodes]);
+
+  // Initial seed for a viewer's player, once it mounts (src resolved) - room.positionSeconds
+  // from the join response is already server-computed live, no elapsed-time math needed here.
+  useEffect(() => {
+    if (!room || room.host || !videoSrc) return;
+    viewerPlayerRef.current?.syncTo({
+      positionSeconds: room.positionSeconds,
+      playing: room.playing,
+      playbackRate: room.playbackRate,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoSrc]);
+
+  useEffect(() => {
+    if (!roomId || !room) return;
+    roomService
+      .listParticipants(roomId)
+      .then((res) => {
+        const list = res.result ?? [];
+        setParticipants(list);
+        setParticipantCount(list.length);
+      })
+      .catch(() => {});
+  }, [roomId, room?.id]);
+
+  useEffect(() => {
+    if (!roomId || !room) return;
+    roomService
+      .listMessages(roomId, 1, 30)
+      .then((res) => {
+        const history = [...(res.result.data ?? [])].reverse();
+        setMessages(history.map((m) => ({ kind: 'message', id: m.id, data: m })));
+      })
+      .catch(() => {});
+  }, [roomId, room?.id]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages.length]);
+
+  useRoomSocket(roomId, !!room, {
+    onPlayback: (event) => {
+      setRoom((prev) => {
+        if (!prev) return prev;
+        return event.episodeId && event.episodeId !== prev.episodeId
+          ? { ...prev, episodeId: event.episodeId }
+          : prev;
+      });
+      if (!isHost) {
+        viewerPlayerRef.current?.syncTo({
+          positionSeconds: computeLivePosition(event),
+          playing: event.playing,
+          playbackRate: event.playbackRate,
+        });
+      }
+    },
+    onParticipants: (event) => {
+      setParticipantCount(event.participantCount);
+      const name = event.participant?.displayName || 'Một người xem';
+      if (event.eventType === 'JOINED' && event.participant) {
+        const joined = event.participant;
+        setParticipants((prev) => (prev.some((p) => p.userId === joined.userId) ? prev : [...prev, joined]));
+        setMessages((prev) => [
+          ...prev,
+          { kind: 'system', id: `sys-${joined.userId}-${Date.now()}`, text: `${name} đã tham gia phòng` },
+        ]);
+      } else if (event.eventType === 'LEFT' && event.participant) {
+        const left = event.participant;
+        setParticipants((prev) => prev.filter((p) => p.userId !== left.userId));
+        setMessages((prev) => [
+          ...prev,
+          { kind: 'system', id: `sys-${left.userId}-${Date.now()}`, text: `${name} đã rời phòng` },
+        ]);
+      }
+    },
+    onMessage: (message) => {
+      setMessages((prev) => [...prev, { kind: 'message', id: message.id, data: message }]);
+    },
+    onClosed: () => {
+      toast(isHost ? 'Bạn đã đóng phòng.' : 'Chủ phòng đã đóng phòng xem chung.', { icon: '👋' });
+      navigate('/film/watch-together');
+    },
+  });
+
+  const handleHostAction = useCallback(
+    (action: PlaybackActionPayload) => {
+      if (!roomId) return;
+      let payload: PlaybackUpdateRequest;
+      switch (action.type) {
+        case 'play':
+          payload = { action: 'PLAY', positionSeconds: action.positionSeconds };
+          break;
+        case 'pause':
+          payload = { action: 'PAUSE', positionSeconds: action.positionSeconds };
+          break;
+        case 'seek':
+          payload = { action: 'SEEK', positionSeconds: action.positionSeconds };
+          break;
+        case 'rate':
+          payload = {
+            action: 'HEARTBEAT',
+            positionSeconds: action.positionSeconds,
+            playbackRate: action.playbackRate,
+          };
+          break;
+        case 'heartbeat':
+        default:
+          payload = { action: 'HEARTBEAT', positionSeconds: action.positionSeconds };
+          break;
+      }
+      roomService.updatePlayback(roomId, payload).catch(() => {});
+    },
+    [roomId],
+  );
+
+  const handleLeave = () => {
+    navigate('/film/watch-together');
+  };
+
+  const handleCloseRoom = async () => {
+    if (!roomId) return;
+    try {
+      await roomService.closeRoom(roomId);
+      toast.success('Đã đóng phòng.');
+      navigate('/film/watch-together');
+    } catch {
+      toast.error('Không thể đóng phòng.');
+    }
+  };
+
+  const handleCopyInviteLink = async () => {
+    if (!room) return;
+    const link = `${window.location.origin}/film/watch-together/room/${room.id}?code=${room.inviteCode}`;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(link);
+      }
+      toast.success(t('linkCopied'));
+    } catch {
+      toast.error('Không thể sao chép link');
+    }
+  };
+
+  const handleShareToFeed = async () => {
+    if (!room) return;
+    setShareAnchorEl(null);
+    setSharingPost(true);
+    try {
+      let thumbnailFileId: string | undefined;
+      try {
+        const filmRes = await filmService.getFilmAggregate(room.filmId);
+        thumbnailFileId = filmRes?.result?.film?.thumbnailFileId;
+      } catch {
+        // thumbnail is optional, ignore resolve failure
+      }
+      const ep = episodes.find((e) => e.id === room.episodeId);
+      const defaultTitle = `Xem cùng: ${room.filmTitle || room.name}` + (ep ? ` - Tập ${ep.episodeNumber}` : '');
+      await postService.createPost({
+        postType: 'WATCH_TOGETHER',
+        title: defaultTitle,
+        content: 'Ai cùng xem?',
+        watchRoomId: room.id,
+        watchFilmId: room.filmId,
+        watchEpisodeId: room.episodeId,
+        watchInviteCode: room.inviteCode,
+        watchFilmTitle: room.filmTitle,
+        watchFilmThumbnailFileId: thumbnailFileId,
+      });
+      toast.success(t('roomSharedToFeed'));
+    } catch {
+      toast.error(t('roomShareFailed'));
+    } finally {
+      setSharingPost(false);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    const trimmed = messageInput.trim();
+    if (!trimmed || !roomId) return;
+    setMessageInput('');
+    try {
+      await roomService.sendMessage(roomId, { content: trimmed });
+    } catch {
+      toast.error('Không thể gửi tin nhắn');
+    }
+  };
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '70vh' }}>
+        <CircularProgress color="primary" />
+      </Box>
+    );
+  }
+
+  if (errorMessage || !room) {
+    return (
+      <Container sx={{ mt: 6, textAlign: 'center' }}>
+        <Typography variant="h5" sx={{ mb: 2 }}>
+          {errorMessage || 'Không tìm thấy phòng xem chung này.'}
+        </Typography>
+        <Link component={RouterLink} to="/film/watch-together" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+          <ArrowBack fontSize="small" /> {t('watchTogetherTitle')}
+        </Link>
+      </Container>
+    );
+  }
+
+  const currentEpisode = episodes.find((e) => e.id === room.episodeId);
+
+  return (
+    <Box sx={{ minHeight: '100vh', pb: 4 }}>
+      <Container maxWidth="xl" sx={{ pt: 2 }}>
+        <Paper
+          sx={{
+            borderRadius: 3,
+            p: 2,
+            mb: 2,
+            display: 'flex',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 1.5,
+            bgcolor: alpha(theme.palette.text.primary, 0.03),
+            border: '1px solid',
+            borderColor: alpha(theme.palette.text.primary, 0.06),
+          }}
+        >
+          <Groups sx={{ color: 'primary.main' }} />
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="subtitle1" noWrap sx={{ fontWeight: 800 }}>
+              {room.name}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+              {room.filmTitle || room.filmId}
+              {currentEpisode ? ` · Tập ${currentEpisode.episodeNumber}` : ''}
+            </Typography>
+          </Box>
+
+          <Box sx={{ flexGrow: 1 }} />
+
+          <AvatarGroup max={5} sx={{ '& .MuiAvatar-root': { width: 30, height: 30, fontSize: '0.75rem' } }}>
+            {participants.map((p) => (
+              <Tooltip key={p.userId} title={p.displayName || 'Người xem'}>
+                <Avatar src={p.avatar} sx={{ bgcolor: 'primary.main' }}>
+                  {INITIALS(p.displayName)}
+                </Avatar>
+              </Tooltip>
+            ))}
+          </AvatarGroup>
+          <Chip size="small" label={`${participantCount} ${t('viewers')}`} sx={{ fontWeight: 700 }} />
+
+          {isHost && (
+            <>
+              <Tooltip title={t('shareRoom')}>
+                <IconButton
+                  onClick={(e) => setShareAnchorEl(e.currentTarget)}
+                  disabled={sharingPost}
+                  sx={{ border: '1px solid', borderColor: alpha(theme.palette.text.primary, 0.1) }}
+                >
+                  <ShareIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Menu anchorEl={shareAnchorEl} open={Boolean(shareAnchorEl)} onClose={() => setShareAnchorEl(null)}>
+                <MenuItem
+                  onClick={() => {
+                    setShareAnchorEl(null);
+                    handleCopyInviteLink();
+                  }}
+                >
+                  <ListItemIcon>
+                    <ContentCopy fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText>{t('copyLink')}</ListItemText>
+                </MenuItem>
+                <MenuItem onClick={handleShareToFeed} disabled={sharingPost}>
+                  <ListItemIcon>
+                    <PostAddIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText>{t('shareToFeed')}</ListItemText>
+                </MenuItem>
+              </Menu>
+            </>
+          )}
+          {isHost ? (
+            <Tooltip title="Đóng phòng">
+              <IconButton onClick={handleCloseRoom} color="error" sx={{ border: '1px solid', borderColor: alpha(theme.palette.text.primary, 0.1) }}>
+                <CloseIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          ) : (
+            <Tooltip title="Rời phòng">
+              <IconButton onClick={handleLeave} sx={{ border: '1px solid', borderColor: alpha(theme.palette.text.primary, 0.1) }}>
+                <ExitToApp fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+        </Paper>
+
+        <Grid container spacing={2}>
+          <Grid size={{ xs: 12, md: 8 }}>
+            <Box sx={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', bgcolor: '#000', borderRadius: 2, overflow: 'hidden' }}>
+              {videoError ? (
+                <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Typography color="text.secondary">{videoError}</Typography>
+                </Box>
+              ) : videoSrc ? (
+                isHost ? (
+                  <VideoPlayer
+                    key={room.episodeId}
+                    src={videoSrc}
+                    title={currentEpisode ? `Tập ${currentEpisode.episodeNumber} - ${currentEpisode.title}` : room.filmTitle}
+                    role="host"
+                    onPlaybackAction={handleHostAction}
+                    style={{ maxWidth: '100%', aspectRatio: 'auto', height: '100%' }}
+                  />
+                ) : (
+                  <VideoPlayer
+                    key={room.episodeId}
+                    ref={viewerPlayerRef}
+                    src={videoSrc}
+                    title={currentEpisode ? `Tập ${currentEpisode.episodeNumber} - ${currentEpisode.title}` : room.filmTitle}
+                    role="viewer"
+                    autoPlay={room.playing}
+                    style={{ maxWidth: '100%', aspectRatio: 'auto', height: '100%' }}
+                  />
+                )
+              ) : (
+                <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <CircularProgress color="primary" />
+                </Box>
+              )}
+            </Box>
+          </Grid>
+
+          <Grid size={{ xs: 12, md: 4 }}>
+            <Paper
+              sx={{
+                borderRadius: 3,
+                height: { xs: 420, md: 'calc(100vh - 190px)' },
+                display: 'flex',
+                flexDirection: 'column',
+                bgcolor: alpha(theme.palette.text.primary, 0.03),
+                border: '1px solid',
+                borderColor: alpha(theme.palette.text.primary, 0.06),
+              }}
+            >
+              <Box sx={{ p: 1.5, borderBottom: '1px solid', borderColor: alpha(theme.palette.text.primary, 0.06) }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+                  {t('chat')}
+                </Typography>
+              </Box>
+
+              <Box sx={{ flex: 1, overflowY: 'auto', p: 1.5, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                {messages.length === 0 && (
+                  <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: 2 }}>
+                    Chưa có tin nhắn nào. Hãy là người đầu tiên bắt chuyện!
+                  </Typography>
+                )}
+                {messages.map((item) => {
+                  if (item.kind === 'system') {
+                    return (
+                      <Typography
+                        key={item.id}
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ textAlign: 'center', display: 'block', my: 0.5 }}
+                      >
+                        {item.text}
+                      </Typography>
+                    );
+                  }
+
+                  const message = item.data;
+                  const isMine = message.senderId === currentUser?.id;
+                  return (
+                    <Box
+                      key={item.id}
+                      sx={{
+                        display: 'flex',
+                        flexDirection: isMine ? 'row-reverse' : 'row',
+                        alignItems: 'flex-end',
+                        gap: 0.75,
+                      }}
+                    >
+                      <Avatar src={message.senderAvatar} sx={{ width: 24, height: 24, fontSize: '0.65rem', bgcolor: 'primary.main' }}>
+                        {INITIALS(message.senderName)}
+                      </Avatar>
+                      <Box sx={{ maxWidth: '75%' }}>
+                        {!isMine && (
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 0.5 }}>
+                            {message.senderName || 'Người xem'}
+                          </Typography>
+                        )}
+                        <Box
+                          sx={{
+                            px: 1.5,
+                            py: 0.75,
+                            borderRadius: 2.5,
+                            bgcolor: isMine ? 'primary.main' : alpha(theme.palette.text.primary, 0.08),
+                            color: isMine ? '#fff' : 'text.primary',
+                            wordBreak: 'break-word',
+                          }}
+                        >
+                          <Typography variant="body2">{message.content}</Typography>
+                        </Box>
+                      </Box>
+                    </Box>
+                  );
+                })}
+                <div ref={messagesEndRef} />
+              </Box>
+
+              <Box sx={{ p: 1.5, borderTop: '1px solid', borderColor: alpha(theme.palette.text.primary, 0.06), display: 'flex', gap: 1 }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  placeholder="Nhắn gì đó..."
+                  value={messageInput}
+                  onChange={(e) => setMessageInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
+                />
+                <IconButton color="primary" onClick={handleSendMessage} disabled={!messageInput.trim()}>
+                  <SendIcon />
+                </IconButton>
+              </Box>
+            </Paper>
+          </Grid>
+        </Grid>
+      </Container>
+    </Box>
+  );
+};
+
+export default WatchRoom;

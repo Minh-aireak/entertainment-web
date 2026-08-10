@@ -6,7 +6,7 @@
 	<modelVersion>4.0.0</modelVersion>
 
 	<groupId>com.project</groupId>
-	<artifactId>travelplanner-parent</artifactId>
+	<artifactId>aireak-parent</artifactId>
 	<version>1.0.0</version>
 	<packaging>pom</packaging>
 
@@ -24,11 +24,8 @@
 		<spotless.version>2.43.0</spotless.version>
 		<spring-cloud.version>2024.0.1</spring-cloud.version>
 		<maven-compiler-plugin.version>3.12.1</maven-compiler-plugin.version>
-		<jacoco.version>0.8.12</jacoco.version>
 		<nimbus.jose.jwt.version>9.48</nimbus.jose.jwt.version>
-		<jjwt.version>0.12.6</jjwt.version>
 		<testcontainers.bom.version>1.20.4</testcontainers.bom.version>
-		<common.file-upload>1.6.0</common.file-upload>
 		<common.version>1.0.0</common.version>
 		<logback.version>1.5.18</logback.version>
 		<jackson-bom.version>2.18.3</jackson-bom.version>
@@ -152,41 +149,6 @@
 				<version>${nimbus.jose.jwt.version}</version>
 			</dependency>
 
-			<!-- JJWT -->
-			<dependency>
-				<groupId>io.jsonwebtoken</groupId>
-				<artifactId>jjwt-api</artifactId>
-				<version>${jjwt.version}</version>
-			</dependency>
-
-			<dependency>
-				<groupId>io.jsonwebtoken</groupId>
-				<artifactId>jjwt-impl</artifactId>
-				<version>${jjwt.version}</version>
-				<scope>runtime</scope>
-			</dependency>
-
-			<dependency>
-				<groupId>io.jsonwebtoken</groupId>
-				<artifactId>jjwt-jackson</artifactId>
-				<version>${jjwt.version}</version>
-				<scope>runtime</scope>
-			</dependency>
-
-			<!-- Commons FileUpload -->
-			<dependency>
-				<groupId>commons-fileupload</groupId>
-				<artifactId>commons-fileupload</artifactId>
-				<version>${common.file-upload}</version>
-			</dependency>
-
-			<!-- Netty SocketIO -->
-			<dependency>
-				<groupId>com.corundumstudio.socketio</groupId>
-				<artifactId>netty-socketio</artifactId>
-				<version>2.0.13</version>
-			</dependency>
-
 		</dependencies>
 	</dependencyManagement>
 
@@ -246,38 +208,6 @@
 							<version>${mapstruct.version}</version>
 						</path>
 					</annotationProcessorPaths>
-				</configuration>
-			</plugin>
-
-			<plugin>
-				<groupId>org.jacoco</groupId>
-				<artifactId>jacoco-maven-plugin</artifactId>
-				<version>${jacoco.version}</version>
-				<executions>
-					<execution>
-						<goals>
-							<goal>prepare-agent</goal>
-						</goals>
-					</execution>
-					<execution>
-						<id>report</id>
-						<phase>verify</phase>
-						<goals>
-							<goal>report</goal>
-						</goals>
-					</execution>
-				</executions>
-				<configuration>
-					<excludes>
-						<exclude>**/dto/**</exclude>
-						<exclude>**/entity/**</exclude>
-						<exclude>**/mapper/**</exclude>
-						<exclude>**/configuration/**</exclude>
-						<exclude>**/IdentityApplication.class</exclude>
-						<exclude>**/ProfileServiceApplication.class</exclude>
-						<exclude>**/NotificationServiceApplication.class</exclude>
-						<exclude>**/PostServiceApplication.class</exclude>
-					</excludes>
 				</configuration>
 			</plugin>
 

@@ -1,7 +1,11 @@
+### Maven ###
+target/
+
 ### IntelliJ IDEA ###
 out/
 !**/src/main/**/out/
 !**/src/test/**/out/
+*.iml
 
 ### Eclipse ###
 .apt_generated
@@ -30,3 +34,4 @@ bin/
 
 ### Local secrets (never commit real credentials) ###
 /.env
+cookies.txt
