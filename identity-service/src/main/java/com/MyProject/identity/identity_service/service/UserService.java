@@ -35,6 +35,8 @@ import lombok.experimental.FieldDefaults;
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class UserService {
+    private static final String ADMIN_ROLE = "ADMIN";
+
     UserRepository userRepository;
     UserMapper userMapper;
     RoleRepository roleRepository;
@@ -102,10 +104,10 @@ public class UserService {
         return userMapper.toUserResponse(user);
     }
 
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(readOnly = true)
     public PageResponse<UserResponse> getUsers(int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
-        Page<User> userPage = userRepository.findAll(pageable);
+        Page<User> userPage = userRepository.findAllWithoutRole(ADMIN_ROLE, pageable);
         
         return PageResponse.<UserResponse>builder()
                 .currentPage(userPage.getNumber())

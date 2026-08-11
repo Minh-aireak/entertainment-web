@@ -247,7 +247,7 @@ class UserServiceTest {
     @Test
     void getUsers_success() {
         Page<User> page = new PageImpl<>(users, PageRequest.of(0, 10), 1);
-        when(userRepository.findAll(PageRequest.of(0, 10))).thenReturn(page);
+        when(userRepository.findAllWithoutRole("ADMIN", PageRequest.of(0, 10))).thenReturn(page);
         when(userMapper.toListUserResponse(users)).thenReturn(userResponses);
 
         PageResponse<UserResponse> response = userService.getUsers(0, 10);
@@ -256,7 +256,7 @@ class UserServiceTest {
         assertEquals(1, response.getTotalElement());
         assertThat(response.getData()).isSameAs(userResponses);
 
-        verify(userRepository, times(1)).findAll(PageRequest.of(0, 10));
+        verify(userRepository, times(1)).findAllWithoutRole("ADMIN", PageRequest.of(0, 10));
         verify(userMapper, times(1)).toListUserResponse(users);
     }
 

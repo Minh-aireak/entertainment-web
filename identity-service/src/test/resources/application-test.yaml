@@ -16,6 +16,12 @@ spring:
       ddl-auto: update
     show-sql: false
 
+  # Production/development seed data must not leak into isolated repository tests.
+  # data.sql remains H2-compatible, but tests create only the rows they assert on.
+  sql:
+    init:
+      mode: never
+
   kafka:
     bootstrap-servers: localhost:9092
 

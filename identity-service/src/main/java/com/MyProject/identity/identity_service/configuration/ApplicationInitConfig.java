@@ -51,6 +51,7 @@ public class ApplicationInitConfig {
                 }
 
                 if (userRepository.findByUsername(bootstrapAdminUsername).isEmpty()) {
+
                     Role role = roleRepository
                             .findById("ADMIN")
                             .orElseGet(() -> roleRepository.save(Role.builder()
