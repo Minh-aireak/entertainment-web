@@ -436,6 +436,38 @@ class RoomServiceTest {
         assertThat(room.isPlaying()).isTrue();
     }
 
+    @Test
+    void updatePlayback_changeEpisode_updatesRoomAndPublicLobby() {
+        Room room = activeRoomBuilder().publicRoom(true).episodeId("episode-1").build();
+        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
+
+        roomService.updatePlayback("room-1", PlaybackUpdateRequest.builder()
+                .action(PlaybackAction.CHANGE_EPISODE)
+                .episodeId("episode-12")
+                .build());
+
+        assertThat(room.getEpisodeId()).isEqualTo("episode-12");
+        assertThat(room.getPositionSeconds()).isZero();
+        assertThat(room.isPlaying()).isTrue();
+        verify(outboxRepository).save(argThat(o -> o.getTopic().equals("room.playback.updated")
+                && o.getPayload().contains("episode-12")));
+        verify(outboxRepository).save(argThat(o -> o.getTopic().equals("room.lobby.updated")
+                && o.getPayload().contains("episode-12")));
+    }
+
+    @Test
+    void updatePlayback_changeEpisode_privateRoomDoesNotBroadcastToLobby() {
+        Room room = activeRoomBuilder().publicRoom(false).build();
+        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
+
+        roomService.updatePlayback("room-1", PlaybackUpdateRequest.builder()
+                .action(PlaybackAction.CHANGE_EPISODE)
+                .episodeId("episode-2")
+                .build());
+
+        verify(outboxRepository, never()).save(argThat(o -> o.getTopic().equals("room.lobby.updated")));
+    }
+
     // ---------- requireActiveRoomForParticipant ----------
 
     @Test

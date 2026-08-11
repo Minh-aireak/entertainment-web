@@ -96,4 +96,16 @@ public class RoomEventKafkaService {
             throw new RuntimeException(e);
         }
     }
+
+    @KafkaListener(topics = "room.lobby.updated")
+    public void consumeLobbyRoomUpdated(String payload, Acknowledgment ack) {
+        try {
+            RoomListItemResponse room = objectMapper.readValue(payload, RoomListItemResponse.class);
+            webSocketSessionService.sendToRoom(LOBBY_ROOM_ID, "lobby:room-updated", room);
+            ack.acknowledge();
+        } catch (Exception e) {
+            log.error("Failed to process room lobby updated event", e);
+            throw new RuntimeException(e);
+        }
+    }
 }

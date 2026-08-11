@@ -339,6 +339,15 @@ public class RoomService {
                 .actorUserId(userId)
                 .at(now)
                 .build());
+
+        // The lobby cards also show the room's current episode. Publish the updated room
+        // snapshot only for public rooms; private-room metadata must never be broadcast to the
+        // shared lobby. Private participants receive the same change through room:playback and
+        // GET /rooms/my returns the persisted episodeId when they leave the room screen.
+        if (request.getAction() == com.MyProject.room_service.enums.PlaybackAction.CHANGE_EPISODE
+                && room.isPublicRoom()) {
+            saveToOutbox(roomId, "room.lobby.updated", toListItem(room));
+        }
     }
 
     public List<RoomParticipantResponse> listParticipants(String roomId) {
@@ -521,6 +530,7 @@ public class RoomService {
                 .filmId(room.getFilmId())
                 .filmTitle(room.getFilmTitle())
                 .filmThumbnail(room.getFilmThumbnail())
+                .episodeId(room.getEpisodeId())
                 .publicRoom(room.isPublicRoom())
                 .alreadyJoined(alreadyJoined)
                 .status(room.getStatus())

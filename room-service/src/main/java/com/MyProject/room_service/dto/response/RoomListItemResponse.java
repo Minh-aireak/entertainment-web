@@ -21,6 +21,7 @@ public class RoomListItemResponse {
     String filmId;
     String filmTitle;
     String filmThumbnail;
+    String episodeId;
 
     boolean publicRoom;
     RoomStatus status;

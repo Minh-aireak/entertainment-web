@@ -23,6 +23,7 @@ public class RoomListItemResponse {
     String filmId;
     String filmTitle;
     String filmThumbnail;
+    String episodeId;
     boolean publicRoom;
     // Always false on this broadcast payload - alreadyJoined is only meaningful per-viewer, see
     // room-service's RoomListItemResponse javadoc. Kept here purely so the field round-trips

@@ -115,6 +115,17 @@ class RoomEventKafkaServiceTest {
         verifyNoInteractions(webSocketSessionService, ack);
     }
 
+    @Test
+    void consumeLobbyRoomUpdated_happyPath_broadcastsToLobbyRoomAndAcks() {
+        String payload = "{\"id\":\"room-1\",\"episodeId\":\"episode-12\",\"publicRoom\":true}";
+
+        roomEventKafkaService.consumeLobbyRoomUpdated(payload, ack);
+
+        verify(webSocketSessionService).sendToRoom(eq("watch-together-lobby"), eq("lobby:room-updated"),
+                argThat((RoomListItemResponse room) -> "episode-12".equals(room.getEpisodeId())));
+        verify(ack).acknowledge();
+    }
+
     private void assertThrows(org.junit.jupiter.api.function.Executable executable) {
         org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class, executable);
     }
