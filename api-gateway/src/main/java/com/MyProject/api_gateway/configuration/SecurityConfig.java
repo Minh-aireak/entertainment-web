@@ -46,6 +46,7 @@ public class SecurityConfig {
             "/api/v1/identities/users/reset-password",
             "/api/v1/identities/users/registration",
             "/api/v1/files/media/info/**",
+            "/api/v1/files/media/hls/**",
             "/api/v1/sockets/**",
     };
 

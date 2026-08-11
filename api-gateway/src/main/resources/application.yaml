@@ -146,6 +146,20 @@ app:
           method: GET
           limit: 60
           window-seconds: 60
+        - name: public-media-hls-playlist
+          # Phải đứng TRƯỚC public-media-hls-segment: resolveRule() trả về rule khớp ĐẦU TIÊN trong
+          # danh sách, và pattern segment /** bên dưới cũng khớp URL playlist nếu đứng trước nó.
+          path-pattern: /api/v1/files/media/hls/*/playlist.m3u8
+          method: GET
+          limit: 60
+          window-seconds: 60
+        - name: public-media-hls-segment
+          # Giới hạn rộng có chủ đích: phim 2 tiếng, segment 6s ~ 1200 request/lượt xem, chưa kể
+          # tua/rebuffer - limit chặt sẽ false-positive ngay cả khi xem bình thường.
+          path-pattern: /api/v1/files/media/hls/**
+          method: GET
+          limit: 600
+          window-seconds: 60
         - name: public-socket-handshake
           path-pattern: /api/v1/sockets/**
           method: GET
