@@ -7,7 +7,9 @@ import com.MyProject.file.file_service.dto.request.InitPresignedUploadRequest;
 import com.MyProject.file.file_service.dto.response.FileResponse;
 import com.MyProject.file.file_service.dto.response.InitPresignedUploadResponse;
 import com.MyProject.file.file_service.entity.FileMgmt;
+import com.MyProject.file.file_service.entity.VideoFile;
 import com.MyProject.file.file_service.enums.ErrorCode;
+import com.MyProject.file.file_service.enums.HlsStatus;
 import com.MyProject.file.file_service.exception.AppException;
 import com.MyProject.file.file_service.repository.FileMgmtRepository;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
@@ -25,6 +27,7 @@ import org.springframework.util.unit.DataSize;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.ResponseBytes;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -81,6 +84,7 @@ class FileServiceTest {
         ReflectionTestUtils.setField(fileService, "maxVideoSize", DataSize.ofGigabytes(5));
         ReflectionTestUtils.setField(fileService, "maxRawSize", DataSize.ofMegabytes(100));
         ReflectionTestUtils.setField(fileService, "multipartConcurrency", 6);
+        ReflectionTestUtils.setField(fileService, "gatewayPublicUrl", "http://localhost:8888/api/v1");
 
         securityUtils = mockStatic(SecurityUtils.class);
         securityUtils.when(SecurityUtils::getCurrentUserId).thenReturn("user-1");
@@ -292,7 +296,8 @@ class FileServiceTest {
     @Test
     void completePresignedUpload_singlePutSession_skipsCompleteMultipartCall() {
         InitPresignedUploadRequest initRequest = InitPresignedUploadRequest.builder()
-                .fileName("clip.mp4").contentType("video/mp4").fileSize(5L * 1024 * 1024).build();
+                .fileName("clip.mp4").contentType("video/mp4").fileSize(5L * 1024 * 1024)
+                .durationSeconds(1245L).build();
         String uploadId = fileService.initPresignedUpload(initRequest).getUploadId();
 
         when(s3Client.headObject(any(HeadObjectRequest.class)))
@@ -304,6 +309,9 @@ class FileServiceTest {
         FileResponse response = fileService.completePresignedUpload(request);
 
         assertThat(response).isNotNull();
+        assertThat(response.getDuration()).isEqualTo(1245L);
+        verify(fileMgmtRepository).save(argThat(file -> file instanceof VideoFile video
+                && Long.valueOf(1245L).equals(video.getDuration())));
         verify(s3Client, never()).completeMultipartUpload(any(CompleteMultipartUploadRequest.class));
     }
 
@@ -361,5 +369,129 @@ class FileServiceTest {
                 .isInstanceOf(AppException.class)
                 .extracting(e -> ((AppException) e).getErrorCode())
                 .isEqualTo(ErrorCode.FILE_NOT_FOUND);
+    }
+
+    @Test
+    void getFileInfo_videoHlsReady_returnsHlsPlaylistUrlInsteadOfPresignedMp4() {
+        VideoFile fileMgmt = VideoFile.builder()
+                .id("movie-platform/abc.mp4").contentType("video/mp4").size(1024L).path("movie-platform/abc.mp4")
+                .hlsStatus(HlsStatus.READY)
+                .build();
+        when(fileMgmtRepository.findById("movie-platform/abc.mp4")).thenReturn(Optional.of(fileMgmt));
+
+        FileResponse response = fileService.getFileInfo("movie-platform/abc.mp4");
+
+        assertThat(response.getUrl())
+                .startsWith("http://localhost:8888/api/v1/files/media/hls/")
+                .endsWith("/playlist.m3u8");
+    }
+
+    @Test
+    void getFileInfo_videoHlsPending_stillReturnsPresignedMp4Url() {
+        VideoFile fileMgmt = VideoFile.builder()
+                .id("movie-platform/abc.mp4").contentType("video/mp4").size(1024L).path("movie-platform/abc.mp4")
+                .hlsStatus(HlsStatus.PENDING)
+                .build();
+        when(fileMgmtRepository.findById("movie-platform/abc.mp4")).thenReturn(Optional.of(fileMgmt));
+
+        FileResponse response = fileService.getFileInfo("movie-platform/abc.mp4");
+
+        assertThat(response.getUrl()).contains("test-bucket").contains("X-Amz-Signature");
+    }
+
+    // ---------- HlsKeys ----------
+
+    @Test
+    void hlsKeys_encodeDecode_roundTripsKeyContainingSlashesAndDots() {
+        String key = "movie-platform/abc-123.mp4";
+
+        String encoded = HlsKeys.encodeFileId(key);
+        String decoded = HlsKeys.decodeFileId(encoded);
+
+        assertThat(decoded).isEqualTo(key);
+        assertThat(encoded).doesNotContain("/");
+    }
+
+    @Test
+    void hlsKeys_decodeInvalidBase64_throwsIllegalArgumentException() {
+        assertThatThrownBy(() -> HlsKeys.decodeFileId("not valid base64url!!"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void hlsKeys_playlistAndSegmentKeys_derivedUnderHlsPrefix() {
+        String key = "movie-platform/abc.mp4";
+
+        assertThat(HlsKeys.prefixFor(key)).isEqualTo("movie-platform/abc.mp4.hls/");
+        assertThat(HlsKeys.playlistKeyFor(key)).isEqualTo("movie-platform/abc.mp4.hls/playlist.m3u8");
+        assertThat(HlsKeys.segmentKeyFor(key, "segment00000.ts"))
+                .isEqualTo("movie-platform/abc.mp4.hls/segment00000.ts");
+    }
+
+    // ---------- getHlsPlaylist / presignHlsSegment ----------
+
+    @Test
+    void getHlsPlaylist_videoNotReady_throwsFileNotFound() {
+        VideoFile fileMgmt = VideoFile.builder()
+                .id("movie-platform/abc.mp4").contentType("video/mp4").hlsStatus(HlsStatus.PROCESSING).build();
+        when(fileMgmtRepository.findById("movie-platform/abc.mp4")).thenReturn(Optional.of(fileMgmt));
+
+        assertThatThrownBy(() -> fileService.getHlsPlaylist("movie-platform/abc.mp4"))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo(ErrorCode.FILE_NOT_FOUND);
+        verifyNoInteractions(s3Client);
+    }
+
+    @Test
+    void getHlsPlaylist_unknownFileId_throwsFileNotFound() {
+        when(fileMgmtRepository.findById("missing")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> fileService.getHlsPlaylist("missing"))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo(ErrorCode.FILE_NOT_FOUND);
+    }
+
+    @Test
+    void getHlsPlaylist_videoReady_returnsManifestTextVerbatim() {
+        VideoFile fileMgmt = VideoFile.builder()
+                .id("movie-platform/abc.mp4").contentType("video/mp4").hlsStatus(HlsStatus.READY).build();
+        when(fileMgmtRepository.findById("movie-platform/abc.mp4")).thenReturn(Optional.of(fileMgmt));
+        String manifest = "#EXTM3U\n#EXT-X-VERSION:3\nsegment00000.ts\n#EXT-X-ENDLIST\n";
+        when(s3Client.getObjectAsBytes(any(GetObjectRequest.class)))
+                .thenReturn(ResponseBytes.fromByteArray(GetObjectResponse.builder().build(), manifest.getBytes()));
+
+        String result = fileService.getHlsPlaylist("movie-platform/abc.mp4");
+
+        assertThat(result).isEqualTo(manifest);
+        verify(s3Client).getObjectAsBytes(argThat((GetObjectRequest req) ->
+                req.key().equals("movie-platform/abc.mp4.hls/playlist.m3u8")));
+    }
+
+    @Test
+    void presignHlsSegment_videoNotReady_throwsFileNotFound() {
+        VideoFile fileMgmt = VideoFile.builder()
+                .id("movie-platform/abc.mp4").contentType("video/mp4").hlsStatus(null).build();
+        when(fileMgmtRepository.findById("movie-platform/abc.mp4")).thenReturn(Optional.of(fileMgmt));
+
+        assertThatThrownBy(() -> fileService.presignHlsSegment("movie-platform/abc.mp4", "segment00000.ts"))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo(ErrorCode.FILE_NOT_FOUND);
+    }
+
+    @Test
+    void presignHlsSegment_videoReady_returnsFreshPresignedUrlForThatSegment() {
+        VideoFile fileMgmt = VideoFile.builder()
+                .id("movie-platform/abc.mp4").contentType("video/mp4").hlsStatus(HlsStatus.READY).build();
+        when(fileMgmtRepository.findById("movie-platform/abc.mp4")).thenReturn(Optional.of(fileMgmt));
+
+        java.net.URI url = fileService.presignHlsSegment("movie-platform/abc.mp4", "segment00042.ts");
+
+        assertThat(url.toString())
+                .contains("test-bucket")
+                .contains("segment00042.ts")
+                .contains("X-Amz-Signature");
     }
 }

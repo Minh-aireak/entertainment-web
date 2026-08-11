@@ -5,21 +5,30 @@ import com.MyProject.file.file_service.dto.request.CompletePresignedUploadReques
 import com.MyProject.file.file_service.dto.request.InitPresignedUploadRequest;
 import com.MyProject.file.file_service.dto.response.FileResponse;
 import com.MyProject.file.file_service.dto.response.InitPresignedUploadResponse;
+import com.MyProject.file.file_service.enums.ErrorCode;
+import com.MyProject.file.file_service.exception.AppException;
 import com.MyProject.file.file_service.service.FileService;
+import com.MyProject.file.file_service.service.HlsKeys;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.core.io.Resource;
-import org.springframework.http.*;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
+import java.util.regex.Pattern;
 
 @RestController
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class FileController {
+    // Chỉ chấp nhận đúng định dạng segment do HlsTranscodeJob sinh ra (segment%05d.ts) - endpoint
+    // này public/không xác thực (giống /media/info/**) nên phải chặn sớm mọi filename lạ trước khi
+    // ghép thành B2 key.
+    private static final Pattern HLS_SEGMENT_PATTERN = Pattern.compile("^segment\\d{5}\\.ts$");
+
     FileService fileService;
 
     @PostMapping("/media/upload")
@@ -56,20 +65,35 @@ public class FileController {
                 .build();
     }
 
-    @GetMapping("/media/download/{*fileName}")
-    ResponseEntity<Resource> downloadMedia(@PathVariable String fileName) throws IOException {
-        var fileDownload = fileService.downloadFile(stripLeadingSlash(fileName));
-        ContentDisposition contentDisposition = ContentDisposition.builder("attachment")
-                .filename(fileDownload.resource().getFilename())
-                .build();
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentDisposition(contentDisposition);
-        headers.setContentType(MediaType.parseMediaType(fileDownload.contentType()));
-
+    // {encodedFileId} thay vì {*fileId} vì key gốc chứa "/" (xem getFileInfo ở trên) và {*...} bắt
+    // buộc phải là phần tử cuối của pattern - không thể theo sau bởi "/playlist.m3u8" hay
+    // "/{segmentFile}". HlsKeys.encodeFileId gói cả key thành 1 path segment "phẳng" để né vấn đề đó.
+    @GetMapping(value = "/media/hls/{encodedFileId}/playlist.m3u8", produces = "application/vnd.apple.mpegurl")
+    ResponseEntity<String> getHlsPlaylist(@PathVariable String encodedFileId) {
         return ResponseEntity.ok()
-                .headers(headers)
-                .body(fileDownload.resource());
+                .contentType(MediaType.valueOf("application/vnd.apple.mpegurl"))
+                .body(fileService.getHlsPlaylist(decodeOrThrow(encodedFileId)));
+    }
+
+    // Redirect (302) sang presigned URL B2 vừa ký cho riêng segment này thay vì proxy byte video qua
+    // backend - giữ đúng nguyên tắc "backend không bao giờ relay bytes video" đã áp dụng cho luồng
+    // MP4/getFileInfo hiện có.
+    @GetMapping("/media/hls/{encodedFileId}/{segmentFile}")
+    ResponseEntity<Void> getHlsSegment(@PathVariable String encodedFileId, @PathVariable String segmentFile) {
+        if (!HLS_SEGMENT_PATTERN.matcher(segmentFile).matches()) {
+            throw new AppException(ErrorCode.FILE_NOT_FOUND);
+        }
+        return ResponseEntity.status(HttpStatus.FOUND)
+                .location(fileService.presignHlsSegment(decodeOrThrow(encodedFileId), segmentFile))
+                .build();
+    }
+
+    private static String decodeOrThrow(String encodedFileId) {
+        try {
+            return HlsKeys.decodeFileId(encodedFileId);
+        } catch (IllegalArgumentException e) {
+            throw new AppException(ErrorCode.FILE_NOT_FOUND);
+        }
     }
 
     private static String stripLeadingSlash(String path) {

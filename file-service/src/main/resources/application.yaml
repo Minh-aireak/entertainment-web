@@ -38,6 +38,18 @@ file:
   max-video-size: ${MAX_VIDEO_SIZE}
   max-raw-size: ${MAX_RAW_SIZE}
 
+app:
+  # VideoPlayer.tsx fetch thẳng URL manifest HLS (không qua axiosInstance) nên phải là URL tuyệt đối
+  # trỏ đúng gateway - path tương đối sẽ bị trình duyệt resolve nhầm sang origin của frontend.
+  gateway-public-url: ${GATEWAY_PUBLIC_URL:http://localhost:8888/api/v1}
+
+# HlsTranscodeJob: remux (stream-copy, không encode lại) MP4 gốc thành segment .ts + manifest .m3u8.
+hls:
+  poll-interval-ms: ${HLS_POLL_INTERVAL_MS:10000}
+  segment-duration-seconds: ${HLS_SEGMENT_DURATION_SECONDS:6}
+  ffmpeg-timeout-minutes: ${HLS_FFMPEG_TIMEOUT_MINUTES:120}
+  stale-processing-minutes: ${HLS_STALE_PROCESSING_MINUTES:30}
+
 resilience4j:
   circuitbreaker:
     instances:

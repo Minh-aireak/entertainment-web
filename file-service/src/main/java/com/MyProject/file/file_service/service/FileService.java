@@ -3,7 +3,6 @@ package com.MyProject.file.file_service.service;
 import com.MyProject.file.file_service.dto.request.CompletePresignedUploadRequest;
 import com.MyProject.file.file_service.dto.request.CompletedPartRequest;
 import com.MyProject.file.file_service.dto.request.InitPresignedUploadRequest;
-import com.MyProject.file.file_service.dto.response.FileDownload;
 import com.MyProject.file.file_service.dto.response.FileResponse;
 import com.MyProject.file.file_service.dto.response.InitPresignedUploadResponse;
 import com.MyProject.file.file_service.dto.response.PresignedPartResponse;
@@ -12,6 +11,7 @@ import com.MyProject.file.file_service.entity.ImageFile;
 import com.MyProject.file.file_service.entity.VideoFile;
 import com.MyProject.file.file_service.exception.AppException;
 import com.MyProject.file.file_service.enums.ErrorCode;
+import com.MyProject.file.file_service.enums.HlsStatus;
 import com.MyProject.file.file_service.repository.FileMgmtRepository;
 import com.MyProject.common.security.SecurityUtils;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
@@ -44,6 +44,7 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -98,6 +99,13 @@ public class FileService {
     @Value("${b2.presigned-part-url-ttl:PT30M}")
     Duration presignedPartUrlTtl;
 
+    // VideoPlayer.tsx set thẳng hls.loadSource(src)/video.src = src (fetch trình duyệt thô, không
+    // qua axiosInstance), nên URL manifest HLS trả về phải là URL tuyệt đối trỏ đúng origin gateway
+    // - một path tương đối sẽ bị trình duyệt resolve nhầm sang origin của chính frontend.
+    @NonFinal
+    @Value("${app.gateway-public-url:http://localhost:8888/api/v1}")
+    String gatewayPublicUrl;
+
     // b2.endpoint is already fail-fast-checked in B2Config; bucket-name isn't validated by anyone,
     // so a blank value used to sail through startup and only blow up as a confusing SDK/HTTP error
     // on the first upload.
@@ -141,9 +149,11 @@ public class FileService {
     // Kích thước mỗi part khi phải multipart-copy (UploadPartCopy) cho object vượt COPY_OBJECT_MAX_SIZE.
     static final long COPY_PART_SIZE = 1024L * 1024 * 1024;
     // B2 thỉnh thoảng trả 500 "InternalError" (kèm incident id) ở CompleteMultipartUpload dù các part
-    // đã upload thành công - các lần retry nội bộ của AWS SDK bắn liên tiếp trong vài ms nên không đủ
-    // thời gian cho backend B2 kịp hồi, còn nếu abort ngay thì user phải upload lại từ đầu file có thể
-    // vài GB. Retry thêm vài lần với delay ở tầng app trước khi coi là fail thật.
+    // đã upload thành công, hoặc trả 200 cho CompleteMultipartUpload nhưng object vẫn chưa "hiện" kịp
+    // cho HeadObject ngay sau đó (object lớn, backend B2 cần thêm thời gian assemble các part) - các
+    // lần retry nội bộ của AWS SDK bắn liên tiếp trong vài ms nên không đủ thời gian cho backend B2 kịp
+    // hồi, còn nếu abort ngay thì user phải upload lại từ đầu file có thể vài GB. Retry thêm vài lần với
+    // delay ở tầng app trước khi coi là fail thật.
     static final int COMPLETE_MULTIPART_MAX_ATTEMPTS = 3;
     static final Duration COMPLETE_MULTIPART_RETRY_DELAY = Duration.ofSeconds(2);
 
@@ -152,7 +162,7 @@ public class FileService {
     // s3UploadId null nghĩa là phiên này KHÔNG phải multipart trên B2 (xem initPresignedUpload) -
     // completePresignedUpload khi đó bỏ qua bước completeMultipartUpload.
     private record PresignedMultipartSession(String key, String s3UploadId, String contentType, String fileName,
-                                              long fileSize) {
+                                              long fileSize, boolean enableHls, Long durationSeconds) {
     }
 
     @Transactional
@@ -173,8 +183,10 @@ public class FileService {
             }
 
             String ownerId = SecurityUtils.getCurrentUserId();
+            // false: luồng relay-upload (POST /media/upload) dùng cho ảnh/video ngắn (vd chat) -
+            // không có cách nào (và không cần) bật HLS ở đây, xem InitPresignedUploadRequest.enableHls.
             FileMgmt fileMgmt = buildFileMgmt(key, contentType, multipartFile.getSize(),
-                    multipartFile.getOriginalFilename(), ownerId, bytesForProbing);
+                    multipartFile.getOriginalFilename(), ownerId, bytesForProbing, false, null);
             fileMgmtRepository.save(fileMgmt);
 
             return mapToFileResponse(fileMgmt);
@@ -334,16 +346,22 @@ public class FileService {
                 .multipartUpload(CompletedMultipartUpload.builder().parts(sorted).build())
                 .build();
 
+        retryOnSdkException("completeMultipartUpload key=" + key + " uploadId=" + s3UploadId,
+                () -> callB2(() -> s3Client.completeMultipartUpload(request)));
+    }
+
+    // Retry vài lần với delay cho các lệnh gọi B2 flaky ngay sau khi 1 multipart upload lớn vừa hoàn tất
+    // (xem giải thích ở COMPLETE_MULTIPART_MAX_ATTEMPTS) trước khi coi là fail thật.
+    private <T> T retryOnSdkException(String opDescription, Supplier<T> operation) {
         for (int attempt = 1; attempt <= COMPLETE_MULTIPART_MAX_ATTEMPTS; attempt++) {
             try {
-                callB2(() -> s3Client.completeMultipartUpload(request));
-                return;
+                return operation.get();
             } catch (SdkException e) {
                 if (attempt == COMPLETE_MULTIPART_MAX_ATTEMPTS) {
                     throw e;
                 }
-                log.warn("completeMultipartUpload attempt {}/{} failed for key={} uploadId={}, retrying",
-                        attempt, COMPLETE_MULTIPART_MAX_ATTEMPTS, key, s3UploadId, e);
+                log.warn("{} attempt {}/{} failed, retrying",
+                        opDescription, attempt, COMPLETE_MULTIPART_MAX_ATTEMPTS, e);
                 try {
                     Thread.sleep(COMPLETE_MULTIPART_RETRY_DELAY.toMillis());
                 } catch (InterruptedException interrupted) {
@@ -352,6 +370,7 @@ public class FileService {
                 }
             }
         }
+        throw new IllegalStateException("unreachable");
     }
 
     private void abortMultipartUploadQuietly(String key, String s3UploadId) {
@@ -394,7 +413,8 @@ public class FileService {
     }
 
     private FileMgmt buildFileMgmt(String key, String contentType, long fileSize, String originalName,
-                                    String ownerId, byte[] bytesForProbing) {
+                                    String ownerId, byte[] bytesForProbing, boolean enableHls,
+                                    Long durationSeconds) {
         boolean isImage = contentType != null && contentType.startsWith("image/");
 
         if (isImage) {
@@ -426,8 +446,8 @@ public class FileService {
                     .format(format)
                     .build();
         } else {
-            // Khác với Cloudinary, B2/S3 không tự trích metadata video (duration, resolution, bitrate).
-            // Các trường này sẽ để trống trừ khi tích hợp thêm công cụ đọc media (vd. ffprobe).
+            // B2/S3 không tự trích metadata video. Duration được trình duyệt đọc từ chính file đã
+            // chọn và gửi ở bước init; resolution/bitrate vẫn để trống cho tới khi có ffprobe.
             return VideoFile.builder()
                     .id(key)
                     .ownerId(ownerId)
@@ -435,6 +455,11 @@ public class FileService {
                     .size(fileSize)
                     .path(key)
                     .originalName(originalName)
+                    .duration(durationSeconds)
+                    // null (không phải enableHls) khi không bật cờ, để phân biệt rõ với doc cũ trước
+                    // khi có HLS - cả 2 đều nghĩa là "luôn fallback MP4", nhưng PENDING chỉ dành cho
+                    // video thực sự cần HlsTranscodeJob nhặt lên.
+                    .hlsStatus(enableHls ? HlsStatus.PENDING : null)
                     .build();
         }
     }
@@ -442,20 +467,74 @@ public class FileService {
     private FileResponse mapToFileResponse(FileMgmt fileMgmt) {
         FileResponse.FileResponseBuilder builder = FileResponse.builder()
                 .id(fileMgmt.getId())
-                .url(resolvePublicUrl(fileMgmt.getPath(), fileMgmt.getContentType()))
                 .type(fileMgmt.getContentType())
                 .size(fileMgmt.getSize());
 
         if (fileMgmt instanceof ImageFile imageFile) {
-            builder.width(imageFile.getWidth())
+            builder.url(resolvePublicUrl(fileMgmt.getPath(), fileMgmt.getContentType()))
+                    .width(imageFile.getWidth())
                     .height(imageFile.getHeight())
                     .format(imageFile.getFormat());
         } else if (fileMgmt instanceof VideoFile videoFile) {
-            builder.duration(videoFile.getDuration())
+            // HLS sẵn sàng -> trả URL manifest (segment riêng, xem getHlsPlaylist/presignHlsSegment).
+            // Mọi trường hợp khác (chưa bật HLS, đang PENDING/PROCESSING, hoặc FAILED) fallback về
+            // đúng hành vi cũ: URL MP4 presigned trực tiếp - video luôn xem được ngay cả khi HLS
+            // chưa xong hoặc không bao giờ xong (vd codec không remux được).
+            String url = videoFile.getHlsStatus() == HlsStatus.READY
+                    ? hlsPlaylistUrl(videoFile.getId())
+                    : resolvePublicUrl(fileMgmt.getPath(), fileMgmt.getContentType());
+            builder.url(url)
+                    .duration(videoFile.getDuration())
                     .resolution(videoFile.getResolution());
+        } else {
+            builder.url(resolvePublicUrl(fileMgmt.getPath(), fileMgmt.getContentType()));
         }
 
         return builder.build();
+    }
+
+    private String hlsPlaylistUrl(String fileId) {
+        return gatewayPublicUrl + "/files/media/hls/" + HlsKeys.encodeFileId(fileId) + "/playlist.m3u8";
+    }
+
+    // Trả manifest gốc y nguyên, KHÔNG rewrite URL segment bên trong - các dòng segment vẫn là tên
+    // file tương đối (vd "segment00000.ts"), nhờ vậy trình duyệt/hls.js tự resolve chúng thành
+    // request tới đúng route /media/hls/{encodedFileId}/{segmentFile} bên dưới mà không cần loader
+    // tuỳ biến nào ở frontend.
+    public String getHlsPlaylist(String fileId) {
+        requireReadyVideo(fileId);
+        GetObjectRequest request = GetObjectRequest.builder()
+                .bucket(bucketName)
+                .key(HlsKeys.playlistKeyFor(fileId))
+                .build();
+        return callB2(() -> s3Client.getObjectAsBytes(request).asUtf8String());
+    }
+
+    // Ký presigned URL MỚI cho đúng 1 segment tại thời điểm request tới, thay vì nhúng sẵn URL đã ký
+    // vào manifest lúc trả về - nhờ vậy video dài bao lâu cũng không bao giờ gặp lại lỗi cũ (URL hết
+    // hạn sau 1h dù người xem chưa xem tới đó), vì mỗi segment chỉ được ký khi thực sự được yêu cầu.
+    public URI presignHlsSegment(String fileId, String segmentFile) {
+        requireReadyVideo(fileId);
+        GetObjectRequest.Builder getObjectRequest = GetObjectRequest.builder()
+                .bucket(bucketName)
+                .key(HlsKeys.segmentKeyFor(fileId, segmentFile))
+                .responseContentType("video/mp2t");
+        String url = callB2(() -> s3Presigner.presignGetObject(GetObjectPresignRequest.builder()
+                        .signatureDuration(presignedUrlTtl)
+                        .getObjectRequest(getObjectRequest.build())
+                        .build())
+                .url()
+                .toString());
+        return URI.create(url);
+    }
+
+    private VideoFile requireReadyVideo(String fileId) {
+        FileMgmt fileMgmt = fileMgmtRepository.findById(fileId).orElseThrow(() ->
+                new AppException(ErrorCode.FILE_NOT_FOUND));
+        if (!(fileMgmt instanceof VideoFile video) || video.getHlsStatus() != HlsStatus.READY) {
+            throw new AppException(ErrorCode.FILE_NOT_FOUND);
+        }
+        return video;
     }
 
     private String resolvePublicUrl(String key, String contentType) {
@@ -496,12 +575,6 @@ public class FileService {
                 : "";
     }
 
-    @Transactional(readOnly = true)
-    public FileDownload downloadFile(String fileId) {
-        fileMgmtRepository.findById(fileId).orElseThrow(() -> new AppException(ErrorCode.FILE_NOT_FOUND));
-        throw new UnsupportedOperationException("Direct file download is not supported. Use the provided URL from file info.");
-    }
-
     // Khởi tạo multipart upload trên B2 và ký sẵn 1 presigned PUT URL cho từng part. Client sau đó PUT
     // trực tiếp từng part lên B2 bằng các URL này - file-service không nhận/relay byte nào của file,
     // chỉ điều phối (init/complete) nên không còn là bottleneck băng thông/connection-pool như luồng
@@ -528,7 +601,8 @@ public class FileService {
                         .url(presignPutObject(key))
                         .build());
                 presignedUploadSessions.put(uploadId, new PresignedMultipartSession(
-                        key, null, request.getContentType(), request.getFileName(), request.getFileSize()));
+                        key, null, request.getContentType(), request.getFileName(), request.getFileSize(),
+                        request.isEnableHls(), request.getDurationSeconds()));
             } else {
                 String s3UploadId = createMultipartUpload(key, request.getContentType());
                 parts = new ArrayList<>(totalParts);
@@ -539,7 +613,8 @@ public class FileService {
                             .build());
                 }
                 presignedUploadSessions.put(uploadId, new PresignedMultipartSession(
-                        key, s3UploadId, request.getContentType(), request.getFileName(), request.getFileSize()));
+                        key, s3UploadId, request.getContentType(), request.getFileName(), request.getFileSize(),
+                        request.isEnableHls(), request.getDurationSeconds()));
             }
 
             return InitPresignedUploadResponse.builder()
@@ -614,9 +689,11 @@ public class FileService {
             }
         }
 
+        boolean multipartCompleted = false;
         try {
             if (session.s3UploadId() != null) {
                 completeMultipartUpload(session.key(), session.s3UploadId(), completedParts);
+                multipartCompleted = true;
             }
             // else: phiên single-PUT (xem initPresignedUpload) - object đã được ghi đầy đủ ngay từ
             // request PUT của client, không có gì để "complete" trên B2.
@@ -632,7 +709,8 @@ public class FileService {
             // (xem resolvePublicUrl), không cần đụng tới object.
 
             String ownerId = SecurityUtils.getCurrentUserId();
-            FileMgmt fileMgmt = buildFileMgmt(finalKey, session.contentType(), size, session.fileName(), ownerId, null);
+            FileMgmt fileMgmt = buildFileMgmt(finalKey, session.contentType(), size, session.fileName(), ownerId,
+                    null, session.enableHls(), session.durationSeconds());
             fileMgmtRepository.save(fileMgmt);
 
             return mapToFileResponse(fileMgmt);
@@ -652,7 +730,10 @@ public class FileService {
                 log.error("Error completing presigned upload {} (key={}, uploadId={}, partCount={}, parts={})",
                         request.getUploadId(), session.key(), session.s3UploadId(), completedParts.size(), partsDump, e);
             }
-            if (session.s3UploadId() != null) {
+            // Nếu completeMultipartUpload đã thành công thì uploadId không còn tồn tại để abort nữa
+            // (B2 luôn trả NoSuchUpload cho abort sau khi complete) - object thật đã ghi xong trên B2,
+            // chỉ là headObject/finalize sau đó lỗi, nên bỏ qua bước abort để log không gây hiểu nhầm.
+            if (session.s3UploadId() != null && !multipartCompleted) {
                 abortMultipartUploadQuietly(session.key(), session.s3UploadId());
             }
             throw new AppException(ErrorCode.UPLOAD_ERROR);
@@ -724,8 +805,9 @@ public class FileService {
     }
 
     private long headObjectSize(String key) {
-        return callB2(() ->
-                s3Client.headObject(HeadObjectRequest.builder().bucket(bucketName).key(key).build()).contentLength());
+        return retryOnSdkException("headObject key=" + key, () ->
+                callB2(() -> s3Client.headObject(HeadObjectRequest.builder().bucket(bucketName).key(key).build())
+                        .contentLength()));
     }
 
     public FileResponse getFileInfo(String fileId) {

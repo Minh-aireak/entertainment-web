@@ -21,8 +21,8 @@ import org.springframework.security.web.SecurityFilterChain;
 public class SecurityConfig {
     private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
     private final static String[] WHITE_LIST = {
-            "/media/download/**",
-            "/media/info/**"
+            "/media/info/**",
+            "/media/hls/**"
     };
 
     private final CommonJwtDecoder jwtDecoder;
