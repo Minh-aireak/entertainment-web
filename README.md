@@ -1,186 +1,353 @@
 # AiREAK Entertainment Platform
 
-Nền tảng giải trí kết hợp **mạng xã hội** (đăng bài, bình luận, kết bạn, chat realtime) và **xem phim trực tuyến** (duyệt/tìm phim, streaming HLS, phòng "xem cùng nhau" đồng bộ realtime), được xây dựng theo kiến trúc **microservices** với Spring Boot ở backend và React SPA ở frontend.
+AiREAK là nền tảng giải trí kết hợp mạng xã hội (bài viết, bình luận, kết bạn, chat realtime) và xem phim trực tuyến (tìm phim, HLS streaming, phòng xem cùng nhau), xây dựng theo kiến trúc microservices với Spring Boot và React.
 
-## Tính năng chính (Features)
+## Quick Start — Docker Compose
 
-**Tài khoản & bảo mật**
-- Đăng ký / đăng nhập bằng username-password, đăng nhập qua Google OAuth2
-- Xác thực bằng JWT (ký chung một secret cho toàn hệ thống), quên mật khẩu / đặt lại mật khẩu qua email
-- Phân quyền theo Role (ADMIN/USER)
-
-**Mạng xã hội (Social)**
-- Đăng bài, feed bài viết, bình luận theo bài viết
-- Kết bạn / quản lý danh sách bạn bè, tìm kiếm người dùng
-- Chat nhắn tin realtime (đính kèm file, sửa/xoá/trả lời tin nhắn)
-- Thông báo realtime qua WebSocket + gửi email (Brevo)
-- Upload avatar/tệp qua presigned URL (Backblaze B2)
-
-**Phim (Film)**
-- Duyệt phim theo danh mục (phim bộ, phim lẻ, hoạt hình), tìm kiếm, trang chi tiết phim
-- Xem phim streaming (HLS qua `hls.js`), thư viện phim cá nhân
-- Phòng "xem cùng nhau" (watch-together) — đồng bộ trạng thái phát giữa nhiều người xem realtime
-- Trang quản trị (Admin): quản lý phim, tập phim, diễn viên, đạo diễn, vai trò, người dùng
-
-**Khác**
-- Đa ngôn ngữ (i18n) ở frontend
-- CDC (Change Data Capture) bằng Debezium/Kafka để đồng bộ dữ liệu giữa các service, có service quản lý connector riêng (`debezium-manager`)
-
-## Công nghệ sử dụng (Tech Stack)
-
-**Backend** — Maven multi-module monorepo
-- Java 24, Spring Boot 3.4.5, Spring Cloud 2024.0.1
-- API Gateway: Spring Cloud Gateway (reactive/WebFlux) + Spring Security OAuth2 Resource Server (JWT qua Nimbus JOSE)
-- Giao tiếp giữa service: OpenFeign, Resilience4j (circuit breaker/retry)
-- Dữ liệu: MySQL (JPA/Hibernate), MongoDB, Redis (cache), Elasticsearch (tìm kiếm)
-- Message broker: Apache Kafka (KRaft mode) + Debezium (CDC)
-- Realtime: Spring WebSocket (chat/socket/room service)
-- Lưu trữ file: AWS SDK v2 (S3-compatible client) trỏ tới Backblaze B2
-- Lombok, MapStruct, Spotless (format code)
-- Test: JUnit 5, Mockito, Spring Boot Test, Testcontainers, H2 (in-memory DB cho test)
-
-**Frontend**
-- React 19 + TypeScript, Vite 8
-- MUI (Material UI) v9, Tailwind CSS 4, Emotion
-- Redux Toolkit + React Redux (state), React Router v7 (routing)
-- Axios (HTTP client), i18next (đa ngôn ngữ)
-- hls.js (phát video HLS), emoji-picker-react, react-hot-toast
-- ESLint + typescript-eslint
-
-**Hạ tầng / DevOps**
-- Docker Compose: MySQL, MongoDB (replica set), Kafka, Redis, Elasticsearch, Debezium Connect
-- Mỗi service có Dockerfile riêng; frontend build bằng Nginx image
-- Maven Wrapper (`mvnw` / `mvnw.cmd`) — không cần cài Maven riêng
-
-## Cấu trúc thư mục (Project Structure)
-
-```
-Project/
-├── frontend/                   # Frontend React + Vite SPA
-├── api-gateway/                # Spring Cloud Gateway — cổng vào duy nhất, xác thực JWT, định tuyến
-├── identity-service/           # Auth: đăng ký/đăng nhập, JWT, Google OAuth2, role/user (MySQL)
-├── profile-service/            # Hồ sơ người dùng (MongoDB)
-├── post-service/               # Bài đăng mạng xã hội (MySQL + MongoDB)
-├── comment-service/            # Bình luận (MongoDB)
-├── friend-service/             # Kết bạn, tìm kiếm bạn bè (MongoDB + Elasticsearch)
-├── chat-service/                # Nhắn tin (MongoDB)
-├── socket-service/             # WebSocket gateway cho chat/thông báo realtime
-├── notification-service/       # Thông báo + gửi email qua Brevo (MongoDB)
-├── file-service/                # Upload/lưu trữ file qua Backblaze B2 (MongoDB metadata)
-├── film_service/               # Catalog phim, tập phim, diễn viên/đạo diễn (MySQL + Elasticsearch)
-├── room-service/               # Phòng xem phim cùng nhau, đồng bộ realtime (MongoDB)
-├── debezium-manager/           # Quản lý Kafka Debezium connector (CDC)
-├── common/                     # Thư viện dùng chung (DTO, exception, util...)
-├── common-redis/               # Cấu hình Redis dùng chung
-├── common-security/            # Cấu hình bảo mật/JWT dùng chung
-├── common-elasticsearch/       # Cấu hình Elasticsearch dùng chung
-├── infrastructure/db-init/     # Script khởi tạo MySQL / MongoDB replica set
-├── docker-compose.yml          # Orchestrate toàn bộ hạ tầng + services
-├── pom.xml                     # Maven parent (multi-module)
-└── .env.example                # Mẫu biến môi trường
-```
-
-## Hướng dẫn cài đặt (Installation)
+Đây là cách chạy được khuyến nghị cho người mới clone dự án.
 
 ### Yêu cầu
-- Docker & Docker Compose (cách chạy khuyến nghị — tự dựng toàn bộ hạ tầng)
-- Để chạy/dev thủ công từng service: JDK 24, Node.js ≥ 22 (dùng cho `npm ci` trong Dockerfile frontend)
 
-### Chạy bằng Docker Compose (khuyến nghị)
+- Git và Docker Desktop/Docker Compose.
+- PowerShell 5.1+ trên Windows; Linux/macOS cần PowerShell 7 (`pwsh`) để dùng script sinh secret.
+- Nên cấp khoảng 8 GB RAM cho Docker Desktop vì hệ thống gồm nhiều database, Kafka và microservice.
+
+### 1. Clone và tạo cấu hình local
+
+Windows PowerShell:
+
+```powershell
+git clone https://github.com/Minh-aireak/entertainment-web.git
+Set-Location entertainment-web
+Copy-Item .env.example .env
+```
+
+Linux/macOS:
 
 ```bash
-# 1. Clone project
-git clone <repository-url>
-cd Project
-
-# 2. Tạo file .env từ mẫu và điền giá trị thật (không commit .env)
+git clone https://github.com/Minh-aireak/entertainment-web.git
+cd entertainment-web
 cp .env.example .env
+```
 
-# 3. Build & chạy toàn bộ hệ thống (infra + tất cả microservices + frontend)
+Nếu cần Google Login, gửi email hoặc upload/media, hãy điền credential Google OAuth2, Brevo và Backblaze B2 của riêng bạn vào `.env`. Có thể giữ placeholder để chạy chức năng lõi, nhưng các tích hợp tương ứng sẽ không hoạt động.
+
+Sinh toàn bộ credential nội bộ và cấu hình Debezium:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\scripts\rotate-local-secrets.ps1
+```
+
+`Set-ExecutionPolicy -Scope Process` chỉ áp dụng cho terminal hiện tại và cần thiết khi Windows đang chặn script local.
+
+Trên Linux/macOS:
+
+```bash
+pwsh -File ./scripts/rotate-local-secrets.ps1
+```
+
+### 2. Build và chạy
+
+```powershell
 docker compose up -d --build
+docker compose ps
 ```
 
-> Máy cấu hình yếu nên build/khởi động từng service một thay vì chạy đồng loạt, ví dụ:
-> `docker compose build identity && docker compose up -d --no-deps identity`
+Lần đầu sẽ lâu hơn do Docker phải tải image hạ tầng và build toàn bộ service. Khi các container đã sẵn sàng, mở http://localhost:5173.
 
-### Chạy backend thủ công (không qua Docker)
+Tài khoản demo:
 
-```bash
-# Build toàn bộ module (dùng Maven Wrapper, không cần cài Maven)
-./mvnw clean install        # Windows: mvnw.cmd clean install
-
-# Chạy một service cụ thể, ví dụ identity-service
-./mvnw -pl identity-service spring-boot:run
+```text
+Username: nguyenminhan
+Password: admin
+Role: USER
 ```
-Cần có sẵn MySQL/MongoDB/Redis/Kafka/Elasticsearch đang chạy (có thể chỉ `docker compose up` các service hạ tầng) và các biến môi trường tương ứng trong `.env`/biến hệ thống.
 
-### Chạy frontend thủ công (dev mode)
+## Demo / Ảnh chụp màn hình
 
-```bash
-cd frontend
-npm install
-npm run dev
+### Đăng nhập
+
+![Giao diện đăng nhập AiREAK](docs/screenshots/login.png)
+
+### Bảng tin mạng xã hội
+
+![Trang chủ và bảng tin bài viết AiREAK](docs/screenshots/social-feed.png)
+
+### Chat realtime
+
+![Trao đổi tin nhắn realtime giữa hai người dùng](docs/screenshots/chat-realtime.gif)
+
+### Chi tiết phim và xem phim
+
+![Thông tin chi tiết và danh sách tập phim](docs/screenshots/film-detail.png)
+
+### Xem phim
+
+![Trình phát video streaming HLS](docs/screenshots/film-player.png)
+
+### Xem cùng nhau
+
+![Đồng bộ phát phim realtime trong phòng xem cùng nhau](docs/screenshots/watch-together.gif)
+
+### Tổng quan trang quản trị
+
+![Tổng quan trang quản trị AiREAK](docs/screenshots/admin-overview.png)
+
+### Quản lý phim
+
+![Giao diện quản lý phim](docs/screenshots/admin-films.png)
+
+### Upload và cập nhật tập phim
+
+![Giao diện upload và cập nhật tập phim](docs/screenshots/admin-episode-upload.png)
+
+## Tính năng chính
+
+**Tài khoản và bảo mật**
+
+- Đăng ký/đăng nhập bằng username-password và Google OAuth2.
+- JWT, quên/đặt lại mật khẩu qua email, phân quyền `ADMIN`/`USER`.
+- Rate limit tại API Gateway và từng identity endpoint nhạy cảm.
+
+**Mạng xã hội**
+
+- Bài viết, news feed, bình luận và reaction.
+- Kết bạn, gợi ý/tìm kiếm người dùng.
+- Chat realtime, trả lời/sửa/xóa tin nhắn và đính kèm file.
+- Thông báo realtime qua WebSocket và email qua Brevo.
+- Upload avatar/tệp qua presigned URL của Backblaze B2.
+
+**Phim**
+
+- Danh mục, tìm kiếm, chi tiết phim, thư viện cá nhân và đánh giá.
+- Streaming HLS bằng `hls.js`, quản lý/upload tập phim.
+- Phòng xem cùng nhau đồng bộ play/pause/tua theo thời gian thực.
+- Trang quản trị phim, tập phim, diễn viên, đạo diễn, role và người dùng.
+
+**Dữ liệu và tích hợp**
+
+- Đa ngôn ngữ ở frontend.
+- Kafka + Debezium CDC với service quản lý connector riêng.
+- Redis cache và Elasticsearch cho tìm kiếm.
+
+## Công nghệ sử dụng
+
+**Backend**
+
+- Java 24, Spring Boot 3.4.5, Spring Cloud 2024.0.1.
+- Spring Cloud Gateway, Spring Security, OAuth2 Resource Server và JWT.
+- OpenFeign, Resilience4j, JPA/Hibernate và Spring Data MongoDB.
+- MySQL, MongoDB, Redis, Elasticsearch, Kafka KRaft và Debezium.
+- JUnit 5, Mockito, Spring Boot Test, Testcontainers và H2.
+
+**Frontend**
+
+- React 19, TypeScript, Vite 8 và React Router 7.
+- MUI 9, Tailwind CSS 4, Emotion, Redux Toolkit và Axios.
+- `hls.js`, i18next, Vitest, React Testing Library và ESLint.
+
+**Hạ tầng**
+
+- Docker Compose cho môi trường local.
+- Dockerfile riêng cho từng service; frontend production phục vụ qua Nginx.
+- Maven Wrapper nên không cần cài Maven riêng.
+
+## Sơ đồ kiến trúc
+
+![Sơ đồ kiến trúc hệ thống](docs/architecture.png)
+
+## Cấu trúc thư mục
+
+```text
+entertainment-web/
+├── frontend/                   # React + Vite SPA
+├── api-gateway/                # Gateway, JWT và routing
+├── identity-service/           # Auth, role và user (MySQL)
+├── profile-service/            # Hồ sơ người dùng (MongoDB)
+├── post-service/               # Bài đăng (MySQL + MongoDB)
+├── comment-service/            # Bình luận (MongoDB)
+├── friend-service/             # Quan hệ bạn bè và tìm kiếm
+├── chat-service/               # Hội thoại/tin nhắn (MongoDB)
+├── socket-service/             # WebSocket realtime
+├── notification-service/       # Thông báo và email
+├── file-service/               # File, B2 và HLS
+├── film_service/               # Phim/tập phim (MySQL + Elasticsearch)
+├── room-service/               # Phòng xem cùng nhau
+├── debezium-manager/           # Quản lý Debezium connector
+├── common*/                    # Thư viện dùng chung
+├── infrastructure/db-init/     # Init database và seed dữ liệu
+├── scripts/                    # Script secret/env hỗ trợ local
+├── docs/                       # Kiến trúc, ảnh và tài liệu chi tiết
+├── docker-compose.yml
+├── pom.xml
+└── .env.example
 ```
-Mặc định Vite chạy ở `http://localhost:5173` (cần đúng cổng này để khớp CORS allowlist của backend).
 
-## Hướng dẫn sử dụng (Usage)
+## Chạy bằng Docker Compose
 
-Sau khi `docker compose up -d --build` thành công, các endpoint chính:
+`docker compose up -d --build` chạy hạ tầng, init/seed database, các microservice và frontend. `mongo-init` phải hoàn tất trước những service dùng MongoDB. Seed dùng ID cố định và thao tác idempotent nên chạy lại không tạo bản ghi trùng; dữ liệu người dùng khác không bị xóa.
 
-| Service | URL (docker) | Ghi chú |
+Các file `data.sql` của `identity-service` và `film_service` được kiểm tra mỗi lần service khởi động. Marker/`INSERT IGNORE` bảo vệ dữ liệu đã tồn tại thay vì reset toàn bộ database.
+
+Máy yếu dùng script tuần tự; script luôn chờ service hiện tại mở cổng trước khi build/chạy service kế tiếp:
+
+```powershell
+.\scripts\start-compose-sequential.ps1
+```
+
+Linux/macOS dùng `pwsh -File ./scripts/start-compose-sequential.ps1`.
+
+Không dùng `--no-deps` nếu dependency chưa chạy.
+
+Dừng nhưng giữ dữ liệu:
+
+```powershell
+docker compose down
+```
+
+Xem trạng thái và log init:
+
+```powershell
+docker compose ps
+docker compose logs -f mongo-init
+```
+
+## Dữ liệu demo và tài khoản quản trị
+
+Năm tài khoản seed đều có role `USER` và mật khẩu `admin`:
+
+- `nguyenminhan`
+- `tranthulan`
+- `lequanghuy`
+- `phamngocmai`
+- `dovanphuc`
+
+Chỉ dùng các tài khoản này cho local/demo. Không triển khai mật khẩu mẫu ở production.
+
+Admin mặc định bị tắt. Để tạo tài khoản `ADMIN` đầu tiên, đặt `BOOTSTRAP_ADMIN_ENABLED=true` trong `.env`, bảo đảm ba biến `BOOTSTRAP_ADMIN_*` đã có giá trị mạnh, rồi chạy:
+
+```powershell
+docker compose up -d --force-recreate identity
+```
+
+Sau khi admin được tạo, đặt lại `BOOTSTRAP_ADMIN_ENABLED=false` và recreate `identity` lần nữa. `false` chỉ vô hiệu hóa logic bootstrap khi service khởi động lại, không phải cơ chế phân quyền đọc `.env`; không commit `.env` chứa credential thật.
+
+## Endpoint local
+
+| Service | URL Docker Compose | Ghi chú |
 |---|---|---|
-| Frontend (web-app) | http://localhost:5173 | Nginx phục vụ bản build |
-| API Gateway | http://localhost:8888 | Điểm vào API duy nhất cho frontend |
-| identity-service | http://localhost:8080 | Auth |
-| profile-service | http://localhost:8081 | Hồ sơ |
-| notification-service | http://localhost:8082 | Thông báo/email |
-| post-service | http://localhost:8083 | Bài đăng |
-| file-service | http://localhost:8084 | File/upload |
-| chat-service | http://localhost:8086 | Chat |
-| friend-service | http://localhost:8087 | Bạn bè |
-| socket-service | http://localhost:8088 (WS) | Realtime chat/thông báo |
-| comment-service | http://localhost:8089 | Bình luận |
-| film-service | http://localhost:8090 | Catalog phim |
-| room-service | http://localhost:8091 | Xem phim cùng nhau |
-| debezium-manager | http://localhost:9000 | Quản lý CDC connector |
+| Frontend | http://localhost:5173 | Điểm truy cập giao diện |
+| API Gateway | http://localhost:8888 | Điểm vào API/WebSocket |
+| Identity | http://localhost:8080 | Auth |
+| Profile | http://localhost:8081 | Hồ sơ |
+| Notification | http://localhost:8082 | Thông báo/email |
+| Post | http://localhost:8083 | Bài đăng |
+| File | http://localhost:8084 | Upload/media/HLS |
+| Chat | http://localhost:8086 | Chat |
+| Friend | http://localhost:8087 | Bạn bè |
+| Socket | http://localhost:8088 | WebSocket |
+| Comment | http://localhost:8089 | Bình luận |
+| Film | http://localhost:8090 | Catalog phim |
+| Room | http://localhost:8091 | Xem cùng nhau |
+| Debezium Manager | http://localhost:9000 | Quản lý connector |
 | Debezium Connect | http://localhost:8100 | Kafka Connect REST |
 
-`identity-service` tự động seed một tài khoản admin khi khởi động lần đầu (nếu chưa tồn tại): **username `admin` / password `admin`** — dùng để đăng nhập thử/quản trị ở môi trường dev (xem [ApplicationInitConfig.java](identity-service/src/main/java/com/MyProject/identity/identity_service/configuration/ApplicationInitConfig.java)).
+Frontend chỉ gọi backend qua Gateway. Các cổng service trực tiếp phục vụ phát triển và chẩn đoán local.
 
-Đăng nhập Google OAuth2 yêu cầu cấu hình `CLIENT_ID`/`CLIENT_SECRET` thật trong `.env`, nếu không sẽ không hoạt động.
+## Chạy thủ công khi phát triển
 
-## Biến môi trường / Cấu hình
+Ngoài Docker, cần JDK 24 và Node.js 22+.
 
-Toàn bộ biến môi trường được khai báo tập trung trong **một file `.env` duy nhất ở thư mục gốc** (mẫu tại [.env.example](.env.example)), được các service Docker Compose dùng chung qua `env_file`. Các nhóm chính:
+Khởi động hạ tầng cần thiết:
 
-- **Hạ tầng**: image & tên container cho MySQL, MongoDB, Kafka, Redis, Elasticsearch; thông tin kết nối (host/port/user/password)
-- **Bảo mật**: `JWT_SIGNER_KEY` (chung cho mọi service), cấu hình Google OAuth2 (`CLIENT_ID`, `CLIENT_SECRET`, `REDIRECT_URI`), thời hạn access/refresh token
-- **URL nội bộ giữa các service**: dùng tên service Docker khi chạy container (`http://identity:8080`), dùng `localhost` khi chạy local dev
-- **Email** (notification-service): API key Brevo, tên/email người gửi
-- **Backblaze B2** (file-service): key, bucket, endpoint/region, giới hạn dung lượng file theo loại (ảnh/video/raw)
-- **Khác**: timezone (`TZ`), bật/tắt rate limit công khai
-
-**Không** commit file `.env` thật (đã có trong [.gitignore](.gitignore)).
-
-## Cách chạy test
-
-**Backend** (JUnit 5 + Mockito + Spring Boot Test; một số module dùng Testcontainers/H2):
-
-```bash
-# Chạy test cho toàn bộ module
-./mvnw test
-
-# Chạy test cho một service cụ thể
-./mvnw -pl film_service test
+```powershell
+docker compose up -d mysql mongodb
+docker compose up -d --force-recreate mongo-init
+docker wait mongo-init
+docker compose up -d kafka redis elasticsearch connect
 ```
-Các module hiện có test: `identity-service`, `profile-service`, `post-service`, `comment-service`, `file-service`, `chat-service`, `socket-service`, `friend-service`, `film_service`, `notification-service`, `room-service`, `api-gateway` (nhiều nhất ở `film_service`). `debezium-manager` chưa có test.
 
-**Frontend**: hiện chưa cấu hình bộ test tự động (không có script `test` trong `package.json`), chỉ có lint:
-```bash
-cd frontend
+Spring Boot không tự đọc `.env` ở thư mục gốc. Hãy dot-source script sau để nạp biến vào process hiện tại và đổi Docker DNS thành `localhost`:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+. .\scripts\import-local-env.ps1
+.\mvnw.cmd -pl identity-service spring-boot:run
+```
+
+Chạy frontend dev:
+
+```powershell
+Set-Location frontend
+npm ci
+npm run dev
+```
+
+Vite mặc định chạy tại http://localhost:5173.
+
+## Biến môi trường và bảo mật
+
+Docker Compose đọc `.env`. File này bị Git ignore và chỉ file mẫu (`.env.example`) được phép commit.
+
+Quy tắc bắt buộc:
+
+- Không commit `.env`, private key, certificate hoặc credential thật.
+- Username CDC là `debezium`; `DEBEZIUM_DB_PASSWORD` không có giá trị mặc định.
+- Xoay credential riêng cho từng môi trường và revoke ngay nếu từng xuất hiện trong Git history.
+- Script local không thể revoke Google OAuth2, Brevo hoặc Backblaze B2; phải thao tác trên dashboard nhà cung cấp.
+- Không giữ `BOOTSTRAP_ADMIN_ENABLED=true` sau khi tạo admin.
+
+Production nên dùng external secret manager, encryption at rest, TLS, firewall/network rule phù hợp, backup và giám sát.
+
+## Kiểm thử và build
+
+Backend:
+
+```powershell
+.\mvnw.cmd test
+.\mvnw.cmd -pl debezium-manager test
+.\mvnw.cmd -pl film_service test
+```
+
+Frontend:
+
+```powershell
+Set-Location frontend
+npm ci
+npm test
 npm run lint
+npm audit --omit=dev
+npm run build
 ```
+
+Không ghi cố định số lượng test/vulnerability vào README vì các con số thay đổi theo code và lockfile; kết quả của lệnh/CI hiện tại mới là nguồn xác nhận.
+
+## Troubleshooting
+
+Kiểm tra container lỗi:
+
+```powershell
+docker compose ps
+docker compose logs --tail=200 <service-name>
+```
+
+Nếu port `5173`, `8888`, `3306` hoặc các cổng service đã bị chiếm, hãy dừng process/container đang dùng cổng hoặc đổi mapping phù hợp.
+
+Nếu lần xoay credential MySQL bị gián đoạn và mật khẩu trong `.env` không còn đăng nhập được:
+
+```powershell
+.\scripts\rotate-local-secrets.ps1 -RecoverMySqlToCurrentEnv
+```
+
+Reset toàn bộ Docker volume sẽ xóa vĩnh viễn database local và chạy seed lại từ đầu:
+
+```powershell
+docker compose down -v
+```
+
+Chỉ chạy lệnh trên khi chắc chắn không cần dữ liệu hiện tại. Nếu metadata ảnh/video tồn tại nhưng media không tải được, hãy kiểm tra credential, bucket và object thật trên Backblaze B2.
 
 ## License
 
-Không tìm thấy file `LICENSE` trong repository. [Điền loại giấy phép ở đây nếu có]
+Repository hiện chưa phát hành dưới một giấy phép mã nguồn mở. Cần chọn và thêm file `LICENSE` trước khi công bố điều khoản sử dụng/phân phối chính thức.
