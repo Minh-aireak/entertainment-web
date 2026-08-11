@@ -36,6 +36,16 @@ export interface CommentReactionResponse {
   myReaction: CommentReactionType | null;
 }
 
+export interface CommentReactionChangedEvent {
+  commentId: string;
+  sourceId: string;
+  parentId?: string;
+  actorUserId: string;
+  likeCount: number;
+  loveCount: number;
+  myReaction: CommentReactionType | null;
+}
+
 export interface CreateCommentRequest {
   sourceId: string;
   content: string;

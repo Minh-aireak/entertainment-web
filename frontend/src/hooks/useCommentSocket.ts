@@ -1,13 +1,14 @@
 import { useEffect, useRef } from 'react';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { useWebSocket } from '../contexts/WebSocketContext';
-import { addComment, decrementReplyCount, incrementReplyCount, removeComment, replaceComment } from '../store';
-import type { AppDispatch } from '../store';
-import type { CommentResponse } from '../api/commentService';
+import { addComment, decrementReplyCount, incrementReplyCount, patchComment, removeComment, replaceComment } from '../store';
+import type { AppDispatch, RootState } from '../store';
+import type { CommentReactionChangedEvent, CommentResponse } from '../api/commentService';
 
 const COMMENT_CREATED_EVENT = 'comment:created';
 const COMMENT_UPDATED_EVENT = 'comment:updated';
 const COMMENT_DELETED_EVENT = 'comment:deleted';
+const COMMENT_REACTION_EVENT = 'comment:reaction';
 
 export interface CommentSocketCallbacks {
   onCommentCreated?: (comment: CommentResponse) => void;
@@ -39,6 +40,7 @@ export const useCommentSocket = (
 ) => {
   const { send, subscribe, isConnected } = useWebSocket();
   const dispatch = useDispatch<AppDispatch>();
+  const currentUserId = useSelector((state: RootState) => state.auth.user?.id);
 
   const normalized: CommentSocketCallbacks =
     typeof callbacks === 'function' ? { onCommentCreated: callbacks } : callbacks;
@@ -46,9 +48,12 @@ export const useCommentSocket = (
   const onCreatedRef = useRef(normalized.onCommentCreated);
   const onUpdatedRef = useRef(normalized.onCommentUpdated);
   const onDeletedRef = useRef(normalized.onCommentDeleted);
-  onCreatedRef.current = normalized.onCommentCreated;
-  onUpdatedRef.current = normalized.onCommentUpdated;
-  onDeletedRef.current = normalized.onCommentDeleted;
+
+  useEffect(() => {
+    onCreatedRef.current = normalized.onCommentCreated;
+    onUpdatedRef.current = normalized.onCommentUpdated;
+    onDeletedRef.current = normalized.onCommentDeleted;
+  }, [normalized.onCommentCreated, normalized.onCommentDeleted, normalized.onCommentUpdated]);
 
   useEffect(() => {
     if (!enabled || !sourceId || !isConnected) return;
@@ -90,8 +95,21 @@ export const useCommentSocket = (
         }
         onDeletedRef.current?.(data);
       }),
+      subscribe(COMMENT_REACTION_EVENT, (data: CommentReactionChangedEvent) => {
+        if (data?.sourceId !== sourceId) return;
+        const patch = {
+          likeCount: data.likeCount,
+          loveCount: data.loveCount,
+          ...(data.actorUserId === currentUserId ? { myReaction: data.myReaction } : {}),
+        };
+        dispatch(patchComment({
+          groupId: data.parentId || sourceId,
+          commentId: data.commentId,
+          patch,
+        }));
+      }),
     ];
 
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
-  }, [enabled, sourceId, subscribe, dispatch]);
+  }, [enabled, sourceId, subscribe, dispatch, currentUserId]);
 };

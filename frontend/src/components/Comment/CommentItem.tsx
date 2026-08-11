@@ -120,8 +120,8 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, groupId, sourceId, i
     if (!requestType) return;
 
     try {
-      // Reactions are high-frequency and NOT broadcast (backend buffers them in Redis) - apply
-      // the authoritative counts from the response immediately, for this viewer only.
+      // Apply the authoritative response for the actor immediately. The backend also broadcasts
+      // the count change so every other viewer in this post's realtime room stays in sync.
       const response = await commentService.react(comment.id, requestType);
       dispatch(
         patchComment({
@@ -183,8 +183,8 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, groupId, sourceId, i
       likeCount: comment.likeCount,
       loveCount: comment.loveCount,
     };
-    baseline.timer = window.setTimeout(() => flushReaction(baseline, nextReaction), REACTION_DEBOUNCE_MS);
-    pendingReactionRef.current = baseline;
+    const timer = window.setTimeout(() => flushReaction(baseline, nextReaction), REACTION_DEBOUNCE_MS);
+    pendingReactionRef.current = { ...baseline, timer };
   };
 
   const fetchReplies = async (page: number) => {
