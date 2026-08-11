@@ -16,6 +16,15 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 class SocketKafkaServiceTest {
+    private SocketKafkaService createService(CustomWebSocketHandler webSocketHandler, ObjectMapper objectMapper) {
+        return new SocketKafkaService(
+                webSocketHandler,
+                mock(SocketDownstreamService.class),
+                mock(RedisService.class),
+                objectMapper
+        );
+    }
+
     @Test
     void consumeNotification_sendsRealtimeEventToEveryRecipient() throws Exception {
         CustomWebSocketHandler webSocketHandler = mock(CustomWebSocketHandler.class);
@@ -53,6 +62,21 @@ class SocketKafkaServiceTest {
                 eq("notification"),
                 any(NotificationUI.class)
         );
+        verify(acknowledgment).acknowledge();
+    }
+
+    @Test
+    void consumeCommentReaction_broadcastsCountsToPostRoom() {
+        CustomWebSocketHandler webSocketHandler = mock(CustomWebSocketHandler.class);
+        Acknowledgment acknowledgment = mock(Acknowledgment.class);
+        SocketKafkaService service = createService(webSocketHandler, new ObjectMapper());
+        String payload = "{\"commentId\":\"c-1\",\"sourceId\":\"post-1\",\"actorUserId\":\"user-1\",\"likeCount\":3,\"loveCount\":1}";
+
+        service.consumeCommentReaction(payload, acknowledgment);
+
+        verify(webSocketHandler).sendToRoom(eq("post-1"), eq("comment:reaction"), argThat(event ->
+                event instanceof com.MyProject.socket_service.dto.event.CommentReactionChangedEvent reaction
+                        && reaction.getLikeCount() == 3));
         verify(acknowledgment).acknowledge();
     }
 }

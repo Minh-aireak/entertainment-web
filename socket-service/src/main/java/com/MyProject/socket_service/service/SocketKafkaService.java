@@ -3,6 +3,7 @@ package com.MyProject.socket_service.service;
 import com.MyProject.common.dto.response.UserProfileResponse;
 import com.MyProject.common.redis.RedisService;
 import com.MyProject.socket_service.dto.event.CommentCreatedEvent;
+import com.MyProject.socket_service.dto.event.CommentReactionChangedEvent;
 import com.MyProject.socket_service.dto.event.ConversationCreatedEvent;
 import com.MyProject.socket_service.dto.event.ConversationSeenEvent;
 import com.MyProject.socket_service.dto.event.MessageCreatedEvent;
@@ -145,6 +146,18 @@ public class SocketKafkaService {
             ack.acknowledge();
         } catch (Exception e) {
             log.error("Failed to process comment event", e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    @KafkaListener(topics = "comment.reactions")
+    public void consumeCommentReaction(String payload, Acknowledgment ack) {
+        try {
+            CommentReactionChangedEvent event = objectMapper.readValue(payload, CommentReactionChangedEvent.class);
+            webSocketSessionService.sendToRoom(event.getSourceId(), "comment:reaction", event);
+            ack.acknowledge();
+        } catch (Exception e) {
+            log.error("Failed to process comment reaction event", e);
             throw new RuntimeException(e);
         }
     }

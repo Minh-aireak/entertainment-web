@@ -1,12 +1,16 @@
 package com.MyProject.comment_service.service;
 
+import com.MyProject.comment_service.dto.event.CommentReactionChangedEvent;
 import com.MyProject.comment_service.dto.response.CommentReactionResponse;
 import com.MyProject.comment_service.entity.Comment;
+import com.MyProject.comment_service.entity.Outbox;
 import com.MyProject.comment_service.enums.CommentReactionType;
 import com.MyProject.comment_service.enums.ErrorCode;
 import com.MyProject.comment_service.exception.AppException;
 import com.MyProject.comment_service.repository.CommentRepository;
+import com.MyProject.comment_service.repository.OutboxRepository;
 import com.MyProject.common.redis.RedisService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -34,6 +38,8 @@ public class CommentReactionService {
     RedisService redisService;
     RedisTemplate<String, String> redisTemplate;
     CommentReactionNotificationService commentReactionNotificationService;
+    OutboxRepository outboxRepository;
+    ObjectMapper objectMapper;
 
     private String userReactionKey(String commentId) {
         return "comment:reaction:user:" + commentId;
@@ -82,12 +88,38 @@ public class CommentReactionService {
         }
 
         Map<Object, Object> counts = redisService.hashGetAll(countKey);
-        return CommentReactionResponse.builder()
+        CommentReactionResponse response = CommentReactionResponse.builder()
                 .commentId(commentId)
                 .likeCount((int) nonNegative(parseCount(counts.get(CommentReactionType.LIKE.name()))))
                 .loveCount((int) nonNegative(parseCount(counts.get(CommentReactionType.LOVE.name()))))
                 .myReaction(myReaction)
                 .build();
+
+        publishRealtimeEvent(comment, userId, response);
+        return response;
+    }
+
+    private void publishRealtimeEvent(Comment comment, String actorUserId, CommentReactionResponse response) {
+        try {
+            CommentReactionChangedEvent event = CommentReactionChangedEvent.builder()
+                    .commentId(comment.getId())
+                    .sourceId(comment.getSourceId())
+                    .parentId(comment.getParentId())
+                    .actorUserId(actorUserId)
+                    .likeCount(response.getLikeCount())
+                    .loveCount(response.getLoveCount())
+                    .myReaction(response.getMyReaction())
+                    .build();
+            outboxRepository.save(Outbox.builder()
+                    .aggregateId(comment.getId())
+                    .topic("comment.reactions")
+                    .payload(objectMapper.writeValueAsString(event))
+                    .build());
+        } catch (Exception e) {
+            // The reaction already succeeded in Redis; do not roll it back merely because the
+            // realtime fan-out is temporarily unavailable. Other clients will reconcile on GET.
+            log.error("Failed to publish realtime reaction event for comment {}", comment.getId(), e);
+        }
     }
 
     /** Reads current live counts from Redis; falls back to the persisted Mongo values on a cache miss. */

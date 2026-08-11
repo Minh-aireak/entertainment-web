@@ -6,7 +6,9 @@ import com.MyProject.comment_service.enums.CommentReactionType;
 import com.MyProject.comment_service.enums.ErrorCode;
 import com.MyProject.comment_service.exception.AppException;
 import com.MyProject.comment_service.repository.CommentRepository;
+import com.MyProject.comment_service.repository.OutboxRepository;
 import com.MyProject.common.redis.RedisService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,13 +35,14 @@ class CommentReactionServiceTest {
     @Mock RedisTemplate<String, String> redisTemplate;
     @Mock HashOperations<String, Object, Object> hashOperations;
     @Mock CommentReactionNotificationService commentReactionNotificationService;
+    @Mock OutboxRepository outboxRepository;
 
     CommentReactionService commentReactionService;
 
     @BeforeEach
     void setUp() {
         commentReactionService = new CommentReactionService(commentRepository, redisService, redisTemplate,
-                commentReactionNotificationService);
+                commentReactionNotificationService, outboxRepository, new ObjectMapper());
         lenient().when(redisTemplate.opsForHash()).thenReturn(hashOperations);
         lenient().when(redisService.hashGetAll(anyString())).thenReturn(Map.of());
     }
@@ -100,6 +103,21 @@ class CommentReactionServiceTest {
 
         verify(redisService, never()).hashIncrement(eq("comment:reaction:count:c-1"), anyString(), eq(-1L));
         verify(redisService).hashIncrement("comment:reaction:count:c-1", "LOVE", 1);
+    }
+
+    @Test
+    void react_publishesRealtimeEventWithSourceAndCounts() {
+        Comment comment = Comment.builder().id("c-1").sourceId("post-1").parentId("parent-1").userId("owner").build();
+        when(commentRepository.findById("c-1")).thenReturn(Optional.of(comment));
+        when(hashOperations.get("comment:reaction:user:c-1", "user-1")).thenReturn(null);
+        when(redisService.hashGetAll("comment:reaction:count:c-1"))
+                .thenReturn(Map.of("LIKE", "4", "LOVE", "2"));
+
+        commentReactionService.react("c-1", "user-1", CommentReactionType.LIKE);
+
+        verify(outboxRepository).save(argThat(outbox -> outbox.getTopic().equals("comment.reactions")
+                && outbox.getPayload().contains("\"sourceId\":\"post-1\"")
+                && outbox.getPayload().contains("\"likeCount\":4")));
     }
 
     @Test
