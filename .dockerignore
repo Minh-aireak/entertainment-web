@@ -36,3 +36,4 @@ service-account*.json
 *.keystore
 coverage/
 **/coverage/
+docs/
