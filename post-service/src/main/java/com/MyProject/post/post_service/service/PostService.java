@@ -140,6 +140,9 @@ public class PostService {
 
         PageResponse<PostResponse> cached = postCacheService.getCachedPosts(userId, page, size);
         if (cached != null) {
+            // Profile data is intentionally refreshed even on a cache hit so an older cached page
+            // cannot keep returning a missing/stale display name or presigned avatar URL.
+            enrichAuthorProfiles(cached.getData());
             return cached;
         }
 
@@ -162,7 +165,8 @@ public class PostService {
             postList.forEach(response -> response.setLiked(likedPostIds.contains(response.getId())));
         }
 
-        List<PostResponse> enriched = enrichFileUrls(postList);
+        List<PostResponse> enriched = enrichAuthorProfiles(postList);
+        enriched = enrichFileUrls(enriched);
 
         PageResponse<PostResponse> result = PageResponse.<PostResponse>builder()
                 .currentPage(page)
@@ -352,6 +356,29 @@ public class PostService {
                 p.setWatchFilmThumbnailUrl(resolved.get(p.getWatchFilmThumbnailFileId()));
             }
         }
+        return posts;
+    }
+
+    private List<PostResponse> enrichAuthorProfiles(List<PostResponse> posts) {
+        if (posts == null || posts.isEmpty()) return posts;
+
+        Set<String> authorIds = posts.stream()
+                .map(PostResponse::getUserId)
+                .filter(Objects::nonNull)
+                .filter(userId -> !userId.isBlank())
+                .collect(Collectors.toSet());
+        if (authorIds.isEmpty()) return posts;
+
+        Map<String, UserProfileResponse> profiles = postProfileExternalService.getBulkUserProfiles(authorIds);
+        if (profiles == null || profiles.isEmpty()) return posts;
+
+        posts.forEach(post -> {
+            UserProfileResponse profile = profiles.get(post.getUserId());
+            if (profile != null) {
+                post.setDisplayName(profile.getDisplayName());
+                post.setAvatar(profile.getAvatar());
+            }
+        });
         return posts;
     }
 

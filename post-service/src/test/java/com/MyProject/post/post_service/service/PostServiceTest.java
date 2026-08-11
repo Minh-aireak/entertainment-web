@@ -1,6 +1,8 @@
 package com.MyProject.post.post_service.service;
 
 import com.MyProject.common.security.SecurityUtils;
+import com.MyProject.common.dto.response.PageResponse;
+import com.MyProject.common.dto.response.UserProfileResponse;
 import com.MyProject.post.post_service.dto.request.PostRequest;
 import com.MyProject.post.post_service.dto.request.PostUpdateRequest;
 import com.MyProject.post.post_service.dto.response.LikeResponse;
@@ -23,9 +25,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.aggregation.Aggregation;
 import org.springframework.data.mongodb.core.aggregation.AggregationResults;
+import org.springframework.data.domain.PageImpl;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -265,6 +270,54 @@ class PostServiceTest {
         PostResponse response = postService.getMyPost("p-1");
 
         assertThat(response.isLiked()).isTrue();
+    }
+
+    // ---------- getMyPosts ----------
+
+    @Test
+    void getMyPosts_cacheMiss_enrichesDisplayNameAndAvatar() {
+        Post post = Post.builder().id("p-1").userId(USER_ID).postType(PostType.TEXT).build();
+        when(postRepository.findAllByUserId(eq(USER_ID), any()))
+                .thenReturn(new PageImpl<>(List.of(post)));
+        when(postProfileExternalService.getBulkUserProfiles(Set.of(USER_ID)))
+                .thenReturn(Map.of(USER_ID, UserProfileResponse.builder()
+                        .userId(USER_ID)
+                        .displayName("Aireak")
+                        .avatar("https://cdn.example/avatar.webp")
+                        .build()));
+
+        PageResponse<PostResponse> result = postService.getMyPosts(1, 10);
+
+        assertThat(result.getData()).singleElement().satisfies(response -> {
+            assertThat(response.getDisplayName()).isEqualTo("Aireak");
+            assertThat(response.getAvatar()).isEqualTo("https://cdn.example/avatar.webp");
+        });
+        verify(postCacheService).cachePosts(eq(USER_ID), eq(1), eq(10), any());
+    }
+
+    @Test
+    void getMyPosts_cacheHit_refreshesMissingProfileFields() {
+        PostResponse cachedPost = PostResponse.builder().id("p-1").userId(USER_ID).build();
+        PageResponse<PostResponse> cached = PageResponse.<PostResponse>builder()
+                .currentPage(1)
+                .pageSize(10)
+                .data(List.of(cachedPost))
+                .build();
+        when(postCacheService.getCachedPosts(USER_ID, 1, 10)).thenReturn(cached);
+        when(postProfileExternalService.getBulkUserProfiles(Set.of(USER_ID)))
+                .thenReturn(Map.of(USER_ID, UserProfileResponse.builder()
+                        .userId(USER_ID)
+                        .displayName("Aireak")
+                        .avatar("https://cdn.example/avatar.webp")
+                        .build()));
+
+        PageResponse<PostResponse> result = postService.getMyPosts(1, 10);
+
+        assertThat(result.getData()).singleElement().satisfies(response -> {
+            assertThat(response.getDisplayName()).isEqualTo("Aireak");
+            assertThat(response.getAvatar()).isEqualTo("https://cdn.example/avatar.webp");
+        });
+        verifyNoInteractions(postRepository);
     }
 
     // ---------- getRandomPosts ----------

@@ -79,7 +79,6 @@ const MyPostsFeed: React.FC = () => {
         onToggleLike={handleToggleLike}
         sentinelRef={sentinelRef}
         emptyMessage={t('noMyPostsYet')}
-        hideAuthorName
       />
     </Box>
   );

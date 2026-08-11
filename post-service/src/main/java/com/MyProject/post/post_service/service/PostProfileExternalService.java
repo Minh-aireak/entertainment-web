@@ -37,9 +37,9 @@ public class PostProfileExternalService {
     }
 
     // Author name/avatar is cosmetic enrichment on top of the post content itself, so a profile-service
-    // outage must never fail the whole feed - always degrade to blank displayName/avatar instead of throwing.
+    // outage must never fail a feed - always degrade gracefully instead of throwing.
     public Map<String, UserProfileResponse> getBulkUserProfilesFallback(Set<String> userIds, Throwable throwable) {
-        log.warn("Falling back to empty profile map while enriching random posts for users {}: {}",
+        log.warn("Falling back to empty profile map while enriching posts for users {}: {}",
                 userIds, throwable.getMessage());
         return Collections.emptyMap();
     }
