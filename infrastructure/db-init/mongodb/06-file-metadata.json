@@ -1,0 +1,1550 @@
+[{
+	"_id": "movie-platform/af345fdb-dd28-4eb1-9c45-5a7cd1cafcf5.mp4",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "video/mp4",
+	"size": 135110,
+	"path": "movie-platform/af345fdb-dd28-4eb1-9c45-5a7cd1cafcf5.mp4",
+	"originalName": "Screen Recording 2026-08-06 104645.mp4",
+	"updatedAt": {
+		"$date": "2026-08-06T04:09:07.064Z"
+	},
+	"_class": "VIDEO"
+},
+{
+	"_id": "movie-platform/b1c129fd-f6ab-4069-8c0a-59727c314519.mp4",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "video/mp4",
+	"size": 135110,
+	"path": "movie-platform/b1c129fd-f6ab-4069-8c0a-59727c314519.mp4",
+	"originalName": "Screen Recording 2026-08-06 104645.mp4",
+	"updatedAt": {
+		"$date": "2026-08-06T04:10:10.88Z"
+	},
+	"_class": "VIDEO"
+},
+{
+	"_id": "movie-platform/7edca403-1447-4fba-b1f6-453f9d2b87cd.mp4",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "video/mp4",
+	"size": 135110,
+	"path": "movie-platform/7edca403-1447-4fba-b1f6-453f9d2b87cd.mp4",
+	"originalName": "Screen Recording 2026-08-06 104645.mp4",
+	"updatedAt": {
+		"$date": "2026-08-06T04:10:30.617Z"
+	},
+	"_class": "VIDEO"
+},
+{
+	"_id": "movie-platform/0f94a334-b71a-4d43-8366-8e89a223ce3e.mp4",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "video/mp4",
+	"size": 135110,
+	"path": "movie-platform/0f94a334-b71a-4d43-8366-8e89a223ce3e.mp4",
+	"originalName": "Screen Recording 2026-08-06 104645.mp4",
+	"updatedAt": {
+		"$date": "2026-08-06T04:24:15.567Z"
+	},
+	"_class": "VIDEO"
+},
+{
+	"_id": "movie-platform/9026696d-7d5e-4770-a9a2-6739d8d3e5a0.mp4",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "video/mp4",
+	"size": 135110,
+	"path": "movie-platform/9026696d-7d5e-4770-a9a2-6739d8d3e5a0.mp4",
+	"originalName": "Screen Recording 2026-08-06 104645.mp4",
+	"updatedAt": {
+		"$date": "2026-08-06T04:25:02.75Z"
+	},
+	"_class": "VIDEO"
+},
+{
+	"_id": "movie-platform/3ac8d5a9-159c-4dab-a982-62b7a6da05f4.mp4",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "video/mp4",
+	"size": 135110,
+	"path": "movie-platform/3ac8d5a9-159c-4dab-a982-62b7a6da05f4.mp4",
+	"originalName": "Screen Recording 2026-08-06 104645.mp4",
+	"updatedAt": {
+		"$date": "2026-08-06T04:25:16.109Z"
+	},
+	"_class": "VIDEO"
+},
+{
+	"_id": "movie-platform/aef39306-2d52-4357-a43a-4f2385c55654.mp4",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "video/mp4",
+	"size": 135110,
+	"path": "movie-platform/aef39306-2d52-4357-a43a-4f2385c55654.mp4",
+	"originalName": "Screen Recording 2026-08-06 104645.mp4",
+	"updatedAt": {
+		"$date": "2026-08-06T04:35:29.158Z"
+	},
+	"_class": "VIDEO"
+},
+{
+	"_id": "movie-platform/79cc4368-64ec-4572-96dd-db41a58b9fd4.mp4",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "video/mp4",
+	"size": 135110,
+	"path": "movie-platform/79cc4368-64ec-4572-96dd-db41a58b9fd4.mp4",
+	"originalName": "Screen Recording 2026-08-06 104645.mp4",
+	"updatedAt": {
+		"$date": "2026-08-06T06:12:59.678Z"
+	},
+	"_class": "VIDEO"
+},
+{
+	"_id": "movie-platform/ac2c2137-878a-44ea-9071-f4fc6bc4455a.webp",
+	"format": "webp",
+	"ownerId": "4c68ee88-57cb-43b1-ac18-171eac1b0e54",
+	"contentType": "image/webp",
+	"size": 36348,
+	"path": "movie-platform/ac2c2137-878a-44ea-9071-f4fc6bc4455a.webp",
+	"originalName": "cau hoi jvm.webp",
+	"updatedAt": {
+		"$date": "2026-08-06T06:18:39.377Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/f616a41c-5366-43b1-8bd6-c5ac2b718714.mp4",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "video/mp4",
+	"size": 135110,
+	"path": "movie-platform/f616a41c-5366-43b1-8bd6-c5ac2b718714.mp4",
+	"originalName": "Screen Recording 2026-08-06 104645.mp4",
+	"updatedAt": {
+		"$date": "2026-08-06T08:53:17.787Z"
+	},
+	"_class": "VIDEO"
+},
+{
+	"_id": "movie-platform/bad6aeaa-7014-4422-8072-b8f0143ae5c1.mp4",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "video/mp4",
+	"size": 135110,
+	"path": "movie-platform/bad6aeaa-7014-4422-8072-b8f0143ae5c1.mp4",
+	"originalName": "Screen Recording 2026-08-06 104645.mp4",
+	"updatedAt": {
+		"$date": "2026-08-06T10:54:58.455Z"
+	},
+	"_class": "VIDEO"
+},
+{
+	"_id": "movie-platform/f0237982-9fba-4b05-a736-e246db71a80d.png",
+	"width": 300,
+	"height": 450,
+	"format": "png",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/png",
+	"size": 271290,
+	"path": "movie-platform/f0237982-9fba-4b05-a736-e246db71a80d.png",
+	"originalName": "gia-thien-thumb-300x450.png",
+	"updatedAt": {
+		"$date": "2026-08-07T03:35:30.112Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/ba6fb92c-d302-4fb7-886f-d0acc2e93eea.jpg",
+	"width": 452,
+	"height": 678,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 56752,
+	"path": "movie-platform/ba6fb92c-d302-4fb7-886f-d0acc2e93eea.jpg",
+	"originalName": "wicked.jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T03:48:19.743Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/baed80de-9bb1-4ee8-88bd-a222338ff00a.jpg",
+	"width": 452,
+	"height": 678,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 56752,
+	"path": "movie-platform/baed80de-9bb1-4ee8-88bd-a222338ff00a.jpg",
+	"originalName": "wicked.jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T04:18:43.649Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/9ff265c2-5f09-421f-905a-d8f849a794f2.jpg",
+	"width": 452,
+	"height": 678,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 56752,
+	"path": "movie-platform/9ff265c2-5f09-421f-905a-d8f849a794f2.jpg",
+	"originalName": "wicked.jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T04:49:00.567Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/05b7e138-05b8-4ae2-ab1e-2516c249d48a.mp4",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "video/mp4",
+	"size": 8346990,
+	"path": "movie-platform/05b7e138-05b8-4ae2-ab1e-2516c249d48a.mp4",
+	"originalName": "YTDown.com_Shorts_Gia-Thien-trailer-tap-176-donghua-giathi_Media_dWGcAtxpXJo_001_1080p.mp4",
+	"updatedAt": {
+		"$date": "2026-08-07T06:07:24.507Z"
+	},
+	"_class": "VIDEO"
+},
+{
+	"_id": "movie-platform/ce07325a-78b5-4e7b-8a3a-579c709299d6.mp4",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "video/mp4",
+	"size": 34432259,
+	"path": "movie-platform/ce07325a-78b5-4e7b-8a3a-579c709299d6.mp4",
+	"originalName": "YTDown.com_YouTube_Wicked-For-Good-Official-Trailer_Media_vt98AlBDI9Y_001_1080p.mp4",
+	"updatedAt": {
+		"$date": "2026-08-07T06:18:33.505Z"
+	},
+	"_class": "VIDEO"
+},
+{
+	"_id": "movie-platform/329eac15-9998-4adb-948c-322766974814.jpg",
+	"width": 452,
+	"height": 678,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 56752,
+	"path": "movie-platform/329eac15-9998-4adb-948c-322766974814.jpg",
+	"originalName": "wicked.jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T06:38:06.751Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/1ae24de3-5421-4a4b-be6e-0f081cef9bf3.mp4",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "video/mp4",
+	"size": 34432259,
+	"path": "movie-platform/1ae24de3-5421-4a4b-be6e-0f081cef9bf3.mp4",
+	"originalName": "YTDown.com_YouTube_Wicked-For-Good-Official-Trailer_Media_vt98AlBDI9Y_001_1080p.mp4",
+	"updatedAt": {
+		"$date": "2026-08-07T06:39:02.185Z"
+	},
+	"_class": "VIDEO"
+},
+{
+	"_id": "movie-platform/a92a2b81-2e9b-4af4-b286-b53608f4699d.jpg",
+	"width": 597,
+	"height": 335,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 20742,
+	"path": "movie-platform/a92a2b81-2e9b-4af4-b286-b53608f4699d.jpg",
+	"originalName": "wed 2.jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T06:49:14.024Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/265a747d-12fd-4313-bf37-b8237b6edfa6.mp4",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "video/mp4",
+	"size": 30926018,
+	"path": "movie-platform/265a747d-12fd-4313-bf37-b8237b6edfa6.mp4",
+	"originalName": "YTDown.com_YouTube_Wednesday-Season-2-Official-Trailer-Netf_Media_03u4xyj0TH4_001_1080p.mp4",
+	"updatedAt": {
+		"$date": "2026-08-07T06:49:34.411Z"
+	},
+	"_class": "VIDEO"
+},
+{
+	"_id": "movie-platform/959a9089-d821-4518-9d73-ba5d11fbbedb.jpg",
+	"width": 452,
+	"height": 678,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 60024,
+	"path": "movie-platform/959a9089-d821-4518-9d73-ba5d11fbbedb.jpg",
+	"originalName": "vong xoay.jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T06:50:50.784Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/2f017bcb-0122-464a-9c74-e0b6cfdf63d8.mp4",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "video/mp4",
+	"size": 39310793,
+	"path": "movie-platform/2f017bcb-0122-464a-9c74-e0b6cfdf63d8.mp4",
+	"originalName": "YTDown.com_YouTube_The-Wheel-Of-Time-Official-Trailer-Prime_Media_11ZozKfRqvA_001_1080p.mp4",
+	"updatedAt": {
+		"$date": "2026-08-07T06:51:03.854Z"
+	},
+	"_class": "VIDEO"
+},
+{
+	"_id": "movie-platform/5a45f39a-dafb-4b84-b8ea-0c82f2336cd4.jpg",
+	"width": 738,
+	"height": 414,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 26381,
+	"path": "movie-platform/5a45f39a-dafb-4b84-b8ea-0c82f2336cd4.jpg",
+	"originalName": "Ody.jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T06:55:37.525Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/951c6bbf-1fd5-444a-a654-a7f8ad7a6d90.mp4",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "video/mp4",
+	"size": 18028120,
+	"path": "movie-platform/951c6bbf-1fd5-444a-a654-a7f8ad7a6d90.mp4",
+	"originalName": "Trailer 'The Odyssey' của Christopher Nolan.mp4",
+	"updatedAt": {
+		"$date": "2026-08-07T06:58:23.05Z"
+	},
+	"_class": "VIDEO"
+},
+{
+	"_id": "movie-platform/29d627b8-5f49-41dd-8d50-b77c4c45e207.jpg",
+	"width": 554,
+	"height": 554,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 44076,
+	"path": "movie-platform/29d627b8-5f49-41dd-8d50-b77c4c45e207.jpg",
+	"originalName": "eupho.jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T06:59:32.083Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/13e782cb-574c-4661-8174-a0448acd8df9.mp4",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "video/mp4",
+	"size": 31390425,
+	"path": "movie-platform/13e782cb-574c-4661-8174-a0448acd8df9.mp4",
+	"originalName": "YTDown.com_YouTube_EUPHORIA-Season-3-Teaser-Trailer-2026_Media_2cngjIk3xUU_001_1080p.mp4",
+	"updatedAt": {
+		"$date": "2026-08-07T06:59:45.718Z"
+	},
+	"_class": "VIDEO"
+},
+{
+	"_id": "movie-platform/5f70ff3c-852c-4c31-94bc-9c14a8cadef4.webp",
+	"format": "webp",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/webp",
+	"size": 33368,
+	"path": "movie-platform/5f70ff3c-852c-4c31-94bc-9c14a8cadef4.webp",
+	"originalName": "tien-nghich-6-300x450.webp",
+	"updatedAt": {
+		"$date": "2026-08-07T07:09:14.679Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/3f40bac8-1780-4b89-88cb-f7589152e2e0.webp",
+	"format": "webp",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/webp",
+	"size": 27948,
+	"path": "movie-platform/3f40bac8-1780-4b89-88cb-f7589152e2e0.webp",
+	"originalName": "muc-than-ky-thumb-300x450.webp",
+	"updatedAt": {
+		"$date": "2026-08-07T07:10:21.805Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/56c116c7-73de-4358-a41e-312e11be396b.webp",
+	"format": "webp",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/webp",
+	"size": 40932,
+	"path": "movie-platform/56c116c7-73de-4358-a41e-312e11be396b.webp",
+	"originalName": "quang-am-chi-ngoai-thumb-300x450.webp",
+	"updatedAt": {
+		"$date": "2026-08-07T07:11:00.785Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/3a2adc39-73a4-4043-93d5-3c281ce56dbd.jpg",
+	"width": 184,
+	"height": 273,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 12049,
+	"path": "movie-platform/3a2adc39-73a4-4043-93d5-3c281ce56dbd.jpg",
+	"originalName": "tải xuống.jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T07:14:16.369Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/680df033-f44f-4865-ad59-98a2d807f834.webp",
+	"format": "webp",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/webp",
+	"size": 37366,
+	"path": "movie-platform/680df033-f44f-4865-ad59-98a2d807f834.webp",
+	"originalName": "pham-nhan-tu-tien-phan-3-thumb-300x450.webp",
+	"updatedAt": {
+		"$date": "2026-08-07T07:14:55.362Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/4bb7f398-8f00-4a19-bb1e-ab19a6b9211b.png",
+	"width": 300,
+	"height": 450,
+	"format": "png",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/png",
+	"size": 271290,
+	"path": "movie-platform/4bb7f398-8f00-4a19-bb1e-ab19a6b9211b.png",
+	"originalName": "gia-thien-thumb-300x450.png",
+	"updatedAt": {
+		"$date": "2026-08-07T07:15:31.751Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/6514f526-9b16-4bcc-8ab1-7083fa01477d.webp",
+	"format": "webp",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/webp",
+	"size": 25916,
+	"path": "movie-platform/6514f526-9b16-4bcc-8ab1-7083fa01477d.webp",
+	"originalName": "nhat-tram-thuong-khung-thumb-2-300x450.webp",
+	"updatedAt": {
+		"$date": "2026-08-07T07:15:58.593Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/3c5400c7-6cea-4661-a561-ada99462e617.webp",
+	"format": "webp",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/webp",
+	"size": 63272,
+	"path": "movie-platform/3c5400c7-6cea-4661-a561-ada99462e617.webp",
+	"originalName": "phu-nhan-dai-quan-the-ky-21-thumb.webp",
+	"updatedAt": {
+		"$date": "2026-08-07T07:17:04.818Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/b6c6ac11-9023-4869-b883-d7d2f245b388.jpg",
+	"width": 519,
+	"height": 385,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 53973,
+	"path": "movie-platform/b6c6ac11-9023-4869-b883-d7d2f245b388.jpg",
+	"originalName": "images.jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T07:29:54.369Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/3c852cfa-6620-4c03-8117-f13e4b32cf3f.webp",
+	"format": "webp",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/webp",
+	"size": 92128,
+	"path": "movie-platform/3c852cfa-6620-4c03-8117-f13e4b32cf3f.webp",
+	"originalName": "maxresdefault-1597379270649.webp",
+	"updatedAt": {
+		"$date": "2026-08-07T07:32:39.113Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/c1e939f0-9a50-4515-a86f-df445a465510.webp",
+	"format": "webp",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/webp",
+	"size": 52720,
+	"path": "movie-platform/c1e939f0-9a50-4515-a86f-df445a465510.webp",
+	"originalName": "dac-vu-kim-tai-khoi-dong-thumb.webp",
+	"updatedAt": {
+		"$date": "2026-08-07T07:34:17.332Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/335484f5-3d2a-41be-b773-1056eafafe69.webp",
+	"format": "webp",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/webp",
+	"size": 46004,
+	"path": "movie-platform/335484f5-3d2a-41be-b773-1056eafafe69.webp",
+	"originalName": "nhat-niem-vinh-hang-phan-cuoi-thumb-300x450.webp",
+	"updatedAt": {
+		"$date": "2026-08-07T07:34:46.495Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/4d5c011c-628a-4954-907d-f5abeab14723.webp",
+	"format": "webp",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/webp",
+	"size": 67168,
+	"path": "movie-platform/4d5c011c-628a-4954-907d-f5abeab14723.webp",
+	"originalName": "tieu-dao-2025-thumb.webp",
+	"updatedAt": {
+		"$date": "2026-08-07T07:38:19.294Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/ff3b83a0-fd3f-48c7-a7e3-dfc8c739b6ad.jpg",
+	"width": 300,
+	"height": 429,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 34505,
+	"path": "movie-platform/ff3b83a0-fd3f-48c7-a7e3-dfc8c739b6ad.jpg",
+	"originalName": "034afe4d9f1198904977bb7cd8297a56.jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T07:39:12.196Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/e4617095-0d77-488e-b94c-f24a53dac473.webp",
+	"format": "webp",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/webp",
+	"size": 46320,
+	"path": "movie-platform/e4617095-0d77-488e-b94c-f24a53dac473.webp",
+	"originalName": "michael-thumb.webp",
+	"updatedAt": {
+		"$date": "2026-08-07T07:40:00.713Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/9e182526-da30-4cfc-bab9-17eec2b4322b.webp",
+	"format": "webp",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/webp",
+	"size": 41872,
+	"path": "movie-platform/9e182526-da30-4cfc-bab9-17eec2b4322b.webp",
+	"originalName": "tieng-yeu-nay-anh-dich-duoc-khong-thumb.webp",
+	"updatedAt": {
+		"$date": "2026-08-07T07:40:42.492Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/da826ecf-7dde-4756-9317-edc455976ece.webp",
+	"format": "webp",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/webp",
+	"size": 54508,
+	"path": "movie-platform/da826ecf-7dde-4756-9317-edc455976ece.webp",
+	"originalName": "dien-hy-cong-luoc-thumb.webp",
+	"updatedAt": {
+		"$date": "2026-08-07T07:41:48.974Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/c2c85456-7555-47bc-a60c-8399fb652ed6.webp",
+	"format": "webp",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/webp",
+	"size": 57976,
+	"path": "movie-platform/c2c85456-7555-47bc-a60c-8399fb652ed6.webp",
+	"originalName": "avatar-3-lua-va-tro-tan-thumb.webp",
+	"updatedAt": {
+		"$date": "2026-08-07T07:45:01.034Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/3a1c161f-1a00-4bb9-8211-934f1a130b2e.webp",
+	"width": 300,
+	"height": 450,
+	"format": "webp",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/webp",
+	"size": 41049,
+	"path": "movie-platform/3a1c161f-1a00-4bb9-8211-934f1a130b2e.webp",
+	"originalName": "mua-do-6013684288.webp",
+	"updatedAt": {
+		"$date": "2026-08-07T07:46:15.712Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/2f4c7928-17a9-4c46-9cd1-5f19726ab009.webp",
+	"format": "webp",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/webp",
+	"size": 31310,
+	"path": "movie-platform/2f4c7928-17a9-4c46-9cd1-5f19726ab009.webp",
+	"originalName": "na-tra-2-ma-dong-nao-hai-1.webp",
+	"updatedAt": {
+		"$date": "2026-08-07T07:47:03.521Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/00de4f21-6501-4e2a-bb96-bb2ba7e3df16.webp",
+	"format": "webp",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/webp",
+	"size": 52720,
+	"path": "movie-platform/00de4f21-6501-4e2a-bb96-bb2ba7e3df16.webp",
+	"originalName": "dac-vu-kim-tai-khoi-dong-thumb.webp",
+	"updatedAt": {
+		"$date": "2026-08-07T07:47:18.593Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/61cb3a4a-d95a-4433-8927-b8aad5c587d4.webp",
+	"format": "webp",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/webp",
+	"size": 29892,
+	"path": "movie-platform/61cb3a4a-d95a-4433-8927-b8aad5c587d4.webp",
+	"originalName": "tram-than-pham-tran-than-vuc-phan-2-thumb-300x450.webp",
+	"updatedAt": {
+		"$date": "2026-08-07T07:51:37.497Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/6f958da3-38c3-4344-8de5-92aa842007df.jpg",
+	"width": 205,
+	"height": 246,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 5150,
+	"path": "movie-platform/6f958da3-38c3-4344-8de5-92aa842007df.jpg",
+	"originalName": "images (1).jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T09:08:16.691Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/1326f8db-4d0f-4368-95be-a311fd9286ff.jpg",
+	"width": 205,
+	"height": 246,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 5471,
+	"path": "movie-platform/1326f8db-4d0f-4368-95be-a311fd9286ff.jpg",
+	"originalName": "images (2).jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T09:09:05.284Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/a00d02c0-d1f2-495a-9198-984be3482693.jpg",
+	"width": 235,
+	"height": 235,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 7501,
+	"path": "movie-platform/a00d02c0-d1f2-495a-9198-984be3482693.jpg",
+	"originalName": "images (3).jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T09:10:10.981Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/6b4758f3-2874-4b8b-beb4-680993df5b11.jpg",
+	"width": 495,
+	"height": 620,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 24389,
+	"path": "movie-platform/6b4758f3-2874-4b8b-beb4-680993df5b11.jpg",
+	"originalName": "images (4).jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T09:10:52.088Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/61a8f2f5-9203-4d98-8863-aff944302b92.jpg",
+	"width": 684,
+	"height": 448,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 21092,
+	"path": "movie-platform/61a8f2f5-9203-4d98-8863-aff944302b92.jpg",
+	"originalName": "images.jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T09:11:15.308Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/6009cde1-8458-4f35-9cf2-fb69858ebb2f.jpg",
+	"width": 480,
+	"height": 638,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 31379,
+	"path": "movie-platform/6009cde1-8458-4f35-9cf2-fb69858ebb2f.jpg",
+	"originalName": "images (1).jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T09:11:48.334Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/3672c7ff-f50f-467e-bcdc-5f56c5b49d22.jpg",
+	"width": 300,
+	"height": 360,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 11838,
+	"path": "movie-platform/3672c7ff-f50f-467e-bcdc-5f56c5b49d22.jpg",
+	"originalName": "images (2).jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T09:12:26.443Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/185afacd-be15-4f9c-b409-a8820bf98e4d.jpg",
+	"width": 225,
+	"height": 225,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 4431,
+	"path": "movie-platform/185afacd-be15-4f9c-b409-a8820bf98e4d.jpg",
+	"originalName": "images (3).jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T09:13:00.857Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/95af7dcb-10ca-4193-b2fe-b74199529e57.jpg",
+	"width": 365,
+	"height": 547,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 26320,
+	"path": "movie-platform/95af7dcb-10ca-4193-b2fe-b74199529e57.jpg",
+	"originalName": "images (5).jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T09:13:32.581Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/84d09f74-5e82-4f94-84e3-4c6119df10ef.jpg",
+	"width": 452,
+	"height": 678,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 33833,
+	"path": "movie-platform/84d09f74-5e82-4f94-84e3-4c6119df10ef.jpg",
+	"originalName": "images (6).jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T09:14:34.155Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/32489d96-0aed-42fa-9195-447b266af1a8.jpg",
+	"width": 183,
+	"height": 275,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 3191,
+	"path": "movie-platform/32489d96-0aed-42fa-9195-447b266af1a8.jpg",
+	"originalName": "tải xuống.jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T09:14:58.076Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/f8fba53b-a245-4e79-8c9a-d4518d6e016c.jpg",
+	"width": 248,
+	"height": 330,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 9262,
+	"path": "movie-platform/f8fba53b-a245-4e79-8c9a-d4518d6e016c.jpg",
+	"originalName": "images.jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T09:15:21.121Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/9ea9a5f9-e295-4351-9bdd-b953e4fa7cd0.jpg",
+	"width": 299,
+	"height": 168,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 5904,
+	"path": "movie-platform/9ea9a5f9-e295-4351-9bdd-b953e4fa7cd0.jpg",
+	"originalName": "images (1).jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T09:17:19.917Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/e862337b-4ad0-49a1-b0c4-4016ceed1068.jpg",
+	"width": 201,
+	"height": 251,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 7283,
+	"path": "movie-platform/e862337b-4ad0-49a1-b0c4-4016ceed1068.jpg",
+	"originalName": "tải xuống (1).jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T09:18:30.098Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/b05d8269-e177-474c-b83b-7035db9b10fc.jpg",
+	"width": 160,
+	"height": 200,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 52588,
+	"path": "movie-platform/b05d8269-e177-474c-b83b-7035db9b10fc.jpg",
+	"originalName": "image2.jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T09:18:58.585Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/cec4bebb-638b-4578-b394-8ed7747c9eef.jpg",
+	"width": 452,
+	"height": 678,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 14980,
+	"path": "movie-platform/cec4bebb-638b-4578-b394-8ed7747c9eef.jpg",
+	"originalName": "images (2).jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T09:19:37.034Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/1de4efde-8a4b-426c-9d03-507a939ad247.jpg",
+	"width": 688,
+	"height": 445,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 14963,
+	"path": "movie-platform/1de4efde-8a4b-426c-9d03-507a939ad247.jpg",
+	"originalName": "images (3).jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T09:20:25.114Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/966bb541-b081-4ef1-a364-1f0b730efa10.jpg",
+	"width": 150,
+	"height": 200,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 6480,
+	"path": "movie-platform/966bb541-b081-4ef1-a364-1f0b730efa10.jpg",
+	"originalName": "image2.jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T09:20:57.028Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/57db2ffc-2d2c-432e-b72d-c7974f768c49.jpg",
+	"width": 382,
+	"height": 200,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 22122,
+	"path": "movie-platform/57db2ffc-2d2c-432e-b72d-c7974f768c49.jpg",
+	"originalName": "image2 (1).jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T09:21:20.463Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/6b4a21fa-c9eb-4f81-b461-c4617501033c.png",
+	"width": 250,
+	"height": 250,
+	"format": "png",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/png",
+	"size": 137018,
+	"path": "movie-platform/6b4a21fa-c9eb-4f81-b461-c4617501033c.png",
+	"originalName": "tải xuống.png",
+	"updatedAt": {
+		"$date": "2026-08-07T09:22:05.959Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/3b6a4e9b-aa76-421a-a2cd-cf34d0286a33.jpg",
+	"width": 469,
+	"height": 654,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 29164,
+	"path": "movie-platform/3b6a4e9b-aa76-421a-a2cd-cf34d0286a33.jpg",
+	"originalName": "images.jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T09:22:32.17Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/643a7eea-3b2d-4397-b3c3-d2eb88785451.jpg",
+	"width": 150,
+	"height": 200,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 5459,
+	"path": "movie-platform/643a7eea-3b2d-4397-b3c3-d2eb88785451.jpg",
+	"originalName": "image2 (2).jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T09:23:36.435Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/d3c38868-ab3f-45a7-8de1-ff3c04a39293.png",
+	"width": 250,
+	"height": 250,
+	"format": "png",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/png",
+	"size": 134932,
+	"path": "movie-platform/d3c38868-ab3f-45a7-8de1-ff3c04a39293.png",
+	"originalName": "tải xuống (1).png",
+	"updatedAt": {
+		"$date": "2026-08-07T09:23:54.298Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/4bfcc85c-075b-45fb-8edf-5229a376d1f8.png",
+	"width": 250,
+	"height": 250,
+	"format": "png",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/png",
+	"size": 126647,
+	"path": "movie-platform/4bfcc85c-075b-45fb-8edf-5229a376d1f8.png",
+	"originalName": "tải xuống (2).png",
+	"updatedAt": {
+		"$date": "2026-08-07T09:24:14.039Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/058d7973-3e50-4511-b50c-3464e0e3a81d.png",
+	"width": 250,
+	"height": 250,
+	"format": "png",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/png",
+	"size": 118797,
+	"path": "movie-platform/058d7973-3e50-4511-b50c-3464e0e3a81d.png",
+	"originalName": "tải xuống (3).png",
+	"updatedAt": {
+		"$date": "2026-08-07T09:29:10.395Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/f83b6b30-fae8-4af3-b85b-0b4aadf69794.png",
+	"width": 250,
+	"height": 250,
+	"format": "png",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/png",
+	"size": 139712,
+	"path": "movie-platform/f83b6b30-fae8-4af3-b85b-0b4aadf69794.png",
+	"originalName": "tải xuống (4).png",
+	"updatedAt": {
+		"$date": "2026-08-07T09:29:59.487Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/99840ee8-28bd-4398-9fce-5948c9e26ff6.jpg",
+	"width": 145,
+	"height": 200,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 6171,
+	"path": "movie-platform/99840ee8-28bd-4398-9fce-5948c9e26ff6.jpg",
+	"originalName": "image2 (3).jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T09:31:00.029Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/2f4bcbc3-6d8c-4cef-b274-b8d7a7425c8a.png",
+	"width": 250,
+	"height": 250,
+	"format": "png",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/png",
+	"size": 140146,
+	"path": "movie-platform/2f4bcbc3-6d8c-4cef-b274-b8d7a7425c8a.png",
+	"originalName": "tải xuống (5).png",
+	"updatedAt": {
+		"$date": "2026-08-07T09:31:48.016Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/4815b8fb-dec7-41d8-bf99-c925cb4567db.jpg",
+	"width": 144,
+	"height": 200,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 57653,
+	"path": "movie-platform/4815b8fb-dec7-41d8-bf99-c925cb4567db.jpg",
+	"originalName": "image2 (4).jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T09:34:04.492Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/c0ba22f0-d562-42f0-aed0-6c4db1c981ab.jpg",
+	"width": 145,
+	"height": 200,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 4895,
+	"path": "movie-platform/c0ba22f0-d562-42f0-aed0-6c4db1c981ab.jpg",
+	"originalName": "image2 (5).jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T09:36:04.049Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/4eeba7d7-6338-482e-9aaf-ad08e5aa7a4c.webp",
+	"format": "webp",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/webp",
+	"size": 14544,
+	"path": "movie-platform/4eeba7d7-6338-482e-9aaf-ad08e5aa7a4c.webp",
+	"originalName": "images.webp",
+	"updatedAt": {
+		"$date": "2026-08-07T09:36:47.152Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/3f1f5c6b-2245-4749-9e84-a2e1e4e2e302.png",
+	"width": 250,
+	"height": 250,
+	"format": "png",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/png",
+	"size": 139233,
+	"path": "movie-platform/3f1f5c6b-2245-4749-9e84-a2e1e4e2e302.png",
+	"originalName": "tải xuống (6).png",
+	"updatedAt": {
+		"$date": "2026-08-07T10:18:57.981Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/2fa6d38b-db57-40c6-8106-b50aa4b84e4d.webp",
+	"format": "webp",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/webp",
+	"size": 45228,
+	"path": "movie-platform/2fa6d38b-db57-40c6-8106-b50aa4b84e4d.webp",
+	"originalName": "lang-khach-thumb.webp",
+	"updatedAt": {
+		"$date": "2026-08-07T10:22:11.625Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/2c653a28-8bdb-4922-8309-619973a7bb69.webp",
+	"format": "webp",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/webp",
+	"size": 45228,
+	"path": "movie-platform/2c653a28-8bdb-4922-8309-619973a7bb69.webp",
+	"originalName": "lang-khach-thumb.webp",
+	"updatedAt": {
+		"$date": "2026-08-07T10:28:59.6Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/18c861cb-5f35-487e-a3f1-5e4fa48479fb.jpg",
+	"width": 464,
+	"height": 660,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 44436,
+	"path": "movie-platform/18c861cb-5f35-487e-a3f1-5e4fa48479fb.jpg",
+	"originalName": "images (1).jpg",
+	"updatedAt": {
+		"$date": "2026-08-07T10:30:31.719Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/a8ef0176-835c-4fdd-8331-4e3614a92221.png",
+	"format": "png",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/png",
+	"size": 61,
+	"path": "movie-platform/a8ef0176-835c-4fdd-8331-4e3614a92221.png",
+	"originalName": "test.png",
+	"updatedAt": {
+		"$date": "2026-08-08T03:18:59.78Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/81f5e848-880c-4f7e-8088-0134b2374de9.webp",
+	"format": "webp",
+	"ownerId": "4c68ee88-57cb-43b1-ac18-171eac1b0e54",
+	"contentType": "image/webp",
+	"size": 36348,
+	"path": "movie-platform/81f5e848-880c-4f7e-8088-0134b2374de9.webp",
+	"originalName": "cau hoi jvm.webp",
+	"updatedAt": {
+		"$date": "2026-08-08T04:36:56.223Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/f2021acc-7f08-4170-b67a-fefac5958583.png",
+	"width": 250,
+	"height": 250,
+	"format": "png",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/png",
+	"size": 149092,
+	"path": "movie-platform/f2021acc-7f08-4170-b67a-fefac5958583.png",
+	"originalName": "tải xuống.png",
+	"updatedAt": {
+		"$date": "2026-08-10T08:53:25.158Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/1f2532de-62d3-4d20-ac96-643d9b80956a.png",
+	"width": 250,
+	"height": 250,
+	"format": "png",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/png",
+	"size": 137636,
+	"path": "movie-platform/1f2532de-62d3-4d20-ac96-643d9b80956a.png",
+	"originalName": "tải xuống (1).png",
+	"updatedAt": {
+		"$date": "2026-08-10T08:54:01.662Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/3dadea03-0045-4265-b129-0ecb7743c7ed.png",
+	"width": 250,
+	"height": 250,
+	"format": "png",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/png",
+	"size": 120421,
+	"path": "movie-platform/3dadea03-0045-4265-b129-0ecb7743c7ed.png",
+	"originalName": "tải xuống (2).png",
+	"updatedAt": {
+		"$date": "2026-08-10T08:54:23.735Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/62c19b47-b42c-463b-bffb-aa11882f20a0.jpg",
+	"width": 365,
+	"height": 547,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 25578,
+	"path": "movie-platform/62c19b47-b42c-463b-bffb-aa11882f20a0.jpg",
+	"originalName": "images.jpg",
+	"updatedAt": {
+		"$date": "2026-08-10T08:55:20.812Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/efe902cd-4b5e-4ccd-a29c-7b8c030918f1.png",
+	"width": 250,
+	"height": 250,
+	"format": "png",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/png",
+	"size": 127850,
+	"path": "movie-platform/efe902cd-4b5e-4ccd-a29c-7b8c030918f1.png",
+	"originalName": "tải xuống (3).png",
+	"updatedAt": {
+		"$date": "2026-08-10T08:55:44.21Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/e0947d5f-5f4e-4851-aee9-610172caf23c.png",
+	"width": 250,
+	"height": 250,
+	"format": "png",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/png",
+	"size": 150638,
+	"path": "movie-platform/e0947d5f-5f4e-4851-aee9-610172caf23c.png",
+	"originalName": "tải xuống (4).png",
+	"updatedAt": {
+		"$date": "2026-08-10T08:56:05.495Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/ccb0f63e-379c-47a3-9617-305c77bd5918.jpg",
+	"width": 209,
+	"height": 200,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 6581,
+	"path": "movie-platform/ccb0f63e-379c-47a3-9617-305c77bd5918.jpg",
+	"originalName": "image2.jpg",
+	"updatedAt": {
+		"$date": "2026-08-10T08:56:34.302Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/8801dd1d-5262-4a23-8fb2-e69edf40e3d6.png",
+	"width": 250,
+	"height": 250,
+	"format": "png",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/png",
+	"size": 148571,
+	"path": "movie-platform/8801dd1d-5262-4a23-8fb2-e69edf40e3d6.png",
+	"originalName": "tải xuống (5).png",
+	"updatedAt": {
+		"$date": "2026-08-10T08:56:57.855Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/98dd3b09-6892-476a-9744-3d2379cd353d.jpg",
+	"width": 553,
+	"height": 553,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 19058,
+	"path": "movie-platform/98dd3b09-6892-476a-9744-3d2379cd353d.jpg",
+	"originalName": "phunog nam.jpg",
+	"updatedAt": {
+		"$date": "2026-08-10T09:07:59.926Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/9284eb67-7aa7-4135-9e58-6a437dd6e23b.png",
+	"width": 250,
+	"height": 250,
+	"format": "png",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/png",
+	"size": 101006,
+	"path": "movie-platform/9284eb67-7aa7-4135-9e58-6a437dd6e23b.png",
+	"originalName": "Bae Suzy.png",
+	"updatedAt": {
+		"$date": "2026-08-10T09:08:12.336Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/d98b1f1a-129a-4e8b-ada9-ca9b073d968a.jpg",
+	"width": 200,
+	"height": 200,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 6491,
+	"path": "movie-platform/d98b1f1a-129a-4e8b-ada9-ca9b073d968a.jpg",
+	"originalName": "Choi Dae-hoon (최대훈).jpg",
+	"updatedAt": {
+		"$date": "2026-08-10T09:08:25.341Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/b56b1b03-c819-4d5a-963d-69cfc0500e8c.png",
+	"width": 250,
+	"height": 250,
+	"format": "png",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/png",
+	"size": 142467,
+	"path": "movie-platform/b56b1b03-c819-4d5a-963d-69cfc0500e8c.png",
+	"originalName": "Colman Domingo.png",
+	"updatedAt": {
+		"$date": "2026-08-10T09:08:56.499Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/99604497-7461-49bf-9855-af534a1f0f2a.png",
+	"width": 250,
+	"height": 250,
+	"format": "png",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/png",
+	"size": 155826,
+	"path": "movie-platform/99604497-7461-49bf-9855-af534a1f0f2a.png",
+	"originalName": "Denise Gough.png",
+	"updatedAt": {
+		"$date": "2026-08-10T09:10:47.04Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/474139d6-3672-4dca-b6a7-98bd3a4dcbce.jpg",
+	"width": 399,
+	"height": 501,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 23659,
+	"path": "movie-platform/474139d6-3672-4dca-b6a7-98bd3a4dcbce.jpg",
+	"originalName": "Đỗ Nhật Hoàng.jpg",
+	"updatedAt": {
+		"$date": "2026-08-10T09:10:57.785Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/ba20d0be-f52c-4a6a-8d2c-78ad858d5722.png",
+	"width": 250,
+	"height": 250,
+	"format": "png",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/png",
+	"size": 73205,
+	"path": "movie-platform/ba20d0be-f52c-4a6a-8d2c-78ad858d5722.png",
+	"originalName": "Go Yoon-jung (고윤정).png",
+	"updatedAt": {
+		"$date": "2026-08-10T09:13:08.014Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/3acb1a93-9482-4568-97c3-b8f80d972cc4.png",
+	"width": 250,
+	"height": 250,
+	"format": "png",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/png",
+	"size": 124081,
+	"path": "movie-platform/3acb1a93-9482-4568-97c3-b8f80d972cc4.png",
+	"originalName": "Hunter Schafer.png",
+	"updatedAt": {
+		"$date": "2026-08-10T09:13:21.507Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/4bf70bda-ca7c-42ac-bc1f-423c192e454a.png",
+	"width": 250,
+	"height": 250,
+	"format": "png",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/png",
+	"size": 121566,
+	"path": "movie-platform/4bf70bda-ca7c-42ac-bc1f-423c192e454a.png",
+	"originalName": "IU.png",
+	"updatedAt": {
+		"$date": "2026-08-10T09:13:33.887Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/8173e5bf-a820-4352-a1d4-e9d052bd60c6.jpg",
+	"width": 452,
+	"height": 678,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 20775,
+	"path": "movie-platform/8173e5bf-a820-4352-a1d4-e9d052bd60c6.jpg",
+	"originalName": "Jaafar Jackson.jpg",
+	"updatedAt": {
+		"$date": "2026-08-10T09:13:45.983Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/75bb4596-0848-4314-bba0-ad604b60def3.jpg",
+	"width": 155,
+	"height": 200,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 5675,
+	"path": "movie-platform/75bb4596-0848-4314-bba0-ad604b60def3.jpg",
+	"originalName": "Joo Sang-wook (주상욱).jpg",
+	"updatedAt": {
+		"$date": "2026-08-10T09:14:06.723Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/5d7de90e-4908-4135-bebf-5c4d4e2ebac7.jpg",
+	"width": 399,
+	"height": 501,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 18938,
+	"path": "movie-platform/5d7de90e-4908-4135-bebf-5c4d4e2ebac7.jpg",
+	"originalName": "Kim Sun-ho (김선호).jpg",
+	"updatedAt": {
+		"$date": "2026-08-10T09:14:26.668Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/a9953531-dd86-49f4-90e6-e3279b0666ca.jpg",
+	"width": 452,
+	"height": 678,
+	"format": "jpg",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/jpeg",
+	"size": 62665,
+	"path": "movie-platform/a9953531-dd86-49f4-90e6-e3279b0666ca.jpg",
+	"originalName": "Lee Seung-gi.jpg",
+	"updatedAt": {
+		"$date": "2026-08-10T09:14:44.591Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/e7c88476-4973-4518-8c65-dfed4c8344fe.png",
+	"width": 250,
+	"height": 250,
+	"format": "png",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "image/png",
+	"size": 128618,
+	"path": "movie-platform/e7c88476-4973-4518-8c65-dfed4c8344fe.png",
+	"originalName": "tải xuống.png",
+	"updatedAt": {
+		"$date": "2026-08-10T09:15:06.142Z"
+	},
+	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/890df4ec-e06d-4c0f-a9df-3cc00b0311dd.mp4",
+	"hlsStatus": "READY",
+	"ownerId": "3cb3d150-9d1a-42b7-9dbe-6d740548ff36",
+	"contentType": "video/mp4",
+	"size": 990895793,
+	"path": "movie-platform/890df4ec-e06d-4c0f-a9df-3cc00b0311dd.mp4",
+	"originalName": "Sư Huynh A Sư Huynh Tập 150 [Việt Sub] - HH3D.mp4",
+	"updatedAt": {
+		"$date": "2026-08-10T09:24:23.272Z"
+	},
+	"_class": "VIDEO"
+},
+{
+	"_id": "movie-platform/aed57d92-fcb4-489a-b99a-27d39d549136.webp",
+	"format": "webp",
+	"ownerId": "4c68ee88-57cb-43b1-ac18-171eac1b0e54",
+	"contentType": "image/webp",
+	"size": 36348,
+	"path": "movie-platform/aed57d92-fcb4-489a-b99a-27d39d549136.webp",
+	"originalName": "cau hoi jvm.webp",
+	"updatedAt": {
+		"$date": "2026-08-10T12:41:16.686Z"
+	},
+	"_class": "IMAGE"
+}]
+

@@ -38,7 +38,7 @@ if (!isMaster.ismaster) {
   quit(1);
 }
 
-// Create or rotate the Debezium user with least-privilege CDC roles.
+// Create Debezium User with necessary roles for CDC (idempotent).
 // Credentials are injected at runtime; never store them in this tracked script.
 var debeziumUsername = process.env.DEBEZIUM_DB_USERNAME;
 var debeziumPassword = process.env.DEBEZIUM_DB_PASSWORD;
@@ -72,3 +72,16 @@ if (existing) {
 }
 
 print("MongoDB CDC initialization completed successfully.");
+
+// Seed service data after the replica set and CDC user are ready. Each file is
+// idempotent and owns one bounded domain so it can also be run independently.
+[
+  '/docker-entrypoint-initdb.d/02-account-profiles.js',
+  '/docker-entrypoint-initdb.d/03-post-data.js',
+  '/docker-entrypoint-initdb.d/04-friend-data.js',
+  '/docker-entrypoint-initdb.d/05-chat-data.js',
+  '/docker-entrypoint-initdb.d/06-file-data.js'
+].forEach(function (seedFile) {
+  print('Loading seed file: ' + seedFile);
+  load(seedFile);
+});

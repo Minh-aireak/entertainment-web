@@ -1,0 +1,12 @@
+FROM mongo:7.0
+
+# The scripts use deterministic IDs plus replaceOne/updateOne/upsert
+# semantics, so they can be rerun without creating duplicate records.
+COPY 01-init-replica-set.js \
+     02-account-profiles.js \
+     03-post-data.js \
+     04-friend-data.js \
+     05-chat-data.js \
+     06-file-data.js \
+     06-file-metadata.json \
+     /docker-entrypoint-initdb.d/
