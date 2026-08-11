@@ -3,6 +3,7 @@ package com.MyProject.film.film_service.service;
 import com.MyProject.film.film_service.dto.event.NotificationEvent;
 import com.MyProject.film.film_service.dto.request.EpisodeRequest;
 import com.MyProject.film.film_service.dto.response.EpisodeResponse;
+import com.MyProject.film.film_service.dto.response.FileResponse;
 import com.MyProject.film.film_service.entity.Episode;
 import com.MyProject.film.film_service.entity.Film;
 import com.MyProject.film.film_service.entity.FilmFollow;
@@ -14,6 +15,8 @@ import com.MyProject.film.film_service.repository.mysql.EpisodeRepository;
 import com.MyProject.film.film_service.repository.mysql.FilmFollowRepository;
 import com.MyProject.film.film_service.repository.mysql.FilmRepository;
 import com.MyProject.film.film_service.repository.mysql.OutboxRepository;
+import com.MyProject.film.film_service.repository.httpclient.FileClient;
+import com.MyProject.common.dto.response.ApiResponse;
 import com.MyProject.common.security.SecurityUtils;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,6 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -40,6 +44,7 @@ public class EpisodeService {
     EpisodeMapper episodeMapper;
     ObjectMapper objectMapper;
     FilmService filmService;
+    FileClient fileClient;
 
     @Transactional(readOnly = true)
     public List<EpisodeResponse> getEpisodesByFilm(String filmId) {
@@ -56,16 +61,17 @@ public class EpisodeService {
     public EpisodeResponse createEpisode(EpisodeRequest request) {
         Film film = filmRepository.findById(request.getFilmId())
                 .orElseThrow(() -> new AppException(ErrorCode.FILM_NOT_FOUND));
+
+        if (request.getVideoFileId() != null && !request.getVideoFileId().isBlank()) {
+            request.setDurationMinutes(getVideoDurationMinutes(request.getVideoFileId()));
+        }
         
         Episode episode = episodeMapper.toEpisode(request);
         episode.setFilm(film);
         
         var savedEpisode = episodeRepository.save(episode);
-
-        // Update film's episode count
-        film.setEpisodeCount(film.getEpisodeCount() + 1);
-        filmRepository.save(film);
-        filmService.syncFilmToElasticsearch(film);
+        episodeRepository.flush();
+        syncFilmEpisodeCount(film);
 
         // Notify followers
         notifyFollowers(film, savedEpisode);
@@ -110,25 +116,56 @@ public class EpisodeService {
                 .orElseThrow(() -> new AppException(ErrorCode.EPISODE_NOT_FOUND));
         
         Film oldFilm = episode.getFilm();
-        
-        episodeMapper.updateEpisode(episode, request);
-        
+        Film targetFilm = oldFilm;
+
         if (request.getFilmId() != null && !request.getFilmId().equals(oldFilm.getId())) {
-            Film newFilm = filmRepository.findById(request.getFilmId())
+            targetFilm = filmRepository.findById(request.getFilmId())
                     .orElseThrow(() -> new AppException(ErrorCode.FILM_NOT_FOUND));
-            // Decrement old film's count
-            oldFilm.setEpisodeCount(Math.max(0, oldFilm.getEpisodeCount() - 1));
-            filmRepository.save(oldFilm);
-            filmService.syncFilmToElasticsearch(oldFilm);
-            // Increment new film's count
-            newFilm.setEpisodeCount(newFilm.getEpisodeCount() + 1);
-            filmRepository.save(newFilm);
-            filmService.syncFilmToElasticsearch(newFilm);
-            
-            episode.setFilm(newFilm);
+        }
+
+        boolean replacesVideo = request.getVideoFileId() != null
+                && !request.getVideoFileId().isBlank()
+                && !Objects.equals(request.getVideoFileId(), episode.getVideoFileId());
+        if (replacesVideo) {
+            request.setDurationMinutes(getVideoDurationMinutes(request.getVideoFileId()));
+        } else {
+            // Duration belongs to the stored video and cannot be edited independently.
+            request.setVideoFileId(episode.getVideoFileId());
+            request.setDurationMinutes(episode.getDurationMinutes());
         }
         
-        return episodeMapper.toEpisodeResponse(episodeRepository.save(episode));
+        episodeMapper.updateEpisode(episode, request);
+        episode.setFilm(targetFilm);
+
+        Episode savedEpisode = episodeRepository.save(episode);
+        episodeRepository.flush();
+        syncFilmEpisodeCount(oldFilm);
+        if (!Objects.equals(targetFilm.getId(), oldFilm.getId())) {
+            syncFilmEpisodeCount(targetFilm);
+        }
+
+        return episodeMapper.toEpisodeResponse(savedEpisode);
+    }
+
+    private void syncFilmEpisodeCount(Film film) {
+        int latestEpisodeNumber = episodeRepository.findMaxEpisodeNumberByFilmId(film.getId()).orElse(0);
+        film.setEpisodeCount(latestEpisodeNumber);
+        filmRepository.save(film);
+        filmService.syncFilmToElasticsearch(film);
+        filmService.invalidateFilmCaches(film.getId());
+    }
+
+    private int getVideoDurationMinutes(String videoFileId) {
+        ApiResponse<FileResponse> response = fileClient.getFileInfo(videoFileId);
+        Long durationSeconds = response != null && response.getResult() != null
+                ? response.getResult().getDuration()
+                : null;
+
+        if (durationSeconds == null || durationSeconds < 0) {
+            throw new AppException(ErrorCode.VIDEO_DURATION_UNAVAILABLE);
+        }
+
+        return Math.toIntExact(durationSeconds / 60);
     }
 
     @Transactional
@@ -138,10 +175,7 @@ public class EpisodeService {
         Film film = episode.getFilm();
         
         episodeRepository.delete(episode);
-        
-        // Update film's episode count
-        film.setEpisodeCount(Math.max(0, film.getEpisodeCount() - 1));
-        filmRepository.save(film);
-        filmService.syncFilmToElasticsearch(film);
+        episodeRepository.flush();
+        syncFilmEpisodeCount(film);
     }
 }

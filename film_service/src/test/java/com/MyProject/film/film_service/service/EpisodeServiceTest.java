@@ -1,8 +1,10 @@
 package com.MyProject.film.film_service.service;
 
 import com.MyProject.common.security.SecurityUtils;
+import com.MyProject.common.dto.response.ApiResponse;
 import com.MyProject.film.film_service.dto.request.EpisodeRequest;
 import com.MyProject.film.film_service.dto.response.EpisodeResponse;
+import com.MyProject.film.film_service.dto.response.FileResponse;
 import com.MyProject.film.film_service.entity.Episode;
 import com.MyProject.film.film_service.entity.Film;
 import com.MyProject.film.film_service.entity.FilmFollow;
@@ -13,6 +15,7 @@ import com.MyProject.film.film_service.repository.mysql.EpisodeRepository;
 import com.MyProject.film.film_service.repository.mysql.FilmFollowRepository;
 import com.MyProject.film.film_service.repository.mysql.FilmRepository;
 import com.MyProject.film.film_service.repository.mysql.OutboxRepository;
+import com.MyProject.film.film_service.repository.httpclient.FileClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +42,7 @@ class EpisodeServiceTest {
     @Mock OutboxRepository outboxRepository;
     @Mock EpisodeMapper episodeMapper;
     @Mock FilmService filmService;
+    @Mock FileClient fileClient;
 
     EpisodeService episodeService;
     MockedStatic<SecurityUtils> securityUtils;
@@ -46,7 +50,7 @@ class EpisodeServiceTest {
     @BeforeEach
     void setUp() {
         episodeService = new EpisodeService(episodeRepository, filmRepository, filmFollowRepository,
-                outboxRepository, episodeMapper, new ObjectMapper(), filmService);
+                outboxRepository, episodeMapper, new ObjectMapper(), filmService, fileClient);
 
         securityUtils = mockStatic(SecurityUtils.class);
         securityUtils.when(SecurityUtils::getCurrentUserId).thenReturn("user-1");
@@ -119,15 +123,17 @@ class EpisodeServiceTest {
     }
 
     @Test
-    void createEpisode_happyPath_incrementsEpisodeCountAndNotifiesFollowers() {
+    void createEpisode_happyPath_syncsLatestEpisodeNumberAndNotifiesFollowers() {
         Film film = new Film();
         film.setId("film-1");
         film.setTitle("Some Film");
         film.setEpisodeCount(5);
         when(filmRepository.findById("film-1")).thenReturn(Optional.of(film));
+        when(episodeRepository.findMaxEpisodeNumberByFilmId("film-1")).thenReturn(Optional.of(6));
         when(filmFollowRepository.findAllByFilmId("film-1")).thenReturn(
                 List.of(FilmFollow.builder().userId("follower-1").build(), FilmFollow.builder().userId("follower-2").build()));
-        EpisodeRequest request = EpisodeRequest.builder().filmId("film-1").title("Ep 6").build();
+        EpisodeRequest request = EpisodeRequest.builder()
+                .filmId("film-1").episodeNumber(6).title("Ep 6").build();
 
         episodeService.createEpisode(request);
 
@@ -144,12 +150,34 @@ class EpisodeServiceTest {
         film.setId("film-1");
         film.setEpisodeCount(0);
         when(filmRepository.findById("film-1")).thenReturn(Optional.of(film));
+        when(episodeRepository.findMaxEpisodeNumberByFilmId("film-1")).thenReturn(Optional.of(1));
         when(filmFollowRepository.findAllByFilmId("film-1")).thenReturn(List.of());
-        EpisodeRequest request = EpisodeRequest.builder().filmId("film-1").title("Ep 1").build();
+        EpisodeRequest request = EpisodeRequest.builder()
+                .filmId("film-1").episodeNumber(1).title("Ep 1").build();
 
         episodeService.createEpisode(request);
 
         verifyNoInteractions(outboxRepository);
+    }
+
+    @Test
+    void createEpisode_usesUploadedVideoDurationInsteadOfRequestValue() {
+        Film film = new Film();
+        film.setId("film-1");
+        film.setEpisodeCount(0);
+        when(filmRepository.findById("film-1")).thenReturn(Optional.of(film));
+        when(episodeRepository.findMaxEpisodeNumberByFilmId("film-1")).thenReturn(Optional.of(1));
+        when(filmFollowRepository.findAllByFilmId("film-1")).thenReturn(List.of());
+        when(fileClient.getFileInfo("video-1")).thenReturn(ApiResponse.<FileResponse>builder()
+                .result(FileResponse.builder().duration(1245L).build())
+                .build());
+        EpisodeRequest request = EpisodeRequest.builder()
+                .filmId("film-1").videoFileId("video-1").durationMinutes(999).build();
+
+        episodeService.createEpisode(request);
+
+        assertThat(request.getDurationMinutes()).isEqualTo(20);
+        verify(fileClient).getFileInfo("video-1");
     }
 
     // ---------- updateEpisode ----------
@@ -165,20 +193,66 @@ class EpisodeServiceTest {
     }
 
     @Test
-    void updateEpisode_sameFilm_doesNotChangeEpisodeCounts() {
+    void updateEpisode_renumberedFrom16To12_syncsFilmEpisodeCount() {
         Film film = new Film();
         film.setId("film-1");
-        film.setEpisodeCount(3);
+        film.setEpisodeCount(16);
         Episode episode = new Episode();
         episode.setId("ep-1");
+        episode.setEpisodeNumber(16);
         episode.setFilm(film);
         when(episodeRepository.findById("ep-1")).thenReturn(Optional.of(episode));
-        EpisodeRequest request = EpisodeRequest.builder().filmId("film-1").title("Updated").build();
+        when(episodeRepository.findMaxEpisodeNumberByFilmId("film-1")).thenReturn(Optional.of(12));
+        EpisodeRequest request = EpisodeRequest.builder()
+                .filmId("film-1").episodeNumber(12).title("Updated").build();
 
         episodeService.updateEpisode("ep-1", request);
 
-        verify(filmRepository, never()).save(any());
-        verify(filmService, never()).syncFilmToElasticsearch(any());
+        assertThat(film.getEpisodeCount()).isEqualTo(12);
+        verify(filmRepository).save(film);
+        verify(filmService).syncFilmToElasticsearch(film);
+        verify(filmService).invalidateFilmCaches("film-1");
+    }
+
+    @Test
+    void updateEpisode_replacementVideoUsesNewFileDuration() {
+        Film film = new Film();
+        film.setId("film-1");
+        Episode episode = new Episode();
+        episode.setId("ep-1");
+        episode.setFilm(film);
+        episode.setVideoFileId("old-video");
+        episode.setDurationMinutes(10);
+        when(episodeRepository.findById("ep-1")).thenReturn(Optional.of(episode));
+        when(fileClient.getFileInfo("new-video")).thenReturn(ApiResponse.<FileResponse>builder()
+                .result(FileResponse.builder().duration(2745L).build())
+                .build());
+        EpisodeRequest request = EpisodeRequest.builder()
+                .filmId("film-1").videoFileId("new-video").durationMinutes(999).build();
+
+        episodeService.updateEpisode("ep-1", request);
+
+        assertThat(request.getDurationMinutes()).isEqualTo(45);
+        verify(fileClient).getFileInfo("new-video");
+    }
+
+    @Test
+    void updateEpisode_sameVideoKeepsStoredDuration() {
+        Film film = new Film();
+        film.setId("film-1");
+        Episode episode = new Episode();
+        episode.setId("ep-1");
+        episode.setFilm(film);
+        episode.setVideoFileId("video-1");
+        episode.setDurationMinutes(20);
+        when(episodeRepository.findById("ep-1")).thenReturn(Optional.of(episode));
+        EpisodeRequest request = EpisodeRequest.builder()
+                .filmId("film-1").videoFileId("video-1").durationMinutes(999).build();
+
+        episodeService.updateEpisode("ep-1", request);
+
+        assertThat(request.getDurationMinutes()).isEqualTo(20);
+        verifyNoInteractions(fileClient);
     }
 
     @Test
@@ -194,6 +268,8 @@ class EpisodeServiceTest {
         episode.setFilm(oldFilm);
         when(episodeRepository.findById("ep-1")).thenReturn(Optional.of(episode));
         when(filmRepository.findById("new-film")).thenReturn(Optional.of(newFilm));
+        when(episodeRepository.findMaxEpisodeNumberByFilmId("old-film")).thenReturn(Optional.of(1));
+        when(episodeRepository.findMaxEpisodeNumberByFilmId("new-film")).thenReturn(Optional.of(5));
         EpisodeRequest request = EpisodeRequest.builder().filmId("new-film").title("Moved").build();
 
         episodeService.updateEpisode("ep-1", request);
@@ -243,6 +319,7 @@ class EpisodeServiceTest {
         episode.setId("ep-1");
         episode.setFilm(film);
         when(episodeRepository.findById("ep-1")).thenReturn(Optional.of(episode));
+        when(episodeRepository.findMaxEpisodeNumberByFilmId("film-1")).thenReturn(Optional.of(2));
 
         episodeService.deleteEpisode("ep-1");
 

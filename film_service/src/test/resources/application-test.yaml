@@ -9,7 +9,20 @@ spring:
       ddl-auto: create-drop
     database-platform: org.hibernate.dialect.H2Dialect
     show-sql: false
+  sql:
+    init:
+      mode: never
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: test-only
+  elasticsearch:
+    uris: http://localhost:9200
+    username: test-only
+    password: test-only
   kafka:
+    bootstrap-servers: localhost:9092
     listener:
       auto-startup: false
   task:

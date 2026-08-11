@@ -1,6 +1,5 @@
 package com.MyProject.film.film_service.document;
 
-import com.MyProject.film.film_service.enums.FilmStatus;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import org.springframework.data.annotation.Id;
@@ -45,7 +44,7 @@ public class FilmDoc {
     int season;
 
     @Field(type = FieldType.Keyword)
-    FilmStatus status;
+    String status;
 
     @Field(type = FieldType.Date)
     Instant lastUpdate;

@@ -2,6 +2,8 @@ package com.MyProject.film.film_service.service;
 
 import com.MyProject.film.film_service.dto.request.FilmRequest;
 import com.MyProject.film.film_service.dto.response.CommentResponse;
+import com.MyProject.film.film_service.dto.response.ActorResponse;
+import com.MyProject.film.film_service.dto.response.DirectorResponse;
 import com.MyProject.film.film_service.dto.response.FilmAggregateResponse;
 import com.MyProject.film.film_service.dto.response.FilmDetailResponse;
 import com.MyProject.film.film_service.dto.response.FilmResponse;
@@ -81,6 +83,50 @@ public class FilmService {
             response.setThumbnailUrl(fileClient.getFileInfo(response.getThumbnailFileId()).getResult().getUrl());
         } catch (Exception e) {
             log.warn("Failed to resolve thumbnail file {} for film {}", response.getThumbnailFileId(), response.getId(), e);
+        }
+        return response;
+    }
+
+    private void resolveAvatar(ActorResponse actor) {
+        if (actor == null || actor.getAvatarFileId() == null || actor.getAvatarFileId().isBlank()) {
+            return;
+        }
+        try {
+            actor.setAvatarUrl(fileClient.getFileInfo(actor.getAvatarFileId()).getResult().getUrl());
+        } catch (Exception e) {
+            log.warn("Failed to resolve avatar file {} for actor {}", actor.getAvatarFileId(), actor.getId(), e);
+        }
+    }
+
+    private void resolveAvatar(DirectorResponse director) {
+        if (director == null || director.getAvatarFileId() == null || director.getAvatarFileId().isBlank()) {
+            return;
+        }
+        try {
+            director.setAvatarUrl(fileClient.getFileInfo(director.getAvatarFileId()).getResult().getUrl());
+        } catch (Exception e) {
+            log.warn("Failed to resolve avatar file {} for director {}", director.getAvatarFileId(), director.getId(), e);
+        }
+    }
+
+    // FilmResponse is mapped directly from the Film aggregate, so it does not pass through
+    // ActorService/DirectorService. Resolve nested people here as well as the film thumbnail;
+    // otherwise detail responses contain avatarFileId but a null avatarUrl.
+    private FilmResponse resolveDetailMedia(FilmResponse response) {
+        resolveThumbnail(response);
+        if (response.getCasts() != null) {
+            response.getCasts().forEach(cast -> {
+                if (cast != null) {
+                    resolveAvatar(cast.getActor());
+                }
+            });
+        }
+        if (response.getDirectors() != null) {
+            response.getDirectors().forEach(filmDirector -> {
+                if (filmDirector != null) {
+                    resolveAvatar(filmDirector.getDirector());
+                }
+            });
         }
         return response;
     }
@@ -350,7 +396,7 @@ public class FilmService {
                 .followCount(film.getFollowCount())
                 .episodeCount(film.getEpisodeCount())
                 .season(film.getSeason())
-                .status(film.getStatus())
+                .status(film.getStatus() == null ? null : film.getStatus().name())
                 .lastUpdate(film.getLastUpdate())
                 .build();
 
@@ -421,7 +467,12 @@ public class FilmService {
         return request.getStars();
     }
 
-    private void invalidateFilmCaches(String filmId) {
+    /**
+     * Clears every cached representation that contains mutable film summary fields such as
+     * episodeCount. EpisodeService also calls this after an episode is created, renumbered,
+     * moved, or deleted so the administration list cannot keep an old count for ten minutes.
+     */
+    public void invalidateFilmCaches(String filmId) {
         try {
             redisService.delete("film:detail:" + filmId);
             redisService.deletePattern("film:comments:" + filmId + ":*");
@@ -520,7 +571,7 @@ public class FilmService {
                         .thumbnailUrl(doc.getThumbnailUrl())
                         .thumbnailFileId(doc.getThumbnailFileId())
                         .season(doc.getSeason())
-                        .status(doc.getStatus())
+                        .status(FilmStatus.fromIndexedValue(doc.getStatus()))
                         .ratingCount(doc.getRatingCount())
                         .followCount(doc.getFollowCount())
                         .episodeCount(doc.getEpisodeCount())
@@ -557,7 +608,7 @@ public class FilmService {
             }
         }
 
-        filmResponse = resolveThumbnail(filmResponse);
+        filmResponse = resolveDetailMedia(filmResponse);
 
         // 2. Lấy Comments (từ cache hoặc Service)
         PageResponse<CommentResponse> comments = null;

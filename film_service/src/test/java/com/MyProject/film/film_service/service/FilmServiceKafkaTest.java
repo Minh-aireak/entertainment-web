@@ -30,11 +30,12 @@ class FilmServiceKafkaTest {
     @Test
     void listenFilmSync_happyPath_savesToElasticAndMarksProcessedAndAcks() {
         when(redisService.getAsString("film:event:processed:sync:film-1")).thenReturn(null);
-        String payload = "{\"id\":\"film-1\",\"title\":\"Title\"}";
+        String payload = "{\"id\":\"film-1\",\"title\":\"Title\",\"status\":\"NOW_PLAYING\"}";
 
         filmServiceKafka.listenFilmSync(payload, ack);
 
-        verify(filmElasticRepository).save(argThat((FilmDoc doc) -> doc.getId().equals("film-1")));
+        verify(filmElasticRepository).save(argThat((FilmDoc doc) ->
+                doc.getId().equals("film-1") && doc.getStatus().equals("NOW_PLAYING")));
         verify(redisService).setWithExpiration(eq("film:event:processed:sync:film-1"), eq("1"), eq(7L), any());
         verify(ack).acknowledge();
     }

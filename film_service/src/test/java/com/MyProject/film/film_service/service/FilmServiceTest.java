@@ -1,10 +1,17 @@
 package com.MyProject.film.film_service.service;
 
 import com.MyProject.common.dto.response.PageResponse;
+import com.MyProject.common.dto.response.ApiResponse;
 import com.MyProject.common.security.SecurityUtils;
+import com.MyProject.film.film_service.document.FilmDoc;
 import com.MyProject.film.film_service.dto.request.FilmRequest;
 import com.MyProject.film.film_service.dto.request.RatingRequest;
 import com.MyProject.film.film_service.dto.response.FilmDetailResponse;
+import com.MyProject.film.film_service.dto.response.ActorResponse;
+import com.MyProject.film.film_service.dto.response.DirectorResponse;
+import com.MyProject.film.film_service.dto.response.FileResponse;
+import com.MyProject.film.film_service.dto.response.FilmCastResponse;
+import com.MyProject.film.film_service.dto.response.FilmDirectorResponse;
 import com.MyProject.film.film_service.dto.response.FilmResponse;
 import com.MyProject.film.film_service.dto.response.FilmSummaryResponse;
 import com.MyProject.film.film_service.entity.Actor;
@@ -15,6 +22,7 @@ import com.MyProject.film.film_service.enums.Country;
 import com.MyProject.film.film_service.enums.ErrorCode;
 import com.MyProject.film.film_service.enums.FilmCategory;
 import com.MyProject.film.film_service.enums.FilmSortField;
+import com.MyProject.film.film_service.enums.FilmStatus;
 import com.MyProject.film.film_service.enums.Genre;
 import com.MyProject.film.film_service.exception.AppException;
 import com.MyProject.film.film_service.mapper.FilmMapper;
@@ -175,6 +183,19 @@ class FilmServiceTest {
         verify(filmRepository, never()).findSeriesOrStandalone(anyBoolean(), any(), any(), any(), any());
     }
 
+    @Test
+    void searchFilms_legacyElasticsearchStatuses_areMappedToCurrentStatuses() {
+        when(filmElasticRepository.findByTitleContaining("film")).thenReturn(List.of(
+                FilmDoc.builder().id("film-1").title("Playing film").status("NOW_PLAYING").build(),
+                FilmDoc.builder().id("film-2").title("Ended film").status("ENDED").build()
+        ));
+
+        List<FilmSummaryResponse> result = filmService.searchFilms("film");
+
+        assertThat(result).extracting(FilmSummaryResponse::getStatus)
+                .containsExactly(FilmStatus.ONGOING, FilmStatus.COMPLETED);
+    }
+
     // ---------- createFilm ----------
 
     private FilmRequest.FilmRequestBuilder filmRequestBuilder() {
@@ -229,6 +250,17 @@ class FilmServiceTest {
         verify(outboxRepository).save(argThat(o -> o.getTopic().equals("film.sync")));
     }
 
+    @Test
+    void invalidateFilmCaches_removesAllFilmSummaryCaches() {
+        filmService.invalidateFilmCaches("film-1");
+
+        verify(redisService).delete("film:detail:film-1");
+        verify(redisService).deletePattern("film:comments:film-1:*");
+        verify(redisService).deletePattern("film:latest:page:*");
+        verify(redisService).deletePattern("film:hot:page:*");
+        verify(redisService).deletePattern("film:ongoing:page:*");
+    }
+
     // ---------- getFilm ----------
 
     @Test
@@ -259,5 +291,42 @@ class FilmServiceTest {
         assertThat(response.getUserRating()).isEqualTo(3);
         assertThat(response.getFollowed()).isTrue();
         verify(filmRepository, never()).findById(any());
+    }
+
+    @Test
+    void getFilm_resolvesActorAndDirectorAvatarsFromFileIds() {
+        ActorResponse actor = ActorResponse.builder()
+                .id("actor-1")
+                .avatarFileId("movie-platform/actor.png")
+                .build();
+        DirectorResponse director = DirectorResponse.builder()
+                .id("director-1")
+                .avatarFileId("movie-platform/director.png")
+                .build();
+        FilmResponse cached = FilmResponse.builder()
+                .id("film-1")
+                .casts(List.of(FilmCastResponse.builder().id("cast-1").actor(actor).build()))
+                .directors(List.of(FilmDirectorResponse.builder().id("film-director-1").director(director).build()))
+                .build();
+        when(redisService.get(eq("film:detail:film-1"), any())).thenReturn(cached);
+        when(redisService.get(eq("film:comments:film-1:page:1"), any())).thenReturn(null);
+        when(commentExternalService.getComments("film-1", 1, 10))
+                .thenReturn(CompletableFuture.completedFuture(PageResponse.<com.MyProject.film.film_service.dto.response.CommentResponse>builder().data(List.of()).build()));
+        when(fileClient.getFileInfo("movie-platform/actor.png")).thenReturn(
+                ApiResponse.<FileResponse>builder()
+                        .result(FileResponse.builder().url("https://cdn/actor.png").build())
+                        .build());
+        when(fileClient.getFileInfo("movie-platform/director.png")).thenReturn(
+                ApiResponse.<FileResponse>builder()
+                        .result(FileResponse.builder().url("https://cdn/director.png").build())
+                        .build());
+        when(ratingRepository.findByFilmIdAndUserId("film-1", USER_ID)).thenReturn(Optional.empty());
+
+        FilmDetailResponse response = filmService.getFilm("film-1");
+
+        assertThat(response.getFilm().getCasts().get(0).getActor().getAvatarUrl())
+                .isEqualTo("https://cdn/actor.png");
+        assertThat(response.getFilm().getDirectors().get(0).getDirector().getAvatarUrl())
+                .isEqualTo("https://cdn/director.png");
     }
 }
