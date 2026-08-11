@@ -82,12 +82,17 @@ export const fileService = {
   // thay cho luồng chunked-upload cũ vốn bắt mỗi chunk đi qua 1 request đồng bộ tới file-service.
   uploadFileDirect: async (
     file: File,
-    onProgress?: (percent: number) => void
+    onProgress?: (percent: number) => void,
+    options?: { enableHls?: boolean; durationSeconds?: number }
   ): Promise<{ id: string; url: string; duration?: number }> => {
     const initRes = await axiosInstance.post<ApiResponse<InitPresignedUploadResult>>('/files/media/upload/init', {
       fileName: file.name,
       contentType: file.type,
       fileSize: file.size,
+      // Opt-in: chỉ tập phim (EpisodeUpload.tsx) bật HLS - các video khác (vd clip chat) không cần
+      // và không nên tốn CPU transcode nền, xem file-service InitPresignedUploadRequest.enableHls.
+      enableHls: options?.enableHls ?? false,
+      durationSeconds: options?.durationSeconds,
     });
     const init = initRes.data.result;
 

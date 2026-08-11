@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Box, Tabs, Tab, Typography } from '@mui/material';
+import { useSearchParams } from 'react-router-dom';
 import UsersTab from './UsersTab';
 import RolesTab from './RolesTab';
 import ActorsTab from './ActorsTab';
@@ -17,13 +18,19 @@ const TABS = [
 ];
 
 const AdminPage: React.FC = () => {
-  const [tabIndex, setTabIndex] = useState(0);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTabIndex = searchParams.get('tab') === 'episodes' ? 3 : 0;
+  const [tabIndex, setTabIndex] = useState(initialTabIndex);
   // Giữ lại các tab đã từng mở để tránh unmount/remount (và refetch API) khi quay lại tab cũ
-  const [visitedTabs, setVisitedTabs] = useState<Set<number>>(() => new Set([0]));
+  const [visitedTabs, setVisitedTabs] = useState<Set<number>>(() => new Set([initialTabIndex]));
 
   const handleChangeTab = (_e: React.SyntheticEvent, value: number) => {
     setTabIndex(value);
     setVisitedTabs((prev) => (prev.has(value) ? prev : new Set(prev).add(value)));
+    const nextParams = new URLSearchParams(searchParams);
+    if (value === 3) nextParams.set('tab', 'episodes');
+    else nextParams.delete('tab');
+    setSearchParams(nextParams, { replace: true });
   };
 
   return (
@@ -49,7 +56,7 @@ const AdminPage: React.FC = () => {
         const TabComponent = tab.component;
         return (
           <Box key={tab.label} sx={{ display: index === tabIndex ? 'block' : 'none' }}>
-            <TabComponent />
+            {index === 2 ? <FilmsTab active={index === tabIndex} /> : <TabComponent />}
           </Box>
         );
       })}

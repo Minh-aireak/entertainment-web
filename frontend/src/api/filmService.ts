@@ -186,7 +186,12 @@ export const filmService = {
   },
 
   getEpisodesByFilm: async (filmId: string): Promise<ApiResponse<EpisodeResponse[]>> => {
-    const response = await axiosInstance.get(`${EPISODE_BASE_URL}/film/${filmId}`);
+    const response = await axiosInstance.get(`${EPISODE_BASE_URL}/film/${filmId}`, {
+      // Episode numbers can be edited while another tab is already open. Avoid reusing a
+      // browser/proxy response so episode pickers always receive the latest database state.
+      params: { _ts: Date.now() },
+      headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+    });
     return response.data;
   },
 

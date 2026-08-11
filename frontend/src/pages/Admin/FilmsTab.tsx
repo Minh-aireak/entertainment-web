@@ -64,7 +64,11 @@ const EMPTY_FORM = {
   status: 'ONGOING' as FilmStatus,
 };
 
-const FilmsTab: React.FC = () => {
+interface FilmsTabProps {
+  active?: boolean;
+}
+
+const FilmsTab: React.FC<FilmsTabProps> = ({ active = true }) => {
   const [films, setFilms] = useState<FilmSummaryResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -122,13 +126,15 @@ const FilmsTab: React.FC = () => {
   }, [searchTerm]);
 
   useEffect(() => {
+    if (!active) return;
+
     if (isSearchMode) {
       searchFilmsByTitle(debouncedSearchTerm);
     } else {
       loadFilms();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, rowsPerPage, debouncedSearchTerm]);
+  }, [page, rowsPerPage, debouncedSearchTerm, active]);
 
   const loadDirectorsAndActors = async () => {
     try {

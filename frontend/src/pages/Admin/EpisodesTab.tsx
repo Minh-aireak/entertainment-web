@@ -1,25 +1,21 @@
 import React, { memo, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  Autocomplete,
   Box,
+  Button,
+  CircularProgress,
+  IconButton,
+  Paper,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  IconButton,
-  Paper,
-  CircularProgress,
-  Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   TextField,
-  Autocomplete,
 } from '@mui/material';
-import { Add, Edit, Delete } from '@mui/icons-material';
+import { Add, Delete, Edit } from '@mui/icons-material';
 import { toast } from 'react-hot-toast';
 import { filmService } from '../../api/filmService';
 import type { EpisodeResponse, FilmSummaryResponse } from '../../models';
@@ -28,16 +24,10 @@ import { useConfirmDialog } from '../../contexts/ConfirmDialogContext';
 const EpisodesTab: React.FC = () => {
   const navigate = useNavigate();
   const confirm = useConfirmDialog();
-
   const [films, setFilms] = useState<FilmSummaryResponse[]>([]);
   const [selectedFilm, setSelectedFilm] = useState<FilmSummaryResponse | null>(null);
   const [episodes, setEpisodes] = useState<EpisodeResponse[]>([]);
   const [loading, setLoading] = useState(false);
-
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingEpisode, setEditingEpisode] = useState<EpisodeResponse | null>(null);
-  const [form, setForm] = useState({ seasonNumber: 1, episodeNumber: 1, title: '', durationMinutes: 0 });
-  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     filmService.getPageFilms(1, 100).then((response) => {
@@ -49,9 +39,14 @@ const EpisodesTab: React.FC = () => {
     setLoading(true);
     try {
       const response = await filmService.getEpisodesByFilm(filmId);
-      if (response.code === 1000 && response.result) setEpisodes(response.result);
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Không thể tải danh sách tập phim');
+      if (response.code === 1000 && response.result) {
+        setEpisodes(response.result);
+      } else {
+        toast.error(response.message || 'Không thể tải danh sách tập phim');
+      }
+    } catch (error: unknown) {
+      console.error('Failed to load episodes:', error);
+      toast.error('Không thể tải danh sách tập phim');
     } finally {
       setLoading(false);
     }
@@ -60,41 +55,12 @@ const EpisodesTab: React.FC = () => {
   const handleSelectFilm = (film: FilmSummaryResponse | null) => {
     setSelectedFilm(film);
     setEpisodes([]);
-    if (film) loadEpisodes(film.id);
+    if (film) void loadEpisodes(film.id);
   };
 
-  const openEditDialog = (episode: EpisodeResponse) => {
-    setEditingEpisode(episode);
-    setForm({
-      seasonNumber: episode.seasonNumber,
-      episodeNumber: episode.episodeNumber,
-      title: episode.title,
-      durationMinutes: episode.durationMinutes,
-    });
-    setDialogOpen(true);
-  };
-
-  const handleSave = async () => {
-    if (!editingEpisode || !selectedFilm) return;
-    setSaving(true);
-    try {
-      const response = await filmService.updateEpisode(editingEpisode.id, {
-        ...form,
-        videoFileId: editingEpisode.videoFileId,
-        filmId: selectedFilm.id,
-      });
-      if (response.code === 1000) {
-        toast.success('Cập nhật tập phim thành công');
-        setDialogOpen(false);
-        loadEpisodes(selectedFilm.id);
-      } else {
-        toast.error(response.message || 'Cập nhật thất bại');
-      }
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Cập nhật thất bại');
-    } finally {
-      setSaving(false);
-    }
+  const openEditPage = (episode: EpisodeResponse) => {
+    if (!selectedFilm) return;
+    navigate(`/film/${selectedFilm.id}/upload-episode`, { state: { episode } });
   };
 
   const handleDelete = async (episode: EpisodeResponse) => {
@@ -108,31 +74,35 @@ const EpisodesTab: React.FC = () => {
       const response = await filmService.deleteEpisode(episode.id);
       if (response.code === 1000) {
         toast.success('Xóa tập phim thành công');
-        setEpisodes((prev) => prev.filter((e) => e.id !== episode.id));
+        setEpisodes((current) => current.filter((item) => item.id !== episode.id));
       } else {
-        toast.error(response.message || 'Xóa thất bại');
+        toast.error(response.message || 'Xóa tập phim thất bại');
       }
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Xóa thất bại');
+    } catch (error: unknown) {
+      console.error('Failed to delete episode:', error);
+      toast.error('Xóa tập phim thất bại');
     }
   };
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
+      <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2, flexWrap: 'wrap' }}>
         <Autocomplete
           options={films}
           getOptionLabel={(film) => film.title}
           value={selectedFilm}
-          onChange={(_e, value) => handleSelectFilm(value)}
-          sx={{ width: 360 }}
+          onChange={(_event, value) => handleSelectFilm(value)}
+          sx={{ width: 360, maxWidth: '100%' }}
           renderInput={(params) => <TextField {...params} label="Chọn phim để quản lý tập" size="small" />}
         />
         <Button
           variant="contained"
           startIcon={<Add />}
           disabled={!selectedFilm}
-          onClick={() => selectedFilm && navigate(`/film/${selectedFilm.id}/upload-episode`)}
+          onClick={() => selectedFilm && navigate(
+            `/film/${selectedFilm.id}/upload-episode`,
+            { state: { newUpload: true } },
+          )}
         >
           Thêm tập phim mới
         </Button>
@@ -141,7 +111,7 @@ const EpisodesTab: React.FC = () => {
       {selectedFilm && (
         <TableContainer component={Paper} sx={{ borderRadius: 3 }}>
           <Table sx={{ minWidth: 650 }}>
-            <TableHead sx={{ bgcolor: 'rgba(255, 255, 255, 0.05)' }}>
+            <TableHead sx={{ bgcolor: 'action.hover' }}>
               <TableRow>
                 <TableCell sx={{ fontWeight: 'bold' }}>Mùa</TableCell>
                 <TableCell sx={{ fontWeight: 'bold' }}>Tập</TableCell>
@@ -152,73 +122,33 @@ const EpisodesTab: React.FC = () => {
             </TableHead>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={5} align="center" sx={{ py: 6 }}><CircularProgress size={28} /></TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={5} align="center" sx={{ py: 6 }}><CircularProgress size={28} /></TableCell>
+                </TableRow>
               ) : episodes.length === 0 ? (
-                <TableRow><TableCell colSpan={5} align="center" sx={{ py: 6 }}>Phim này chưa có tập nào</TableCell></TableRow>
-              ) : (
-                episodes.map((episode) => (
-                  <TableRow key={episode.id} hover>
-                    <TableCell>{episode.seasonNumber}</TableCell>
-                    <TableCell>{episode.episodeNumber}</TableCell>
-                    <TableCell sx={{ fontWeight: 'medium' }}>{episode.title}</TableCell>
-                    <TableCell>{episode.durationMinutes}</TableCell>
-                    <TableCell align="right">
-                      <IconButton color="primary" title="Chỉnh sửa" onClick={() => openEditDialog(episode)}>
-                        <Edit fontSize="small" />
-                      </IconButton>
-                      <IconButton color="error" title="Xóa" onClick={() => handleDelete(episode)}>
-                        <Delete fontSize="small" />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
+                <TableRow>
+                  <TableCell colSpan={5} align="center" sx={{ py: 6 }}>Phim này chưa có tập nào</TableCell>
+                </TableRow>
+              ) : episodes.map((episode) => (
+                <TableRow key={episode.id} hover>
+                  <TableCell>{episode.seasonNumber}</TableCell>
+                  <TableCell>{episode.episodeNumber}</TableCell>
+                  <TableCell sx={{ fontWeight: 'medium' }}>{episode.title}</TableCell>
+                  <TableCell>{episode.durationMinutes}</TableCell>
+                  <TableCell align="right">
+                    <IconButton color="primary" title="Chỉnh sửa và thay video" onClick={() => openEditPage(episode)}>
+                      <Edit fontSize="small" />
+                    </IconButton>
+                    <IconButton color="error" title="Xóa" onClick={() => handleDelete(episode)}>
+                      <Delete fontSize="small" />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </TableContainer>
       )}
-
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Chỉnh sửa tập phim</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <TextField
-            label="Tiêu đề"
-            value={form.title}
-            onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
-            fullWidth
-            sx={{ mt: 1 }}
-          />
-          <Box sx={{ display: 'flex', gap: 2 }}>
-            <TextField
-              label="Mùa"
-              type="number"
-              value={form.seasonNumber}
-              onChange={(e) => setForm((p) => ({ ...p, seasonNumber: parseInt(e.target.value, 10) || 1 }))}
-              fullWidth
-            />
-            <TextField
-              label="Tập số"
-              type="number"
-              value={form.episodeNumber}
-              onChange={(e) => setForm((p) => ({ ...p, episodeNumber: parseInt(e.target.value, 10) || 1 }))}
-              fullWidth
-            />
-          </Box>
-          <TextField
-            label="Thời lượng (phút)"
-            type="number"
-            value={form.durationMinutes}
-            onChange={(e) => setForm((p) => ({ ...p, durationMinutes: parseInt(e.target.value, 10) || 0 }))}
-            fullWidth
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>Hủy</Button>
-          <Button variant="contained" onClick={handleSave} disabled={saving}>
-            {saving ? 'Đang lưu...' : 'Lưu'}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 };
