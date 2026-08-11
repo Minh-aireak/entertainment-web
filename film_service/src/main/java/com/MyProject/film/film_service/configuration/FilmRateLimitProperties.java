@@ -17,6 +17,7 @@ public class FilmRateLimitProperties {
     Rule readFilmDetail = new Rule();
     Rule createFilm = new Rule();
     Rule readFollowedFilms = new Rule();
+    Rule ratingLike = new Rule();
 
     @Data
     public static class Rule {

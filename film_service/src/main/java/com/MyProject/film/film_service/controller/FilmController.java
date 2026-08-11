@@ -8,11 +8,13 @@ import com.MyProject.film.film_service.dto.response.FilmAggregateResponse;
 import com.MyProject.film.film_service.dto.response.FilmDetailResponse;
 import com.MyProject.film.film_service.dto.response.FilmResponse;
 import com.MyProject.film.film_service.dto.response.FilmSummaryResponse;
+import com.MyProject.film.film_service.dto.response.RatingLikeResponse;
 import com.MyProject.film.film_service.enums.Country;
 import com.MyProject.film.film_service.enums.FilmCategory;
 import com.MyProject.film.film_service.enums.FilmSortField;
 import com.MyProject.film.film_service.enums.Genre;
 import com.MyProject.film.film_service.service.FilmService;
+import com.MyProject.film.film_service.service.RatingLikeService;
 import org.springframework.data.domain.Sort;
 import com.MyProject.film.film_service.service.FilmApiRateLimitService;
 import com.MyProject.common.security.SecurityUtils;
@@ -33,6 +35,7 @@ import java.util.List;
 public class FilmController {
     FilmService filmService;
     FilmApiRateLimitService filmApiRateLimitService;
+    RatingLikeService ratingLikeService;
 
     @PostMapping
     @RolesAllowed("ADMIN")
@@ -144,11 +147,22 @@ public class FilmController {
     @RateLimiter(name = "filmApi")
     public ApiResponse<Integer> rateFilm(
             @PathVariable String id,
-            @RequestBody RatingRequest request) {
+            @RequestBody @Valid RatingRequest request) {
         String userId = SecurityUtils.getCurrentUserId();
         filmApiRateLimitService.checkFilmRating(userId, id);
         return ApiResponse.<Integer>builder()
                 .result(filmService.rateFilm(id, request))
+                .build();
+    }
+
+    @PostMapping("/rating/{ratingId}/like")
+    @PreAuthorize("isAuthenticated()")
+    @RateLimiter(name = "filmApi")
+    public ApiResponse<RatingLikeResponse> toggleRatingLike(@PathVariable String ratingId) {
+        String userId = SecurityUtils.getCurrentUserId();
+        filmApiRateLimitService.checkRatingLike(userId, ratingId);
+        return ApiResponse.<RatingLikeResponse>builder()
+                .result(ratingLikeService.toggleLike(ratingId))
                 .build();
     }
 }

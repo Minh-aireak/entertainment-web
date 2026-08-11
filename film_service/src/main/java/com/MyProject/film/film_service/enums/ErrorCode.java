@@ -32,7 +32,9 @@ public enum ErrorCode {
     GENRES_REQUIRED(8917, "Genres are required", HttpStatus.BAD_REQUEST),
     DIRECTOR_REQUIRED(8918, "Director is required", HttpStatus.BAD_REQUEST),
     RATE_LIMIT_EXCEEDED(8919, "Rate limit exceeded!", HttpStatus.TOO_MANY_REQUESTS),
-    SERVICE_UNAVAILABLE(8920, "Service unavailable!", HttpStatus.SERVICE_UNAVAILABLE);
+    SERVICE_UNAVAILABLE(8920, "Service unavailable!", HttpStatus.SERVICE_UNAVAILABLE),
+    RATING_NOT_FOUND(8921, "Rating not found!", HttpStatus.NOT_FOUND),
+    VIDEO_DURATION_UNAVAILABLE(8922, "Video duration is unavailable!", HttpStatus.BAD_REQUEST);
 
     int code;
     String message;

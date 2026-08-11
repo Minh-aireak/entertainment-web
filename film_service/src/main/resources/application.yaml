@@ -148,12 +148,17 @@ app:
       url: ${COMMENT_SERVICE_URL}
     file:
       url: ${FILE_SERVICE_URL}
+  notification:
+    like-debounce-seconds: ${LIKE_DEBOUNCE_SECONDS:3}
   rate-limit:
     film-rating:
       limit-for-period: 30
       limit-refresh-period: 60s
     film-follow:
       limit-for-period: 50
+      limit-refresh-period: 60s
+    rating-like:
+      limit-for-period: 60
       limit-refresh-period: 60s
     read-films:
       limit-for-period: 100

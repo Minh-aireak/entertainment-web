@@ -4,9 +4,11 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+import java.time.LocalDateTime;
+
 @Entity
-@Table(name = "ratings", uniqueConstraints = {
-    @UniqueConstraint(columnNames = {"film_id", "user_id"})
+@Table(name = "rating_likes", uniqueConstraints = {
+    @UniqueConstraint(columnNames = {"rating_id", "user_id"})
 })
 @Getter
 @Setter
@@ -14,19 +16,16 @@ import lombok.experimental.FieldDefaults;
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class Rating {
+public class RatingLike {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     String id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "film_id")
-    Film film;
+    @JoinColumn(name = "rating_id")
+    Rating rating;
 
     String userId;
 
-    int stars;
-
-    @Builder.Default
-    int likeCount = 0;
+    LocalDateTime createdAt;
 }

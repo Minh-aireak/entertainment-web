@@ -25,6 +25,10 @@ public class FilmApiRateLimitService {
         enforce("film-follow:" + userId + ":" + filmId, properties.getFilmFollow());
     }
 
+    public void checkRatingLike(String userId, String ratingId) {
+        enforce("rating-like:" + userId + ":" + ratingId, properties.getRatingLike());
+    }
+
     public void checkReadFilms(String userId) {
         enforce("read-films:" + userId, properties.getReadFilms());
     }
