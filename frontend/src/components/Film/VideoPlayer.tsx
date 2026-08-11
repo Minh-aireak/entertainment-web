@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import Hls from 'hls.js';
-import { Box, Fade, IconButton, Menu, MenuItem, Tooltip, Typography } from '@mui/material';
+import { Box, CircularProgress, Fade, IconButton, Menu, MenuItem, Tooltip, Typography } from '@mui/material';
 import {
   Fullscreen,
   FullscreenExit,
@@ -48,12 +48,20 @@ interface VideoPlayerProps {
    *  volume and fullscreen stay local-only either way since they aren't shared state. */
   role?: 'host' | 'viewer';
   onPlaybackAction?: (action: PlaybackActionPayload) => void;
+  /** Called when playback breaks in a way the player can't recover from on its own - a native
+   *  `error` event (e.g. an expired B2 presigned URL) or the browser coming back online while
+   *  still stuck buffering. The caller is expected to resolve a fresh `src` (new presigned URL)
+   *  and pass it back down; the player preserves the current position/playing state across the
+   *  `src` swap so playback resumes where it left off instead of restarting from 0. */
+  onStalledError?: () => void;
 }
 
 const SKIP_SECONDS = 5;
 const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const CONTROLS_HIDE_DELAY_MS = 2500;
 const SYNC_DRIFT_THRESHOLD_SECONDS = 1.5;
+const SEEK_THROTTLE_MS = 150;
+const STALLED_ERROR_COOLDOWN_MS = 4000;
 
 function formatTime(totalSeconds: number): string {
   if (!Number.isFinite(totalSeconds) || totalSeconds < 0) return '0:00';
@@ -75,16 +83,25 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
   style,
   role,
   onPlaybackAction,
+  onStalledError,
 }, ref) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const progressBarRef = useRef<HTMLDivElement>(null);
   const hideControlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Position/playing snapshot kept up to date on every tick so a src swap (fresh presigned URL
+  // after an error/reconnect) can resume where playback left off instead of restarting at 0.
+  const lastTimeRef = useRef(0);
+  const wasPlayingRef = useRef(autoPlay);
+  const lastSeekCommitRef = useRef(0);
+  const scrubTimeRef = useRef(0);
+  const lastStalledErrorRef = useRef(0);
 
   const [playing, setPlaying] = useState(autoPlay);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [bufferedEnd, setBufferedEnd] = useState(0);
+  const [buffering, setBuffering] = useState(false);
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
   const [showControls, setShowControls] = useState(true);
@@ -104,10 +121,23 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
     [role, onPlaybackAction],
   );
 
-  // Load the source (HLS via hls.js, or let the browser/B2 handle it natively).
+  // Load the source (HLS via hls.js, or let the browser/B2 handle it natively). Beyond the
+  // initial mount, `src` only ever changes because a caller refreshed a stale/expired presigned
+  // URL for the SAME episode (episode switches remount this component via a `key` change), so
+  // restoring the last known position/playing state here is always correct - never a stale replay
+  // across a genuine episode change.
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+
+    const resumeTime = lastTimeRef.current;
+    const shouldResume = wasPlayingRef.current;
+
+    const onLoadedMeta = () => {
+      if (resumeTime > 0) video.currentTime = resumeTime;
+      if (shouldResume) video.play().catch(() => {});
+    };
+    video.addEventListener('loadedmetadata', onLoadedMeta, { once: true });
 
     const isHlsSource = src.endsWith('.m3u8');
     let hls: Hls | null = null;
@@ -116,14 +146,32 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
       hls = new Hls();
       hls.loadSource(src);
       hls.attachMedia(video);
+      // hls.js has its own fragment/manifest retry logic, more robust for mid-playback network
+      // blips than the generic native-<video> `error`/`online` recovery below (which just swaps
+      // `src` wholesale) - only fall through to that for errors hls.js itself can't recover from.
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (!data.fatal) return;
+        switch (data.type) {
+          case Hls.ErrorTypes.NETWORK_ERROR:
+            hls?.startLoad();
+            break;
+          case Hls.ErrorTypes.MEDIA_ERROR:
+            hls?.recoverMediaError();
+            break;
+          default:
+            onStalledError?.();
+            break;
+        }
+      });
     } else {
       video.src = src;
     }
 
     return () => {
+      video.removeEventListener('loadedmetadata', onLoadedMeta);
       hls?.destroy();
     };
-  }, [src]);
+  }, [src, onStalledError]);
 
   const resetHideTimer = useCallback(() => {
     setShowControls(true);
@@ -137,7 +185,10 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
     const video = videoRef.current;
     if (!video) return;
 
-    const onTimeUpdate = () => setCurrentTime(video.currentTime);
+    const onTimeUpdate = () => {
+      setCurrentTime(video.currentTime);
+      lastTimeRef.current = video.currentTime;
+    };
     const onDurationChange = () => setDuration(video.duration || 0);
     const onProgress = () => {
       if (video.buffered.length > 0) {
@@ -146,11 +197,13 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
     };
     const onPlay = () => {
       setPlaying(true);
+      wasPlayingRef.current = true;
       resetHideTimer();
       notifyHostAction({ type: 'play', positionSeconds: video.currentTime });
     };
     const onPause = () => {
       setPlaying(false);
+      wasPlayingRef.current = false;
       if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
       setShowControls(true);
       notifyHostAction({ type: 'pause', positionSeconds: video.currentTime });
@@ -162,6 +215,14 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
     const onEnded = () => {
       if (hasNextEpisode) onNextEpisode?.();
     };
+    // Buffering feedback: B2 is fetched directly over HTTP with no backend in between, so any
+    // rebuffer (scrub landing ahead of what's downloaded, a dropped connection mid-playback,
+    // etc.) surfaces here as `waiting`/`stalled` with nothing else in the DOM changing - without
+    // this the player just freezes on the last decoded frame with no visual feedback at all.
+    const onWaiting = () => setBuffering(true);
+    const onStalled = () => setBuffering(true);
+    const onCanPlay = () => setBuffering(false);
+    const onPlaying = () => setBuffering(false);
 
     video.addEventListener('timeupdate', onTimeUpdate);
     video.addEventListener('durationchange', onDurationChange);
@@ -171,6 +232,10 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
     video.addEventListener('pause', onPause);
     video.addEventListener('volumechange', onVolumeChange);
     video.addEventListener('ended', onEnded);
+    video.addEventListener('waiting', onWaiting);
+    video.addEventListener('stalled', onStalled);
+    video.addEventListener('canplay', onCanPlay);
+    video.addEventListener('playing', onPlaying);
 
     return () => {
       video.removeEventListener('timeupdate', onTimeUpdate);
@@ -181,8 +246,41 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
       video.removeEventListener('pause', onPause);
       video.removeEventListener('volumechange', onVolumeChange);
       video.removeEventListener('ended', onEnded);
+      video.removeEventListener('waiting', onWaiting);
+      video.removeEventListener('stalled', onStalled);
+      video.removeEventListener('canplay', onCanPlay);
+      video.removeEventListener('playing', onPlaying);
     };
   }, [hasNextEpisode, onNextEpisode, resetHideTimer, notifyHostAction]);
+
+  // Error recovery: a native `error` (e.g. an expired 1h B2 presigned URL) or the browser coming
+  // back `online` while still stuck buffering are both cases the player can't fix by itself - it
+  // has no way to mint a new presigned URL. Hand off to the caller via onStalledError, which is
+  // expected to refetch and pass down a fresh `src`; cooldown avoids hammering the caller if
+  // connectivity is flapping or the refresh itself keeps failing.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !onStalledError) return;
+
+    const triggerRecovery = () => {
+      const now = Date.now();
+      if (now - lastStalledErrorRef.current < STALLED_ERROR_COOLDOWN_MS) return;
+      lastStalledErrorRef.current = now;
+      onStalledError();
+    };
+
+    const onError = () => triggerRecovery();
+    const onOnline = () => {
+      if (video.error || buffering) triggerRecovery();
+    };
+
+    video.addEventListener('error', onError);
+    window.addEventListener('online', onOnline);
+    return () => {
+      video.removeEventListener('error', onError);
+      window.removeEventListener('online', onOnline);
+    };
+  }, [onStalledError, buffering]);
 
   useEffect(() => {
     const onFullscreenChange = () => setIsFullscreen(document.fullscreenElement === containerRef.current);
@@ -218,6 +316,18 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
       if (notify) notifyHostAction({ type: 'seek', positionSeconds: clamped });
     },
     [duration, notifyHostAction],
+  );
+
+  // Commits an actual `video.currentTime` change (i.e. a real B2 range fetch) without touching
+  // the displayed time - used by the scrub-drag handler below, which calls this throttled while
+  // `setCurrentTime` for the handle/label position updates on every mousemove unthrottled.
+  const commitSeek = useCallback(
+    (time: number) => {
+      const video = videoRef.current;
+      if (!video || !Number.isFinite(duration) || duration <= 0) return;
+      video.currentTime = Math.min(Math.max(time, 0), duration);
+    },
+    [duration],
   );
 
   const skip = useCallback(
@@ -324,15 +434,30 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [interactive, togglePlay, skip, resetHideTimer]);
 
+  // Dragging fires `mousemove` far faster than B2 can serve fresh byte ranges, so the actual
+  // `video.currentTime` write (commitSeek) is throttled - each one cancels/restarts the browser's
+  // in-flight range fetch, and doing that on every pixel of movement is what made scrubbing look
+  // "stuck" (looked frozen because it was permanently re-buffering, with no indicator saying so;
+  // that part is now covered by the `buffering` overlay). The displayed time/handle position
+  // (setCurrentTime) still updates on every event so the drag itself still feels responsive.
   const handleSeekPointer = useCallback(
     (clientX: number) => {
       const bar = progressBarRef.current;
       if (!bar || duration <= 0) return;
       const rect = bar.getBoundingClientRect();
       const ratio = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1);
-      seekTo(ratio * duration);
+      const time = ratio * duration;
+
+      scrubTimeRef.current = time;
+      setCurrentTime(time);
+
+      const now = Date.now();
+      if (now - lastSeekCommitRef.current >= SEEK_THROTTLE_MS) {
+        lastSeekCommitRef.current = now;
+        commitSeek(time);
+      }
     },
-    [duration, seekTo],
+    [duration, commitSeek],
   );
 
   const handleSeekMouseDown = (e: React.MouseEvent) => {
@@ -346,9 +471,11 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
     const onMove = (e: MouseEvent) => handleSeekPointer(e.clientX);
     const onUp = () => {
       setIsScrubbing(false);
-      if (videoRef.current) {
-        notifyHostAction({ type: 'seek', positionSeconds: videoRef.current.currentTime });
-      }
+      lastSeekCommitRef.current = 0;
+      // Final commit lands the exact release position even if it fell inside the last throttle
+      // window and got skipped.
+      commitSeek(scrubTimeRef.current);
+      notifyHostAction({ type: 'seek', positionSeconds: scrubTimeRef.current });
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
@@ -356,7 +483,7 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
-  }, [isScrubbing, handleSeekPointer, notifyHostAction]);
+  }, [isScrubbing, handleSeekPointer, commitSeek, notifyHostAction]);
 
   const playedRatio = duration > 0 ? currentTime / duration : 0;
   const bufferedRatio = duration > 0 ? bufferedEnd / duration : 0;
@@ -418,6 +545,21 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
           <PlayArrow sx={{ fontSize: 40, color: '#fff' }} />
         </Box>
       </Box>
+
+      {playing && buffering && (
+        <Box
+          sx={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            pointerEvents: 'none',
+          }}
+        >
+          <CircularProgress sx={{ color: '#fff' }} />
+        </Box>
+      )}
 
       <Fade in={showControls}>
         <Box

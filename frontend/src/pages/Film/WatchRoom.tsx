@@ -4,6 +4,7 @@ import { useSelector } from 'react-redux';
 import {
   Avatar,
   AvatarGroup,
+  Autocomplete,
   Box,
   Chip,
   CircularProgress,
@@ -36,17 +37,15 @@ import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 import { roomService } from '../../api/roomService';
 import { filmService } from '../../api/filmService';
-import { fileService } from '../../api/fileService';
 import { postService } from '../../api/postService';
-import { useRoomSocket } from '../../hooks/useRoomSocket';
 import VideoPlayer, { type VideoPlayerHandle, type PlaybackActionPayload } from '../../components/Film/VideoPlayer';
+import { useWatchRoomSession } from '../../contexts/watchRoomSessionContextValue';
+import { useWebSocket } from '../../contexts/WebSocketContext';
 import type {
-  EpisodeResponse,
   PlaybackUpdateRequest,
   RoomMessageResponse,
+  RoomParticipantChangedEvent,
   RoomParticipantResponse,
-  RoomPlaybackChangedEvent,
-  RoomResponse,
 } from '../../models';
 import type { RootState } from '../../store';
 
@@ -66,12 +65,6 @@ const INITIALS = (name?: string) =>
     .join('')
     .toUpperCase();
 
-const computeLivePosition = (event: RoomPlaybackChangedEvent): number => {
-  if (!event.playing) return event.positionSeconds;
-  const elapsedSeconds = (Date.now() - new Date(event.at).getTime()) / 1000;
-  return Math.max(0, event.positionSeconds + elapsedSeconds * event.playbackRate);
-};
-
 const WatchRoom: React.FC = () => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -80,13 +73,24 @@ const WatchRoom: React.FC = () => {
   const navigate = useNavigate();
   const currentUser = useSelector((state: RootState) => state.auth.user);
 
-  const [room, setRoom] = useState<RoomResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const [episodes, setEpisodes] = useState<EpisodeResponse[]>([]);
-  const [videoSrc, setVideoSrc] = useState<string | null>(null);
-  const [videoError, setVideoError] = useState<string | null>(null);
+  const {
+    room,
+    episodes,
+    videoSrc,
+    videoError,
+    loading,
+    errorMessage,
+    changingEpisode,
+    playbackEvent,
+    closedEvent,
+    openRoom,
+    changeEpisode,
+    sendPlayback,
+    refreshVideo,
+    leaveSession,
+    closeSession,
+  } = useWatchRoomSession();
+  const { subscribe } = useWebSocket();
 
   const [participants, setParticipants] = useState<RoomParticipantResponse[]>([]);
   const [participantCount, setParticipantCount] = useState(0);
@@ -100,98 +104,14 @@ const WatchRoom: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const isHost = !!room?.host;
-  // Read inside the unmount cleanup below, which only depends on [roomId]. Set directly from the
-  // join response (not derived from `isHost` via a second effect) so the cleanup can never fire
-  // with a stale "not host yet" default before the async join resolves - that race let an
-  // instant mount+unmount (e.g. React StrictMode's dev double-invoke) call leaveRoom for a host
-  // who hadn't been marked as host yet, which the backend reads as "host left" and auto-closes
-  // the room. hasJoinedRef gates the cleanup until we have a definitive join result at all.
-  const isHostRef = useRef(false);
-  const hasJoinedRef = useRef(false);
+  const activeRoomId = room?.id;
 
-  // Join on mount (idempotent if already a participant) - the invite code from a shared link
-  // arrives as ?code=, the same field a private room's ensureCanJoin check accepts server-side.
+  // Session state lives above the router. Navigating to another feature therefore leaves this
+  // session joined and the global mini-player takes over instead of closing/leaving the room.
   useEffect(() => {
     if (!roomId) return;
-    let cancelled = false;
-    setLoading(true);
-    setErrorMessage(null);
-
-    roomService
-      .joinRoom(roomId, { inviteCode: searchParams.get('code') ?? undefined })
-      .then((res) => {
-        if (cancelled) return;
-        setRoom(res.result);
-        hasJoinedRef.current = true;
-        isHostRef.current = !!res.result.host;
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setErrorMessage(err?.response?.data?.message || 'Không thể vào phòng này.');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomId]);
-
-  // Leave on unmount (route change, tab navigation, etc.) - but never for the host: leaving
-  // auto-closes the room server-side, and the host should be able to freely navigate away (e.g.
-  // to paste the invite link somewhere) and come back without destroying the room. Only the
-  // explicit "Đóng phòng" button (handleCloseRoom) may close it. Idempotent no-op server-side if
-  // this user was never a participant.
-  useEffect(() => {
-    return () => {
-      if (roomId && hasJoinedRef.current && !isHostRef.current) roomService.leaveRoom(roomId).catch(() => {});
-    };
-  }, [roomId]);
-
-  useEffect(() => {
-    if (!room?.filmId) return;
-    let cancelled = false;
-    filmService
-      .getEpisodesByFilm(room.filmId)
-      .then((res) => {
-        if (!cancelled) setEpisodes(res.result ?? []);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [room?.filmId]);
-
-  // Bucket B2 private nên FileInfo.url là presigned GET có hạn dùng - resolve lại mỗi khi vào
-  // phòng/đổi tập, giống hệt FilmWatch.tsx.
-  useEffect(() => {
-    if (!room || episodes.length === 0) return;
-    const episode = episodes.find((e) => e.id === room.episodeId) ?? episodes[0];
-
-    setVideoSrc(null);
-    setVideoError(null);
-
-    if (!episode.videoFileId) {
-      setVideoError('Tập phim này chưa có video.');
-      return;
-    }
-
-    let cancelled = false;
-    fileService
-      .getFileInfo(episode.videoFileId)
-      .then((res) => {
-        if (!cancelled) setVideoSrc(res.result.url);
-      })
-      .catch(() => {
-        if (!cancelled) setVideoError('Không thể tải video, vui lòng thử lại sau.');
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [room, episodes]);
+    void openRoom(roomId, searchParams.get('code') ?? undefined);
+  }, [openRoom, roomId, searchParams]);
 
   // Initial seed for a viewer's player, once it mounts (src resolved) - room.positionSeconds
   // from the join response is already server-computed live, no elapsed-time math needed here.
@@ -206,7 +126,16 @@ const WatchRoom: React.FC = () => {
   }, [videoSrc]);
 
   useEffect(() => {
-    if (!roomId || !room) return;
+    if (!playbackEvent || isHost) return;
+    viewerPlayerRef.current?.syncTo({
+      positionSeconds: room?.positionSeconds ?? playbackEvent.positionSeconds,
+      playing: playbackEvent.playing,
+      playbackRate: playbackEvent.playbackRate,
+    });
+  }, [isHost, playbackEvent, room?.positionSeconds]);
+
+  useEffect(() => {
+    if (!roomId || activeRoomId !== roomId) return;
     roomService
       .listParticipants(roomId)
       .then((res) => {
@@ -215,10 +144,10 @@ const WatchRoom: React.FC = () => {
         setParticipantCount(list.length);
       })
       .catch(() => {});
-  }, [roomId, room?.id]);
+  }, [activeRoomId, roomId]);
 
   useEffect(() => {
-    if (!roomId || !room) return;
+    if (!roomId || activeRoomId !== roomId) return;
     roomService
       .listMessages(roomId, 1, 30)
       .then((res) => {
@@ -226,55 +155,53 @@ const WatchRoom: React.FC = () => {
         setMessages(history.map((m) => ({ kind: 'message', id: m.id, data: m })));
       })
       .catch(() => {});
-  }, [roomId, room?.id]);
+  }, [activeRoomId, roomId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length]);
 
-  useRoomSocket(roomId, !!room, {
-    onPlayback: (event) => {
-      setRoom((prev) => {
-        if (!prev) return prev;
-        return event.episodeId && event.episodeId !== prev.episodeId
-          ? { ...prev, episodeId: event.episodeId }
-          : prev;
-      });
-      if (!isHost) {
-        viewerPlayerRef.current?.syncTo({
-          positionSeconds: computeLivePosition(event),
-          playing: event.playing,
-          playbackRate: event.playbackRate,
-        });
-      }
-    },
-    onParticipants: (event) => {
+  useEffect(() => {
+    if (!roomId) return;
+    const unsubscribeParticipants = subscribe('room:participants', (event: RoomParticipantChangedEvent) => {
+      if (event?.roomId !== roomId) return;
       setParticipantCount(event.participantCount);
       const name = event.participant?.displayName || 'Một người xem';
       if (event.eventType === 'JOINED' && event.participant) {
         const joined = event.participant;
-        setParticipants((prev) => (prev.some((p) => p.userId === joined.userId) ? prev : [...prev, joined]));
+        setParticipants((prev) => (prev.some((participant) => participant.userId === joined.userId)
+          ? prev
+          : [...prev, joined]));
         setMessages((prev) => [
           ...prev,
           { kind: 'system', id: `sys-${joined.userId}-${Date.now()}`, text: `${name} đã tham gia phòng` },
         ]);
       } else if (event.eventType === 'LEFT' && event.participant) {
         const left = event.participant;
-        setParticipants((prev) => prev.filter((p) => p.userId !== left.userId));
+        setParticipants((prev) => prev.filter((participant) => participant.userId !== left.userId));
         setMessages((prev) => [
           ...prev,
           { kind: 'system', id: `sys-${left.userId}-${Date.now()}`, text: `${name} đã rời phòng` },
         ]);
       }
-    },
-    onMessage: (message) => {
-      setMessages((prev) => [...prev, { kind: 'message', id: message.id, data: message }]);
-    },
-    onClosed: () => {
-      toast(isHost ? 'Bạn đã đóng phòng.' : 'Chủ phòng đã đóng phòng xem chung.', { icon: '👋' });
-      navigate('/film/watch-together');
-    },
-  });
+    });
+    const unsubscribeMessages = subscribe('room:message', (message: RoomMessageResponse) => {
+      if (message?.roomId !== roomId) return;
+      setMessages((prev) => prev.some((item) => item.id === message.id)
+        ? prev
+        : [...prev, { kind: 'message', id: message.id, data: message }]);
+    });
+    return () => {
+      unsubscribeParticipants();
+      unsubscribeMessages();
+    };
+  }, [roomId, subscribe]);
+
+  useEffect(() => {
+    if (!closedEvent || closedEvent.roomId !== roomId) return;
+    toast(isHost ? 'Bạn đã đóng phòng.' : 'Chủ phòng đã đóng phòng xem chung.', { icon: '👋' });
+    navigate('/film/watch-together');
+  }, [closedEvent, isHost, navigate, roomId]);
 
   const handleHostAction = useCallback(
     (action: PlaybackActionPayload) => {
@@ -302,23 +229,37 @@ const WatchRoom: React.FC = () => {
           payload = { action: 'HEARTBEAT', positionSeconds: action.positionSeconds };
           break;
       }
-      roomService.updatePlayback(roomId, payload).catch(() => {});
+      sendPlayback(payload);
     },
-    [roomId],
+    [roomId, sendPlayback],
   );
 
-  const handleLeave = () => {
-    navigate('/film/watch-together');
+  const handleLeave = async () => {
+    try {
+      await leaveSession();
+      navigate('/film/watch-together');
+    } catch {
+      toast.error('Không thể rời phòng.');
+    }
   };
 
   const handleCloseRoom = async () => {
     if (!roomId) return;
     try {
-      await roomService.closeRoom(roomId);
+      await closeSession();
       toast.success('Đã đóng phòng.');
       navigate('/film/watch-together');
     } catch {
       toast.error('Không thể đóng phòng.');
+    }
+  };
+
+  const handleEpisodeChange = async (episodeId: string) => {
+    if (!episodeId) return;
+    try {
+      await changeEpisode(episodeId);
+    } catch {
+      toast.error('Không thể đổi tập phim.');
     }
   };
 
@@ -490,10 +431,60 @@ const WatchRoom: React.FC = () => {
           )}
         </Paper>
 
+        <Paper
+          sx={{
+            borderRadius: 3,
+            p: 2,
+            mb: 2,
+            display: 'flex',
+            alignItems: { xs: 'stretch', sm: 'center' },
+            flexDirection: { xs: 'column', sm: 'row' },
+            gap: 1.5,
+            bgcolor: alpha(theme.palette.text.primary, 0.03),
+            border: '1px solid',
+            borderColor: alpha(theme.palette.text.primary, 0.06),
+          }}
+        >
+          <Box sx={{ minWidth: { sm: 220 } }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>Tập đang xem</Typography>
+            <Typography variant="caption" color="text.secondary">
+              {isHost ? 'Chủ phòng có thể đổi tập cho tất cả người xem.' : 'Tập phim được điều khiển bởi chủ phòng.'}
+            </Typography>
+          </Box>
+          <Autocomplete
+            fullWidth
+            size="small"
+            options={episodes}
+            disabled={!isHost || changingEpisode || episodes.length === 0}
+            value={currentEpisode ?? null}
+            isOptionEqualToValue={(option, value) => option.id === value.id}
+            getOptionLabel={(episode) => `Mùa ${episode.seasonNumber} · Tập ${episode.episodeNumber} — ${episode.title}`}
+            groupBy={(episode) => `Mùa ${episode.seasonNumber}`}
+            onChange={(_event, episode) => {
+              if (episode) void handleEpisodeChange(episode.id);
+            }}
+            noOptionsText="Phim này chưa có tập"
+            loading={changingEpisode}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label={room.episodeId ? 'Đổi tập phim' : 'Chọn tập bắt đầu xem'}
+                placeholder="Chọn tập phim"
+              />
+            )}
+          />
+        </Paper>
+
         <Grid container spacing={2}>
           <Grid size={{ xs: 12, md: 8 }}>
             <Box sx={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', bgcolor: '#000', borderRadius: 2, overflow: 'hidden' }}>
-              {videoError ? (
+              {!room.episodeId ? (
+                <Box sx={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', p: 3 }}>
+                  <Typography color="text.secondary" align="center">
+                    {isHost ? 'Hãy chọn một tập phim để bắt đầu xem chung.' : 'Đang chờ chủ phòng chọn tập phim.'}
+                  </Typography>
+                </Box>
+              ) : videoError ? (
                 <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Typography color="text.secondary">{videoError}</Typography>
                 </Box>
@@ -505,6 +496,7 @@ const WatchRoom: React.FC = () => {
                     title={currentEpisode ? `Tập ${currentEpisode.episodeNumber} - ${currentEpisode.title}` : room.filmTitle}
                     role="host"
                     onPlaybackAction={handleHostAction}
+                    onStalledError={refreshVideo}
                     style={{ maxWidth: '100%', aspectRatio: 'auto', height: '100%' }}
                   />
                 ) : (
@@ -515,6 +507,7 @@ const WatchRoom: React.FC = () => {
                     title={currentEpisode ? `Tập ${currentEpisode.episodeNumber} - ${currentEpisode.title}` : room.filmTitle}
                     role="viewer"
                     autoPlay={room.playing}
+                    onStalledError={refreshVideo}
                     style={{ maxWidth: '100%', aspectRatio: 'auto', height: '100%' }}
                   />
                 )

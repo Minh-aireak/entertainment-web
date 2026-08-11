@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
   Box,
@@ -144,6 +144,21 @@ const FilmWatch: React.FC = () => {
     };
   }, [loading, episodes, episodeId]);
 
+  // Presigned URL hết hạn sau 1h hoặc B2 trả lỗi khi mất mạng giữa chừng - VideoPlayer tự phát
+  // hiện qua sự kiện `error`/khi mạng có lại nhưng vẫn đứng, rồi gọi lại đây để lấy URL mới thay
+  // vì chịu chết với URL cũ.
+  const handleStalledError = useCallback(() => {
+    if (!episodes.length) return;
+    const episode = episodes.find((e) => e.id === episodeId) ?? episodes[0];
+    if (!episode.videoFileId) return;
+    fileService
+      .getFileInfo(episode.videoFileId)
+      .then((response) => setVideoSrc(response.result.url))
+      .catch(() => {
+        toast.error('Mất kết nối, đang thử tải lại video...');
+      });
+  }, [episodes, episodeId]);
+
   const handleRating = async (newValue: number | null) => {
     if (!id || newValue === null) return;
     try {
@@ -203,6 +218,7 @@ const FilmWatch: React.FC = () => {
               title={`Tập ${currentEpisode.episodeNumber} - ${stripVietSub(currentEpisode.title)}`}
               onNextEpisode={nextEpisode ? () => navigate(`/film/${id}/watch/${nextEpisode.id}`) : undefined}
               hasNextEpisode={!!nextEpisode}
+              onStalledError={handleStalledError}
             />
           ) : (
             <Box sx={{ maxWidth: 1120, mx: 'auto', aspectRatio: '16 / 9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

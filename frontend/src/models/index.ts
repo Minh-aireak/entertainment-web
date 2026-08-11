@@ -417,7 +417,7 @@ export interface EmailRequest {
   channel: string;
   recipient: string;
   templateCode: string;
-  params: Record<string, any>;
+  params: Record<string, unknown>;
   subject: string;
   body: string;
 }
@@ -426,7 +426,7 @@ export interface NotificationRequest {
   typeNotification: TypeNotification;
   userIdSender: string;
   toUserIds: string[];
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
 }
 
 export interface ChatMessageCreateRequest {
@@ -909,6 +909,7 @@ export interface RoomListItemResponse {
   filmId: string;
   filmTitle?: string;
   filmThumbnail?: string;
+  episodeId?: string;
   publicRoom: boolean;
   /** Only meaningful in listMyRooms: true if already joined, false if this room only appears
    *  because you were invited and haven't joined yet. Always false elsewhere. */

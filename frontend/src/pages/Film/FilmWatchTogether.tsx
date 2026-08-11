@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Container,
@@ -70,11 +70,6 @@ const INITIALS = (name: string) =>
     .join('')
     .toUpperCase();
 
-const sortEpisodes = (episodes: EpisodeResponse[]) =>
-  [...episodes].sort((a, b) =>
-    a.seasonNumber === b.seasonNumber ? a.episodeNumber - b.episodeNumber : a.seasonNumber - b.seasonNumber,
-  );
-
 const FilmWatchTogether: React.FC = React.memo(() => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -87,14 +82,15 @@ const FilmWatchTogether: React.FC = React.memo(() => {
 
   const [films, setFilms] = useState<FilmSummaryResponse[]>([]);
   const [selectedFilmId, setSelectedFilmId] = useState<string>('');
-  const [selectedEpisodeId, setSelectedEpisodeId] = useState<string>('');
+  const [episodeById, setEpisodeById] = useState<Record<string, EpisodeResponse>>({});
+  const loadedRoomFilmIdsRef = useRef(new Set<string>());
   const [isPublicRoom, setIsPublicRoom] = useState(true);
   const [creating, setCreating] = useState(false);
 
   const [publicRooms, setPublicRooms] = useState<RoomListItemResponse[]>([]);
   const [myRooms, setMyRooms] = useState<RoomListItemResponse[]>([]);
-  const [refreshingPublic, setRefreshingPublic] = useState(false);
-  const [refreshingMy, setRefreshingMy] = useState(false);
+  const [refreshingPublic, setRefreshingPublic] = useState(true);
+  const [refreshingMy, setRefreshingMy] = useState(true);
 
   useEffect(() => {
     filmService
@@ -111,28 +107,34 @@ const FilmWatchTogether: React.FC = React.memo(() => {
       .catch(() => {});
   }, []);
 
-  const fetchPublicRooms = useCallback(() => {
-    setRefreshingPublic(true);
+  const loadPublicRooms = useCallback(() =>
     roomService
       .listPublicRooms(1, PUBLIC_ROOMS_PAGE_SIZE)
       .then((res) => setPublicRooms(res.result?.data ?? []))
-      .catch(() => toast.error('Không thể tải danh sách phòng công cộng'))
-      .finally(() => setRefreshingPublic(false));
-  }, []);
+      .catch(() => toast.error('Không thể tải danh sách phòng công cộng')),
+  []);
 
-  const fetchMyRooms = useCallback(() => {
-    setRefreshingMy(true);
+  const fetchPublicRooms = useCallback(() => {
+    setRefreshingPublic(true);
+    void loadPublicRooms().finally(() => setRefreshingPublic(false));
+  }, [loadPublicRooms]);
+
+  const loadMyRooms = useCallback(() =>
     roomService
       .listMyRooms(1, 6)
       .then((res) => setMyRooms(res.result?.data ?? []))
-      .catch(() => toast.error('Không thể tải danh sách phòng của bạn'))
-      .finally(() => setRefreshingMy(false));
-  }, []);
+      .catch(() => toast.error('Không thể tải danh sách phòng của bạn')),
+  []);
+
+  const fetchMyRooms = useCallback(() => {
+    setRefreshingMy(true);
+    void loadMyRooms().finally(() => setRefreshingMy(false));
+  }, [loadMyRooms]);
 
   useEffect(() => {
-    fetchPublicRooms();
-    fetchMyRooms();
-  }, [fetchPublicRooms, fetchMyRooms]);
+    void loadPublicRooms().finally(() => setRefreshingPublic(false));
+    void loadMyRooms().finally(() => setRefreshingMy(false));
+  }, [loadPublicRooms, loadMyRooms]);
 
   // Public room list stays live: everyone browsing this page joins a shared "lobby" WS room and
   // gets pushed new/closed public rooms instead of needing to press refresh.
@@ -155,40 +157,41 @@ const FilmWatchTogether: React.FC = React.memo(() => {
       subscribe('lobby:room-closed', (event: RoomClosedEvent) => {
         setPublicRooms((prev) => prev.filter((r) => r.id !== event.roomId));
       }),
+      subscribe('lobby:room-updated', (room: RoomListItemResponse) => {
+        setPublicRooms((prev) => prev.map((current) => current.id === room.id ? room : current));
+        setMyRooms((prev) => prev.map((current) => current.id === room.id
+          ? { ...room, alreadyJoined: current.alreadyJoined }
+          : current));
+      }),
     ];
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
   }, [subscribe]);
 
-  // Selecting a film auto-picks its first episode (by season/episode order) as the room's
-  // starting point - the create-room form has no separate episode picker to keep the flow
-  // to a single dropdown, matching the original design.
+  // Room-service broadcasts the current episodeId. Resolve each room film once so cards can
+  // show the episode number and immediately reflect lobby:room-updated events.
   useEffect(() => {
-    if (!selectedFilmId) {
-      setSelectedEpisodeId('');
-      return;
-    }
-    let cancelled = false;
-    filmService
-      .getEpisodesByFilm(selectedFilmId)
-      .then((res) => {
-        if (cancelled) return;
-        const sorted = sortEpisodes(res.result ?? []);
-        setSelectedEpisodeId(sorted[0]?.id ?? '');
-        if (sorted.length === 0) {
-          toast.error('Phim này chưa có tập nào để xem chung');
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setSelectedEpisodeId('');
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedFilmId]);
+    const missingFilmIds = [...publicRooms, ...myRooms]
+      .filter((room) => room.episodeId)
+      .map((room) => room.filmId)
+      .filter((filmId) => !loadedRoomFilmIdsRef.current.has(filmId));
+
+    [...new Set(missingFilmIds)].forEach((filmId) => {
+      loadedRoomFilmIdsRef.current.add(filmId);
+      filmService.getEpisodesByFilm(filmId)
+        .then((response) => {
+          setEpisodeById((current) => {
+            const next = { ...current };
+            (response.result ?? []).forEach((episode) => { next[episode.id] = episode; });
+            return next;
+          });
+        })
+        .catch(() => loadedRoomFilmIdsRef.current.delete(filmId));
+    });
+  }, [myRooms, publicRooms]);
 
   const handleCreateRoom = useCallback(async () => {
-    if (!selectedFilmId || !selectedEpisodeId) {
-      toast.error('Vui lòng chọn một phim đã có tập để xem chung');
+    if (!selectedFilmId) {
+      toast.error('Vui lòng chọn phim để tạo phòng xem chung');
       return;
     }
     setCreating(true);
@@ -196,7 +199,6 @@ const FilmWatchTogether: React.FC = React.memo(() => {
       const selectedFilm = films.find((f) => f.id === selectedFilmId);
       const response = await roomService.createRoom({
         filmId: selectedFilmId,
-        episodeId: selectedEpisodeId,
         name: selectedFilm ? `Xem chung: ${selectedFilm.title}` : undefined,
         publicRoom: isPublicRoom,
         inviteeUserIds: invitees.map((f) => f.id),
@@ -207,7 +209,7 @@ const FilmWatchTogether: React.FC = React.memo(() => {
     } finally {
       setCreating(false);
     }
-  }, [selectedFilmId, selectedEpisodeId, films, isPublicRoom, invitees, navigate]);
+  }, [selectedFilmId, films, isPublicRoom, invitees, navigate]);
 
   const handleJoinRoom = useCallback(
     (roomId: string) => {
@@ -230,8 +232,11 @@ const FilmWatchTogether: React.FC = React.memo(() => {
     [friends, invitees, inviteInput],
   );
 
-  const renderRoomCard = (room: RoomListItemResponse, variant: 'public' | 'my') => (
-    <Paper
+  const renderRoomCard = (room: RoomListItemResponse, variant: 'public' | 'my') => {
+    const currentEpisode = room.episodeId ? episodeById[room.episodeId] : undefined;
+
+    return (
+      <Paper
       key={room.id}
       sx={{
         borderRadius: 3,
@@ -303,6 +308,7 @@ const FilmWatchTogether: React.FC = React.memo(() => {
               <LocalMovies sx={{ color: '#00A84E', fontSize: 16 }} />
               <Typography variant="body2" sx={{ color: 'inherit' }} noWrap>
                 {room.filmTitle}
+                {currentEpisode ? ` · Tập ${currentEpisode.episodeNumber}` : ' · Chưa chọn tập'}
               </Typography>
             </Box>
           )}
@@ -331,8 +337,9 @@ const FilmWatchTogether: React.FC = React.memo(() => {
           </Button>
         </Box>
       </Box>
-    </Paper>
-  );
+      </Paper>
+    );
+  };
 
   return (
     <Box sx={{ minHeight: '100vh', pb: 8 }}>
@@ -595,7 +602,7 @@ const FilmWatchTogether: React.FC = React.memo(() => {
                   size="large"
                   startIcon={creating ? <CircularProgress size={18} color="inherit" /> : <AddCircleOutlined />}
                   onClick={handleCreateRoom}
-                  disabled={!selectedFilmId || !selectedEpisodeId || creating}
+                  disabled={!selectedFilmId || creating}
                   sx={{
                     borderRadius: 3,
                     py: 1.5,

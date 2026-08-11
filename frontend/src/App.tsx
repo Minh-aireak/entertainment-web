@@ -14,6 +14,10 @@ import MainLayout from './components/Layout/MainLayout';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import { WebSocketProvider } from './contexts/WebSocketContext';
 import { ConfirmDialogProvider } from './contexts/ConfirmDialogContext';
+import { EpisodeUploadProvider } from './contexts/EpisodeUploadContext';
+import { WatchRoomSessionProvider } from './contexts/WatchRoomSessionContext';
+import EpisodeUploadIndicator from './components/Upload/EpisodeUploadIndicator';
+import WatchRoomMiniPlayer from './components/Film/WatchRoomMiniPlayer';
 
 import SocialHome from './pages/SocialHome';
 import Login from './pages/Login';
@@ -150,8 +154,10 @@ function AppContent() {
           }}
         />
         <Router>
+          <EpisodeUploadProvider>
           <ScrollToTop />
           <WebSocketProvider>
+          <WatchRoomSessionProvider>
           <ConfirmDialogProvider>
             <Routes>
             <Route path="/login" element={<Login />} />
@@ -351,8 +357,12 @@ function AppContent() {
 
               <Route path="*" element={<Navigate to="/social" replace />} />
             </Routes>
+            <EpisodeUploadIndicator />
+            <WatchRoomMiniPlayer />
           </ConfirmDialogProvider>
+          </WatchRoomSessionProvider>
           </WebSocketProvider>
+          </EpisodeUploadProvider>
         </Router>
       </ThemeProvider>
   );
