@@ -9,11 +9,29 @@ import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 
+import java.util.List;
+
 @FeignClient(name = "room-film-service", url = "${app.services.film.url}",
         configuration = {AuthenticationRequestInterceptor.class})
 public interface FilmClient {
     @GetMapping(value = "/films/{id}/aggregate")
     ApiResponse<FilmAggregateInfo> getFilmAggregate(@PathVariable("id") String id);
+
+    /** Used to validate CHANGE_EPISODE targets belong to the room's film and to clamp
+     *  positionSeconds against episode duration - see RoomFilmExternalService.getEpisodesByFilm. */
+    @GetMapping(value = "/films/episodes/film/{filmId}")
+    ApiResponse<List<EpisodeInfo>> getEpisodesByFilm(@PathVariable("filmId") String filmId);
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @FieldDefaults(level = AccessLevel.PRIVATE)
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    class EpisodeInfo {
+        String id;
+        String filmId;
+        int durationMinutes;
+    }
 
     /** Deliberately minimal - only pulls the couple of fields room-service denormalizes onto
      *  Room for its list cards. ignoreUnknown = true because film_service's real

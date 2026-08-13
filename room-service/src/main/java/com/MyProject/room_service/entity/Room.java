@@ -47,6 +47,12 @@ public class Room {
     @Builder.Default
     double playbackRate = 1.0;
     Instant lastActionAt;
+    /** Monotonically increasing compare-and-set token for updatePlayback - bumped on every
+     *  successful PLAY/PAUSE/SEEK/CHANGE_EPISODE/HEARTBEAT. Defaults to 0 for pre-existing Mongo
+     *  documents (Spring Data leaves missing primitive fields at their Java default on read), so
+     *  no migration is needed - the first real update after this field shipped simply starts the
+     *  sequence at 1. */
+    int playbackRevision;
 
     int participantCount;
     int maxParticipants;

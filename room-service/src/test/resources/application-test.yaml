@@ -14,6 +14,8 @@ app:
   room:
     max-participants: 50
     invite-code-length: 8
+    presence-disconnect-grace: 2m
+    presence-cleanup-interval-ms: 30000
   rate-limit:
     room-create:
       limit-for-period: 10

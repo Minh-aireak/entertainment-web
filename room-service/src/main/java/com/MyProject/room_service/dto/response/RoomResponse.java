@@ -39,6 +39,13 @@ public class RoomResponse {
     double positionSeconds;
     double playbackRate;
     Instant lastActionAt;
+    /** Mirrors Room.playbackRevision - the frontend ignores any snapshot/event whose revision is
+     *  not newer than (for events) or at least as new as (for snapshots) the last one it applied,
+     *  so a reconnect resync race can never roll playback state backwards. */
+    int playbackRevision;
+    /** Short-lived signed token (see RoomSubscriptionTokenService) letting socket-service verify
+     *  this caller may subscribe to this room's WebSocket channel - null for non-participants. */
+    String wsToken;
 
     int participantCount;
     int maxParticipants;

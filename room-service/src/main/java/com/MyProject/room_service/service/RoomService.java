@@ -16,6 +16,7 @@ import com.MyProject.room_service.entity.Room;
 import com.MyProject.room_service.entity.RoomParticipant;
 import com.MyProject.room_service.enums.ErrorCode;
 import com.MyProject.room_service.enums.ParticipantRole;
+import com.MyProject.room_service.enums.PlaybackAction;
 import com.MyProject.room_service.enums.RoomStatus;
 import com.MyProject.room_service.exception.AppException;
 import com.MyProject.room_service.repository.OutboxRepository;
@@ -68,6 +69,10 @@ public class RoomService {
     private static final int MAX_NAME_LENGTH = 120;
     private static final String INVITE_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final Set<Double> ALLOWED_PLAYBACK_RATES = Set.of(0.5, 0.75, 1.0, 1.25, 1.5, 2.0);
+    private static final int MAX_PLAYBACK_CAS_ATTEMPTS = 3;
+    private static final String WATCH_LAST_SEEN_KEY_PREFIX = "presence:watch-room:last-seen:";
+    private static final String WATCH_LAST_DISCONNECTED_KEY_PREFIX = "presence:watch-room:last-disconnected:";
 
     RoomRepository roomRepository;
     RoomParticipantRepository roomParticipantRepository;
@@ -78,6 +83,7 @@ public class RoomService {
     RedisService redisService;
     ObjectMapper objectMapper;
     MongoTemplate mongoTemplate;
+    RoomSubscriptionTokenService roomSubscriptionTokenService;
 
     @Transactional(rollbackFor = Exception.class)
     public RoomResponse createRoom(CreateRoomRequest request) {
@@ -87,11 +93,17 @@ public class RoomService {
             throw new AppException(ErrorCode.INVALID_FILM);
         }
 
-        FilmClient.FilmInfo filmInfo = roomFilmExternalService.getFilmInfo(request.getFilmId()).orElse(null);
+        String filmId = request.getFilmId().trim();
+        FilmClient.FilmInfo filmInfo = roomFilmExternalService.getFilmInfo(filmId)
+                .orElseThrow(() -> new AppException(ErrorCode.INVALID_FILM));
+        String episodeId = StringUtils.hasText(request.getEpisodeId()) ? request.getEpisodeId().trim() : null;
+        if (episodeId != null) {
+            ensureEpisodeBelongsToFilm(filmId, episodeId);
+        }
 
         String name = StringUtils.hasText(request.getName())
                 ? request.getName().trim()
-                : (filmInfo != null ? "Xem chung: " + filmInfo.getTitle() : "Phòng xem chung");
+                : "Xem chung: " + filmInfo.getTitle();
         if (name.codePointCount(0, name.length()) > MAX_NAME_LENGTH) {
             name = name.substring(0, MAX_NAME_LENGTH);
         }
@@ -105,10 +117,10 @@ public class RoomService {
         Room room = Room.builder()
                 .name(name)
                 .hostUserId(hostUserId)
-                .filmId(request.getFilmId())
-                .filmTitle(filmInfo != null ? filmInfo.getTitle() : null)
-                .filmThumbnail(filmInfo != null ? filmInfo.getThumbnailUrl() : null)
-                .episodeId(request.getEpisodeId())
+                .filmId(filmId)
+                .filmTitle(filmInfo.getTitle())
+                .filmThumbnail(filmInfo.getThumbnailUrl())
+                .episodeId(episodeId)
                 .publicRoom(request.isPublicRoom())
                 .inviteCode(generateInviteCode())
                 .invitedUserIds(new HashSet<>(invitees))
@@ -218,6 +230,11 @@ public class RoomService {
             throw new AppException(ErrorCode.ROOM_FULL);
         }
 
+        Room updated = reserveParticipantSlot(room);
+        if (updated == null) {
+            throw new AppException(ErrorCode.ROOM_FULL);
+        }
+
         ParticipantRole role = userId.equals(room.getHostUserId()) ? ParticipantRole.HOST : ParticipantRole.VIEWER;
         RoomParticipant participant = roomParticipantRepository.save(RoomParticipant.builder()
                 .roomId(roomId)
@@ -226,10 +243,8 @@ public class RoomService {
                 .joinedAt(Instant.now())
                 .build());
 
-        Room updated = incrementParticipantCount(roomId, 1);
-        if (updated == null) updated = room;
-
         publishParticipantEvent(updated, "JOINED", toParticipantResponse(participant));
+        publishLobbyUpdated(updated);
 
         return buildRoomResponse(updated, userId);
     }
@@ -254,10 +269,11 @@ public class RoomService {
             return;
         }
 
-        Room updated = incrementParticipantCount(roomId, -1);
+        Room updated = decrementParticipantCount(roomId);
         if (updated == null) updated = room;
 
         publishParticipantEvent(updated, "LEFT", toParticipantResponse(participant));
+        publishLobbyUpdated(updated);
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -287,68 +303,155 @@ public class RoomService {
             throw new AppException(ErrorCode.INVALID_PLAYBACK_ACTION);
         }
 
-        Instant now = Instant.now();
-        switch (request.getAction()) {
-            case PLAY -> {
-                room.setPositionSeconds(request.getPositionSeconds() != null
-                        ? request.getPositionSeconds()
-                        : computeLivePositionSeconds(room));
-                room.setPlaying(true);
-            }
-            case PAUSE -> {
-                room.setPositionSeconds(request.getPositionSeconds() != null
-                        ? request.getPositionSeconds()
-                        : computeLivePositionSeconds(room));
-                room.setPlaying(false);
-            }
-            case SEEK -> {
-                if (request.getPositionSeconds() == null) {
-                    throw new AppException(ErrorCode.INVALID_PLAYBACK_ACTION);
-                }
-                room.setPositionSeconds(request.getPositionSeconds());
-            }
-            case CHANGE_EPISODE -> {
-                if (!StringUtils.hasText(request.getEpisodeId())) {
-                    throw new AppException(ErrorCode.INVALID_PLAYBACK_ACTION);
-                }
-                room.setEpisodeId(request.getEpisodeId());
-                room.setPositionSeconds(0);
-                room.setPlaying(true);
-            }
-            case HEARTBEAT -> {
-                if (request.getPositionSeconds() != null) {
-                    room.setPositionSeconds(request.getPositionSeconds());
-                }
-            }
-        }
-
-        if (request.getPlaybackRate() != null && request.getPlaybackRate() > 0) {
-            room.setPlaybackRate(request.getPlaybackRate());
-        }
-
-        room.setLastActionAt(now);
-        room = roomRepository.save(room);
+        Room updated = applyPlaybackUpdateWithRetry(roomId, room, request);
 
         saveToOutbox(roomId, "room.playback.updated", RoomPlaybackChangedEvent.builder()
                 .roomId(roomId)
                 .action(request.getAction())
-                .playing(room.isPlaying())
-                .positionSeconds(room.getPositionSeconds())
-                .playbackRate(room.getPlaybackRate())
-                .episodeId(room.getEpisodeId())
+                .playing(updated.isPlaying())
+                .positionSeconds(updated.getPositionSeconds())
+                .playbackRate(updated.getPlaybackRate())
+                .episodeId(updated.getEpisodeId())
                 .actorUserId(userId)
-                .at(now)
+                .at(updated.getLastActionAt())
+                .playbackRevision(updated.getPlaybackRevision())
                 .build());
 
         // The lobby cards also show the room's current episode. Publish the updated room
         // snapshot only for public rooms; private-room metadata must never be broadcast to the
         // shared lobby. Private participants receive the same change through room:playback and
         // GET /rooms/my returns the persisted episodeId when they leave the room screen.
-        if (request.getAction() == com.MyProject.room_service.enums.PlaybackAction.CHANGE_EPISODE
-                && room.isPublicRoom()) {
-            saveToOutbox(roomId, "room.lobby.updated", toListItem(room));
+        if (request.getAction() == PlaybackAction.CHANGE_EPISODE && updated.isPublicRoom()) {
+            saveToOutbox(roomId, "room.lobby.updated", toListItem(updated));
         }
     }
+
+    /** Compare-and-set on Room.playbackRevision so a HEARTBEAT racing a PAUSE (or two commands
+     *  from a stale client) can never silently clobber a newer state - the read-compute-write
+     *  cycle is retried against fresh state on a CAS miss instead of blindly overwriting.
+     *  Bounded at MAX_PLAYBACK_CAS_ATTEMPTS: real contention here is expected to be extremely
+     *  rare (the frontend also serializes its own commands - see sendPlayback), so exhausting
+     *  retries indicates a genuine conflict worth surfacing rather than looping forever. */
+    private Room applyPlaybackUpdateWithRetry(String roomId, Room initial, PlaybackUpdateRequest request) {
+        Room current = initial;
+        for (int attempt = 1; attempt <= MAX_PLAYBACK_CAS_ATTEMPTS; attempt++) {
+            PlaybackComputation next = computeNewState(current, request);
+            Instant now = Instant.now();
+
+            Query query = Query.query(Criteria.where("_id").is(roomId)
+                    .and("playbackRevision").is(current.getPlaybackRevision()));
+            Update update = new Update()
+                    .set("playing", next.playing())
+                    .set("positionSeconds", next.positionSeconds())
+                    .set("playbackRate", next.playbackRate())
+                    .set("episodeId", next.episodeId())
+                    .set("lastActionAt", now)
+                    .inc("playbackRevision", 1);
+
+            Room casResult = mongoTemplate.findAndModify(
+                    query, update, FindAndModifyOptions.options().returnNew(true), Room.class);
+            if (casResult != null) {
+                return casResult;
+            }
+
+            current = findRoomOrThrow(roomId);
+            if (current.getStatus() != RoomStatus.ACTIVE) {
+                throw new AppException(ErrorCode.ROOM_CLOSED);
+            }
+        }
+        throw new AppException(ErrorCode.PLAYBACK_UPDATE_CONFLICT);
+    }
+
+    /** Pure computation (no mutation) so it's safe to call again against freshly-read state on a
+     *  CAS retry. Also where all playback validation lives. */
+    private PlaybackComputation computeNewState(Room current, PlaybackUpdateRequest request) {
+        validatePositionSeconds(request.getPositionSeconds());
+        validatePlaybackRate(request.getPlaybackRate());
+
+        boolean playing = current.isPlaying();
+        double positionSeconds = current.getPositionSeconds();
+        String episodeId = current.getEpisodeId();
+
+        switch (request.getAction()) {
+            case PLAY -> {
+                positionSeconds = request.getPositionSeconds() != null
+                        ? request.getPositionSeconds()
+                        : computeLivePositionSeconds(current);
+                playing = true;
+            }
+            case PAUSE -> {
+                positionSeconds = request.getPositionSeconds() != null
+                        ? request.getPositionSeconds()
+                        : computeLivePositionSeconds(current);
+                playing = false;
+            }
+            case SEEK -> {
+                if (request.getPositionSeconds() == null) {
+                    throw new AppException(ErrorCode.INVALID_PLAYBACK_ACTION);
+                }
+                positionSeconds = request.getPositionSeconds();
+            }
+            case CHANGE_EPISODE -> {
+                if (!StringUtils.hasText(request.getEpisodeId())) {
+                    throw new AppException(ErrorCode.INVALID_PLAYBACK_ACTION);
+                }
+                ensureEpisodeBelongsToFilm(current.getFilmId(), request.getEpisodeId());
+                episodeId = request.getEpisodeId();
+                positionSeconds = 0;
+                playing = true;
+            }
+            case HEARTBEAT -> {
+                // A playing room must keep reporting a live position - accepting a positionless
+                // heartbeat here would refresh lastActionAt without moving positionSeconds,
+                // making every viewer's live-position extrapolation jump backwards on next sync.
+                if (current.isPlaying() && request.getPositionSeconds() == null) {
+                    throw new AppException(ErrorCode.INVALID_PLAYBACK_ACTION);
+                }
+                if (request.getPositionSeconds() != null) {
+                    positionSeconds = request.getPositionSeconds();
+                }
+            }
+        }
+
+        double playbackRate = request.getPlaybackRate() != null ? request.getPlaybackRate() : current.getPlaybackRate();
+        positionSeconds = clampToEpisodeDuration(current.getFilmId(), episodeId, positionSeconds);
+
+        return new PlaybackComputation(playing, positionSeconds, playbackRate, episodeId);
+    }
+
+    private void validatePositionSeconds(Double positionSeconds) {
+        if (positionSeconds == null) return;
+        if (!Double.isFinite(positionSeconds) || positionSeconds < 0) {
+            throw new AppException(ErrorCode.INVALID_POSITION);
+        }
+    }
+
+    private void validatePlaybackRate(Double playbackRate) {
+        if (playbackRate == null) return;
+        if (!ALLOWED_PLAYBACK_RATES.contains(playbackRate)) {
+            throw new AppException(ErrorCode.INVALID_PLAYBACK_RATE);
+        }
+    }
+
+    private void ensureEpisodeBelongsToFilm(String filmId, String episodeId) {
+        boolean exists = roomFilmExternalService.getEpisodesByFilm(filmId).stream()
+                .anyMatch(episode -> episodeId.equals(episode.getId()));
+        if (!exists) {
+            throw new AppException(ErrorCode.EPISODE_NOT_IN_FILM);
+        }
+    }
+
+    /** Best-effort only - a cache miss (episode metadata not already resident) just skips
+     *  clamping rather than forcing a remote film-service call on every HEARTBEAT. */
+    private double clampToEpisodeDuration(String filmId, String episodeId, double positionSeconds) {
+        if (!StringUtils.hasText(episodeId)) return positionSeconds;
+        return roomFilmExternalService.getCachedEpisode(filmId, episodeId)
+                .filter(episode -> episode.getDurationMinutes() > 0)
+                .map(episode -> Math.min(positionSeconds, episode.getDurationMinutes() * 60.0))
+                .orElse(positionSeconds);
+    }
+
+    private record PlaybackComputation(boolean playing, double positionSeconds, double playbackRate, String episodeId) {}
 
     public List<RoomParticipantResponse> listParticipants(String roomId) {
         String userId = SecurityUtils.getCurrentUserId();
@@ -460,6 +563,12 @@ public class RoomService {
                 .build());
     }
 
+    private void publishLobbyUpdated(Room room) {
+        if (room != null && room.isPublicRoom()) {
+            saveToOutbox(room.getId(), "room.lobby.updated", toListItem(room));
+        }
+    }
+
     private RoomParticipantResponse toParticipantResponse(RoomParticipant participant) {
         UserProfileResponse profile = resolveProfiles(Set.of(participant.getUserId())).get(participant.getUserId());
         return RoomParticipantResponse.builder()
@@ -497,6 +606,8 @@ public class RoomService {
                 .positionSeconds(computeLivePositionSeconds(room))
                 .playbackRate(room.getPlaybackRate())
                 .lastActionAt(room.getLastActionAt())
+                .playbackRevision(room.getPlaybackRevision())
+                .wsToken(isParticipant ? roomSubscriptionTokenService.issueToken(viewerId, room.getId()) : null)
                 .participantCount(room.getParticipantCount())
                 .maxParticipants(room.getMaxParticipants())
                 .createdDate(room.getCreatedDate())
@@ -575,10 +686,79 @@ public class RoomService {
         return sb.toString();
     }
 
-    private Room incrementParticipantCount(String roomId, int delta) {
-        Query query = Query.query(Criteria.where("_id").is(roomId));
-        Update update = new Update().inc("participantCount", delta);
+    private Room reserveParticipantSlot(Room room) {
+        Query query = Query.query(Criteria.where("_id").is(room.getId())
+                .and("status").is(RoomStatus.ACTIVE)
+                .and("participantCount").lt(room.getMaxParticipants()));
+        Update update = new Update().inc("participantCount", 1);
         return mongoTemplate.findAndModify(query, update, FindAndModifyOptions.options().returnNew(true), Room.class);
+    }
+
+    private Room decrementParticipantCount(String roomId) {
+        Query query = Query.query(Criteria.where("_id").is(roomId)
+                .and("participantCount").gt(1));
+        Update update = new Update().inc("participantCount", -1);
+        return mongoTemplate.findAndModify(query, update, FindAndModifyOptions.options().returnNew(true), Room.class);
+    }
+
+    /** Called by RoomPresenceCleanupJob after the disconnect grace period. Redis is checked again
+     *  inside the transaction so a participant that reconnected while the job was scanning is
+     *  retained. On Redis failure this method fails safe and removes nobody. */
+    @Transactional(rollbackFor = Exception.class)
+    public boolean expireDisconnectedParticipant(String roomId, String userId, Instant disconnectedBefore) {
+        Optional<RoomParticipant> participantOpt = roomParticipantRepository.findByRoomIdAndUserId(roomId, userId);
+        if (participantOpt.isEmpty() || !hasExpiredPresenceLease(participantOpt.get(), disconnectedBefore)) {
+            return false;
+        }
+
+        Room room = findRoomOrThrow(roomId);
+        if (room.getStatus() != RoomStatus.ACTIVE) return false;
+
+        RoomParticipant participant = participantOpt.get();
+        if (participant.getRole() == ParticipantRole.HOST) {
+            closeRoomInternal(room, "HOST_DISCONNECTED");
+            return true;
+        }
+
+        roomParticipantRepository.deleteByRoomIdAndUserId(roomId, userId);
+        Room updated = decrementParticipantCount(roomId);
+        if (updated == null) updated = room;
+        publishParticipantEvent(updated, "LEFT", toParticipantResponse(participant));
+        publishLobbyUpdated(updated);
+        return true;
+    }
+
+    private boolean hasExpiredPresenceLease(RoomParticipant participant, Instant disconnectedBefore) {
+        try {
+            Long lastSeenAtMillis = redisService.hashGet(
+                    WATCH_LAST_SEEN_KEY_PREFIX + participant.getUserId(),
+                    participant.getRoomId(),
+                    new TypeReference<Long>() {});
+            Long disconnectedAtMillis = redisService.hashGet(
+                    WATCH_LAST_DISCONNECTED_KEY_PREFIX + participant.getUserId(),
+                    participant.getRoomId(),
+                    new TypeReference<Long>() {});
+            Instant leaseRefreshedAt = newestPresenceInstant(
+                    participant.getJoinedAt(), lastSeenAtMillis, disconnectedAtMillis);
+            return leaseRefreshedAt != null && !leaseRefreshedAt.isAfter(disconnectedBefore);
+        } catch (Exception exception) {
+            log.warn("Skipping presence expiry for user {} in room {} because Redis is unavailable",
+                    participant.getUserId(), participant.getRoomId(), exception);
+            return false;
+        }
+    }
+
+    private Instant newestPresenceInstant(Instant joinedAt, Long lastSeenAtMillis, Long disconnectedAtMillis) {
+        Instant newest = joinedAt;
+        if (lastSeenAtMillis != null) {
+            Instant lastSeen = Instant.ofEpochMilli(lastSeenAtMillis);
+            if (newest == null || lastSeen.isAfter(newest)) newest = lastSeen;
+        }
+        if (disconnectedAtMillis != null) {
+            Instant disconnectedAt = Instant.ofEpochMilli(disconnectedAtMillis);
+            if (newest == null || disconnectedAt.isAfter(newest)) newest = disconnectedAt;
+        }
+        return newest;
     }
 
     private Room findRoomOrThrow(String roomId) {

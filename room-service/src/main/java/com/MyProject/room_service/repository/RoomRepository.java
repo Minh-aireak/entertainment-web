@@ -12,6 +12,8 @@ import java.util.List;
 
 @Repository
 public interface RoomRepository extends MongoRepository<Room, String> {
+    List<Room> findByStatus(RoomStatus status);
+
     Page<Room> findByStatusAndPublicRoomTrue(RoomStatus status, Pageable pageable);
 
     Page<Room> findByIdInAndStatus(Collection<String> ids, RoomStatus status, Pageable pageable);
