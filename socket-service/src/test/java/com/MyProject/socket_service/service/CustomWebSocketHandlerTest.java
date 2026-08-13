@@ -31,13 +31,14 @@ class CustomWebSocketHandlerTest {
     @Mock RedisService redisService;
     @Mock SocketDownstreamService socketDownstreamService;
     @Mock OutboxRepository outboxRepository;
+    @Mock RoomSubscriptionTokenVerifier roomSubscriptionTokenVerifier;
 
     CustomWebSocketHandler handler;
 
     @BeforeEach
     void setUp() {
         handler = new CustomWebSocketHandler(webSocketSessionRepository, redisService, socketDownstreamService,
-                outboxRepository, new ObjectMapper().registerModule(new JavaTimeModule()));
+                outboxRepository, new ObjectMapper().registerModule(new JavaTimeModule()), roomSubscriptionTokenVerifier);
     }
 
     private WebSocketSession mockSession(String id, String query, String cookieHeader) {
@@ -157,6 +158,97 @@ class CustomWebSocketHandlerTest {
 
         assertThat(handler.isUserInRoom("user-1", "room-1")).isFalse();
         verify(redisService).hashIncrementAndGet("presence:active-chat:user-1", "room-1", -1);
+    }
+
+    @Test
+    void handleTextMessage_joinRoomWithoutToken_isUnaffectedLikeChatAndComments() throws Exception {
+        WebSocketSession session = connectSession("s1", "user-1");
+
+        invokeHandleTextMessage(session, "{\"type\":\"join-room\",\"roomId\":\"conversation-1\"}");
+
+        assertThat(handler.isUserInRoom("user-1", "conversation-1")).isTrue();
+        verifyNoInteractions(roomSubscriptionTokenVerifier);
+    }
+
+    @Test
+    void handleTextMessage_joinWatchRoomWithValidToken_joinsProtectedChannel() throws Exception {
+        WebSocketSession session = connectSession("s1", "user-1");
+        when(roomSubscriptionTokenVerifier.verify("good-token", "user-1", "room-1")).thenReturn(true);
+
+        invokeHandleTextMessage(session, "{\"type\":\"join-watch-room\",\"roomId\":\"room-1\",\"token\":\"good-token\"}");
+
+        assertThat(handler.isUserInRoom("user-1", "watch-room:room-1")).isTrue();
+        verify(redisService).hashIncrementAndGet("presence:watch-room:user-1", "room-1", 1);
+        verify(redisService).hashPut(eq("presence:watch-room:last-seen:user-1"), eq("room-1"), anyLong());
+        verify(redisService).hashDelete("presence:watch-room:last-disconnected:user-1", "room-1");
+    }
+
+    @Test
+    void handleTextMessage_joinWatchRoomWithInvalidToken_isRejected() throws Exception {
+        WebSocketSession session = connectSession("s1", "user-1");
+        when(roomSubscriptionTokenVerifier.verify("bad-token", "user-1", "room-1")).thenReturn(false);
+
+        invokeHandleTextMessage(session, "{\"type\":\"join-watch-room\",\"roomId\":\"room-1\",\"token\":\"bad-token\"}");
+
+        assertThat(handler.isUserInRoom("user-1", "watch-room:room-1")).isFalse();
+    }
+
+    @Test
+    void handleTextMessage_joinWatchRoomWithoutToken_isRejected() throws Exception {
+        WebSocketSession session = connectSession("s1", "user-1");
+
+        invokeHandleTextMessage(session, "{\"type\":\"join-watch-room\",\"roomId\":\"room-1\"}");
+
+        assertThat(handler.isUserInRoom("user-1", "watch-room:room-1")).isFalse();
+        verifyNoInteractions(roomSubscriptionTokenVerifier);
+    }
+
+    @Test
+    void handleTextMessage_genericJoinCannotEnterProtectedWatchChannel() throws Exception {
+        WebSocketSession session = connectSession("s1", "user-1");
+
+        invokeHandleTextMessage(session, "{\"type\":\"join-room\",\"roomId\":\"watch-room:room-1\"}");
+
+        assertThat(handler.isUserInRoom("user-1", "watch-room:room-1")).isFalse();
+        verifyNoInteractions(roomSubscriptionTokenVerifier);
+    }
+
+    @Test
+    void leaveWatchRoom_recordsLastDisconnectedWhenFinalSocketLeaves() throws Exception {
+        WebSocketSession session = connectSession("s1", "user-1");
+        when(roomSubscriptionTokenVerifier.verify("good-token", "user-1", "room-1")).thenReturn(true);
+        invokeHandleTextMessage(session, "{\"type\":\"join-watch-room\",\"roomId\":\"room-1\",\"token\":\"good-token\"}");
+        when(redisService.hashIncrementAndGet("presence:watch-room:user-1", "room-1", -1)).thenReturn(0L);
+
+        invokeHandleTextMessage(session, "{\"type\":\"leave-watch-room\",\"roomId\":\"room-1\"}");
+
+        verify(redisService).hashDelete("presence:watch-room:user-1", "room-1");
+        verify(redisService).hashPut(eq("presence:watch-room:last-disconnected:user-1"), eq("room-1"), anyLong());
+    }
+
+    @Test
+    void repeatedJoinDoesNotDoubleIncrementPresence() throws Exception {
+        WebSocketSession session = connectSession("s1", "user-1");
+
+        invokeHandleTextMessage(session, "{\"type\":\"join-room\",\"roomId\":\"conversation-1\"}");
+        invokeHandleTextMessage(session, "{\"type\":\"join-room\",\"roomId\":\"conversation-1\"}");
+
+        verify(redisService, times(1)).hashIncrementAndGet("presence:active-chat:user-1", "conversation-1", 1);
+    }
+
+    @Test
+    void watchRoomHeartbeat_refreshesLeaseOnlyAfterAuthorizedJoin() throws Exception {
+        WebSocketSession session = connectSession("s1", "user-1");
+
+        invokeHandleTextMessage(session, "{\"type\":\"watch-room-heartbeat\",\"roomId\":\"room-1\"}");
+        verify(redisService, never()).hashPut(eq("presence:watch-room:last-seen:user-1"), eq("room-1"), anyLong());
+
+        when(roomSubscriptionTokenVerifier.verify("good-token", "user-1", "room-1")).thenReturn(true);
+        invokeHandleTextMessage(session, "{\"type\":\"join-watch-room\",\"roomId\":\"room-1\",\"token\":\"good-token\"}");
+        clearInvocations(redisService);
+
+        invokeHandleTextMessage(session, "{\"type\":\"watch-room-heartbeat\",\"roomId\":\"room-1\"}");
+        verify(redisService).hashPut(eq("presence:watch-room:last-seen:user-1"), eq("room-1"), anyLong());
     }
 
     @Test

@@ -37,6 +37,7 @@ public class CustomWebSocketHandler extends TextWebSocketHandler {
     SocketDownstreamService socketDownstreamService;
     OutboxRepository outboxRepository;
     ObjectMapper objectMapper;
+    RoomSubscriptionTokenVerifier roomSubscriptionTokenVerifier;
 
     // userId -> Set<org.springframework.web.socket.WebSocketSession>
     Map<String, Set<org.springframework.web.socket.WebSocketSession>> userSessions = new ConcurrentHashMap<>();
@@ -50,7 +51,10 @@ public class CustomWebSocketHandler extends TextWebSocketHandler {
     // roomId -> Set<org.springframework.web.socket.WebSocketSession>
     Map<String, Set<org.springframework.web.socket.WebSocketSession>> roomSessions = new ConcurrentHashMap<>();
 
-    private static final String PRESENCE_KEY_PREFIX = "presence:active-chat:";
+    private static final String CHAT_PRESENCE_KEY_PREFIX = "presence:active-chat:";
+    private static final String WATCH_PRESENCE_KEY_PREFIX = "presence:watch-room:";
+    private static final String WATCH_LAST_SEEN_KEY_PREFIX = "presence:watch-room:last-seen:";
+    private static final String WATCH_LAST_DISCONNECTED_KEY_PREFIX = "presence:watch-room:last-disconnected:";
 
     @Override
     public void afterConnectionEstablished(org.springframework.web.socket.WebSocketSession session) throws Exception {
@@ -196,14 +200,30 @@ public class CustomWebSocketHandler extends TextWebSocketHandler {
             Map<String, Object> data = objectMapper.readValue(message.getPayload(), Map.class);
             String type = (String) data.get("type");
             
-            if ("join-room".equals(type)) {
+            if ("join-watch-room".equals(type)) {
                 String roomId = (String) data.get("roomId");
-                if (roomId != null) {
+                String token = (String) data.get("token");
+                if (StringUtils.hasText(roomId) && isWatchRoomJoinAuthorized(session, roomId, token)) {
+                    joinRoom(session, RoomChannelNames.watchRoom(roomId));
+                }
+            } else if ("leave-watch-room".equals(type)) {
+                String roomId = (String) data.get("roomId");
+                if (StringUtils.hasText(roomId)) {
+                    leaveRoom(session, RoomChannelNames.watchRoom(roomId));
+                }
+            } else if ("watch-room-heartbeat".equals(type)) {
+                String roomId = (String) data.get("roomId");
+                if (StringUtils.hasText(roomId)) {
+                    touchWatchRoomPresence(session, roomId);
+                }
+            } else if ("join-room".equals(type)) {
+                String roomId = (String) data.get("roomId");
+                if (StringUtils.hasText(roomId) && !RoomChannelNames.isWatchRoom(roomId)) {
                     joinRoom(session, roomId);
                 }
             } else if ("leave-room".equals(type)) {
                 String roomId = (String) data.get("roomId");
-                if (roomId != null) {
+                if (StringUtils.hasText(roomId) && !RoomChannelNames.isWatchRoom(roomId)) {
                     leaveRoom(session, roomId);
                 }
             }
@@ -212,20 +232,36 @@ public class CustomWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+    /** Watch-room joins use a dedicated protocol and internal channel namespace. This prevents a
+     *  caller from bypassing token verification by sending the legacy generic join-room message
+     *  with a watch room id; that message resolves to a different, non-watch channel. */
+    private boolean isWatchRoomJoinAuthorized(org.springframework.web.socket.WebSocketSession session, String roomId, String token) {
+        String userId = sessionToUser.get(session.getId());
+        if (!StringUtils.hasText(token)
+                || userId == null
+                || !roomSubscriptionTokenVerifier.verify(token, userId, roomId)) {
+            log.warn("Rejected join-watch-room for session {} on room {}: missing or invalid subscription token",
+                    session.getId(), roomId);
+            return false;
+        }
+        return true;
+    }
+
     public void joinRoom(org.springframework.web.socket.WebSocketSession session, String roomId) {
-        roomSessions.computeIfAbsent(roomId, k -> ConcurrentHashMap.newKeySet()).add(session);
+        boolean newlyJoined = roomSessions.computeIfAbsent(roomId, k -> ConcurrentHashMap.newKeySet()).add(session);
         sessionRooms.computeIfAbsent(session.getId(), k -> ConcurrentHashMap.newKeySet()).add(roomId);
 
         String userId = sessionToUser.get(session.getId());
-        incrementPresence(userId, roomId);
+        if (newlyJoined) incrementPresence(userId, roomId);
 
         log.info("Session {} joined room {}", session.getId(), roomId);
     }
 
     public void leaveRoom(org.springframework.web.socket.WebSocketSession session, String roomId) {
+        boolean removed = false;
         Set<org.springframework.web.socket.WebSocketSession> sessions = roomSessions.get(roomId);
         if (sessions != null) {
-            sessions.remove(session);
+            removed = sessions.remove(session);
             if (sessions.isEmpty()) {
                 roomSessions.remove(roomId);
             }
@@ -236,7 +272,7 @@ public class CustomWebSocketHandler extends TextWebSocketHandler {
         }
 
         String userId = sessionToUser.get(session.getId());
-        decrementPresence(userId, roomId);
+        if (removed) decrementPresence(userId, roomId);
 
         log.info("Session {} left room {}", session.getId(), roomId);
     }
@@ -244,7 +280,13 @@ public class CustomWebSocketHandler extends TextWebSocketHandler {
     private void incrementPresence(String userId, String roomId) {
         if (userId == null) return;
         try {
-            redisService.hashIncrementAndGet(PRESENCE_KEY_PREFIX + userId, roomId, 1);
+            String externalRoomId = RoomChannelNames.externalRoomId(roomId);
+            redisService.hashIncrementAndGet(presenceKey(userId, roomId), externalRoomId, 1);
+            if (RoomChannelNames.isWatchRoom(roomId)) {
+                redisService.hashPut(WATCH_LAST_SEEN_KEY_PREFIX + userId,
+                        externalRoomId, Instant.now().toEpochMilli());
+                redisService.hashDelete(WATCH_LAST_DISCONNECTED_KEY_PREFIX + userId, externalRoomId);
+            }
         } catch (Exception e) {
             log.error("Failed to increment presence for user {} in room {}", userId, roomId, e);
         }
@@ -253,12 +295,39 @@ public class CustomWebSocketHandler extends TextWebSocketHandler {
     private void decrementPresence(String userId, String roomId) {
         if (userId == null) return;
         try {
-            Long remaining = redisService.hashIncrementAndGet(PRESENCE_KEY_PREFIX + userId, roomId, -1);
+            String externalRoomId = RoomChannelNames.externalRoomId(roomId);
+            String presenceKey = presenceKey(userId, roomId);
+            Long remaining = redisService.hashIncrementAndGet(presenceKey, externalRoomId, -1);
             if (remaining != null && remaining <= 0) {
-                redisService.hashDelete(PRESENCE_KEY_PREFIX + userId, roomId);
+                redisService.hashDelete(presenceKey, externalRoomId);
+                if (RoomChannelNames.isWatchRoom(roomId)) {
+                    redisService.hashPut(WATCH_LAST_DISCONNECTED_KEY_PREFIX + userId,
+                            externalRoomId, Instant.now().toEpochMilli());
+                }
             }
         } catch (Exception e) {
             log.error("Failed to decrement presence for user {} in room {}", userId, roomId, e);
+        }
+    }
+
+    private String presenceKey(String userId, String roomId) {
+        String prefix = RoomChannelNames.isWatchRoom(roomId)
+                ? WATCH_PRESENCE_KEY_PREFIX
+                : CHAT_PRESENCE_KEY_PREFIX;
+        return prefix + userId;
+    }
+
+    private void touchWatchRoomPresence(org.springframework.web.socket.WebSocketSession session, String roomId) {
+        String channelId = RoomChannelNames.watchRoom(roomId);
+        Set<String> joinedRooms = sessionRooms.get(session.getId());
+        if (joinedRooms == null || !joinedRooms.contains(channelId)) return;
+
+        String userId = sessionToUser.get(session.getId());
+        if (userId == null) return;
+        try {
+            redisService.hashPut(WATCH_LAST_SEEN_KEY_PREFIX + userId, roomId, Instant.now().toEpochMilli());
+        } catch (Exception exception) {
+            log.error("Failed to refresh watch-room presence for user {} in room {}", userId, roomId, exception);
         }
     }
 

@@ -35,7 +35,7 @@ class RoomEventKafkaServiceTest {
 
         roomEventKafkaService.consumePlaybackUpdated(payload, ack);
 
-        verify(webSocketSessionService).sendToRoom(eq("room-1"), eq("room:playback"), any(RoomPlaybackChangedEvent.class));
+        verify(webSocketSessionService).sendToRoom(eq("watch-room:room-1"), eq("room:playback"), any(RoomPlaybackChangedEvent.class));
         verify(ack).acknowledge();
     }
 
@@ -52,7 +52,7 @@ class RoomEventKafkaServiceTest {
 
         roomEventKafkaService.consumeParticipantChanged(payload, ack);
 
-        verify(webSocketSessionService).sendToRoom(eq("room-1"), eq("room:participants"), any(RoomParticipantChangedEvent.class));
+        verify(webSocketSessionService).sendToRoom(eq("watch-room:room-1"), eq("room:participants"), any(RoomParticipantChangedEvent.class));
         verify(ack).acknowledge();
     }
 
@@ -69,7 +69,7 @@ class RoomEventKafkaServiceTest {
 
         roomEventKafkaService.consumeMessageCreated(payload, ack);
 
-        verify(webSocketSessionService).sendToRoom(eq("room-1"), eq("room:message"), any(RoomMessageResponse.class));
+        verify(webSocketSessionService).sendToRoom(eq("watch-room:room-1"), eq("room:message"), any(RoomMessageResponse.class));
         verify(ack).acknowledge();
     }
 
@@ -86,7 +86,7 @@ class RoomEventKafkaServiceTest {
 
         roomEventKafkaService.consumeRoomClosed(payload, ack);
 
-        verify(webSocketSessionService).sendToRoom(eq("room-1"), eq("room:closed"), any(RoomClosedEvent.class));
+        verify(webSocketSessionService).sendToRoom(eq("watch-room:room-1"), eq("room:closed"), any(RoomClosedEvent.class));
         verify(webSocketSessionService).sendToRoom(eq("watch-together-lobby"), eq("lobby:room-closed"), any(RoomClosedEvent.class));
         verify(ack).acknowledge();
     }

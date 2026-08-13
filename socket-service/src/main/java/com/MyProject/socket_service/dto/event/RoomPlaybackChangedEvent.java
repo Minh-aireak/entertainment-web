@@ -21,4 +21,5 @@ public class RoomPlaybackChangedEvent {
     String episodeId;
     String actorUserId;
     Instant at;
+    int playbackRevision;
 }
