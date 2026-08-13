@@ -27,6 +27,8 @@ import {
 import { notificationService } from '../../api/notificationService';
 import type { NotificationResponse } from '../../models';
 import { REALTIME_NOTIFICATION_EVENT } from '../../contexts/WebSocketContext';
+import { useTranslation } from 'react-i18next';
+import { formatRelativeTime } from '../../utils/time';
 
 const PREVIEW_SIZE = 6;
 const FLYOUT_AUTO_HIDE_MS = 6000;
@@ -43,24 +45,13 @@ interface NotificationMenuProps {
   onMarkedAllRead?: () => void;
 }
 
-const formatRelativeTime = (dateString: string) => {
-  const createdAt = new Date(dateString).getTime();
-  const diffSeconds = Math.max(0, Math.floor((Date.now() - createdAt) / 1000));
-
-  if (diffSeconds < 60) return 'V\u1eeba xong';
-  if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)} ph\u00fat tr\u01b0\u1edbc`;
-  if (diffSeconds < 86400) return `${Math.floor(diffSeconds / 3600)} gi\u1edd tr\u01b0\u1edbc`;
-  if (diffSeconds < 604800) return `${Math.floor(diffSeconds / 86400)} ng\u00e0y tr\u01b0\u1edbc`;
-
-  return new Date(dateString).toLocaleDateString('vi-VN');
-};
-
 const NotificationMenu: React.FC<NotificationMenuProps> = ({
   unreadCount,
   active = false,
   onMarkedAllRead,
 }) => {
   const navigate = useNavigate();
+  const { t, i18n } = useTranslation();
   const flyoutTimerRef = useRef<number | undefined>(undefined);
   const [iconEl, setIconEl] = useState<HTMLButtonElement | null>(null);
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
@@ -81,11 +72,11 @@ const NotificationMenu: React.FC<NotificationMenuProps> = ({
       setNotifications(response.result?.data ?? []);
     } catch (fetchError) {
       console.error('Failed to fetch notification preview:', fetchError);
-      setError('Kh\u00f4ng th\u1ec3 t\u1ea3i th\u00f4ng b\u00e1o.');
+      setError(t('notificationsLoadFailed'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (open) {
@@ -166,7 +157,7 @@ const NotificationMenu: React.FC<NotificationMenuProps> = ({
       window.dispatchEvent(new Event(REALTIME_NOTIFICATION_EVENT));
     } catch (markError) {
       console.error('Failed to mark notifications as read:', markError);
-      setError('Kh\u00f4ng th\u1ec3 \u0111\u00e1nh d\u1ea5u th\u00f4ng b\u00e1o \u0111\u00e3 \u0111\u1ecdc.');
+      setError(t('notificationsUpdateFailed'));
     } finally {
       setMarkingAllRead(false);
     }
@@ -174,19 +165,27 @@ const NotificationMenu: React.FC<NotificationMenuProps> = ({
 
   return (
     <>
-      <Tooltip title={'Th\u00f4ng b\u00e1o'}>
+      <Tooltip title={t('notifications')}>
         <IconButton
           ref={setIconEl}
           onClick={handleToggle}
-          aria-label={'Th\u00f4ng b\u00e1o'}
+          aria-label={t('notifications')}
           aria-haspopup="dialog"
           aria-expanded={open}
           sx={{
+            width: 44,
+            height: 44,
+            borderRadius: '12px',
             color: active || open ? 'primary.main' : 'text.secondary',
-            backgroundColor: open ? 'primary.50' : 'transparent',
+            bgcolor: active || open ? 'primary.50' : (theme) =>
+              theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+            border: '1px solid',
+            borderColor: active || open ? 'primary.main' : 'divider',
+            transition: 'all 0.2s ease',
             '&:hover': {
               backgroundColor: 'primary.50',
               color: 'primary.main',
+              borderColor: 'primary.main',
             },
           }}
         >
@@ -235,7 +234,7 @@ const NotificationMenu: React.FC<NotificationMenuProps> = ({
           }}
         >
           <Typography variant="h6" sx={{ fontWeight: 800 }}>
-            {'Th\u00f4ng b\u00e1o'}
+            {t('notifications')}
           </Typography>
           {unreadCount > 0 && (
             <Button
@@ -245,7 +244,7 @@ const NotificationMenu: React.FC<NotificationMenuProps> = ({
               onClick={() => void handleMarkAllRead()}
               sx={{ textTransform: 'none', whiteSpace: 'nowrap' }}
             >
-              {'\u0110\u00e1nh d\u1ea5u \u0111\u00e3 \u0111\u1ecdc'}
+              {t('markAllRead')}
             </Button>
           )}
         </Box>
@@ -258,7 +257,7 @@ const NotificationMenu: React.FC<NotificationMenuProps> = ({
               severity="error"
               action={(
                 <Button color="inherit" size="small" onClick={() => void fetchNotifications()}>
-                  {'Th\u1eed l\u1ea1i'}
+                  {t('retry')}
                 </Button>
               )}
               sx={{ m: 1.5 }}
@@ -283,7 +282,7 @@ const NotificationMenu: React.FC<NotificationMenuProps> = ({
             <Box sx={{ px: 3, py: 5, textAlign: 'center' }}>
               <NotificationsIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
               <Typography color="text.secondary">
-                {'B\u1ea1n ch\u01b0a c\u00f3 th\u00f4ng b\u00e1o n\u00e0o'}
+                {t('noNotificationsYet')}
               </Typography>
             </Box>
           ) : !loading && notifications.map((notification) => (
@@ -314,7 +313,7 @@ const NotificationMenu: React.FC<NotificationMenuProps> = ({
               </ListItemAvatar>
               <ListItemText
                 primary={notification.message}
-                secondary={formatRelativeTime(notification.createdAt)}
+                secondary={formatRelativeTime(notification.createdAt, i18n.language)}
                 slotProps={{
                   primary: {
                     variant: 'body2',
@@ -348,7 +347,7 @@ const NotificationMenu: React.FC<NotificationMenuProps> = ({
             onClick={handleViewAll}
             sx={{ py: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
           >
-            {'Xem t\u1ea5t c\u1ea3 th\u00f4ng b\u00e1o'}
+            {t('viewAllNotifications')}
           </Button>
         </Box>
       </Popover>

@@ -11,7 +11,8 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { Person, Logout as LogoutIcon } from '@mui/icons-material';
+import { Person, Logout as LogoutIcon, ExpandMore } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 
 interface AccountMenuProps {
   displayName: string;
@@ -23,6 +24,7 @@ interface AccountMenuProps {
 
 const AccountMenu: React.FC<AccountMenuProps> = ({ displayName, email, avatar, active = false, onLogout }) => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const open = Boolean(anchorEl);
   const initial = displayName.charAt(0).toUpperCase();
@@ -48,20 +50,40 @@ const AccountMenu: React.FC<AccountMenuProps> = ({ displayName, email, avatar, a
       <Tooltip title={displayName}>
         <IconButton
           onClick={handleToggle}
-          aria-label="Tài khoản"
+          aria-label={t('account')}
           aria-haspopup="menu"
           aria-expanded={open}
           sx={{
-            p: 0.5,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.5,
+            height: 44,
+            pl: 0.5,
+            pr: 1,
             ml: 0.5,
-            border: '2px solid',
-            borderColor: active || open ? 'primary.main' : 'transparent',
-            transition: 'border-color 0.2s ease',
+            borderRadius: '999px',
+            bgcolor: active || open ? 'primary.50' : (theme) =>
+              theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+            border: '1px solid',
+            borderColor: active || open ? 'primary.main' : 'divider',
+            transition: 'all 0.2s ease',
+            '&:hover': {
+              backgroundColor: 'primary.50',
+              borderColor: 'primary.main',
+            },
           }}
         >
           <Avatar src={avatar} sx={{ width: 34, height: 34, fontWeight: 700, fontSize: '0.95rem' }}>
             {!avatar && initial}
           </Avatar>
+          <ExpandMore
+            fontSize="small"
+            sx={{
+              color: active || open ? 'primary.main' : 'text.secondary',
+              transition: 'transform 0.2s ease',
+              transform: open ? 'rotate(180deg)' : 'none',
+            }}
+          />
         </IconButton>
       </Tooltip>
 
@@ -106,7 +128,7 @@ const AccountMenu: React.FC<AccountMenuProps> = ({ displayName, email, avatar, a
           <ListItemIcon>
             <Person fontSize="small" />
           </ListItemIcon>
-          Trang cá nhân
+          {t('profile')}
         </MenuItem>
 
         <Divider />
@@ -115,7 +137,7 @@ const AccountMenu: React.FC<AccountMenuProps> = ({ displayName, email, avatar, a
           <ListItemIcon>
             <LogoutIcon fontSize="small" color="error" />
           </ListItemIcon>
-          Đăng xuất
+          {t('logout')}
         </MenuItem>
       </Menu>
     </>

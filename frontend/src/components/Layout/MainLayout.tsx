@@ -44,6 +44,7 @@ import { notificationService } from '../../api/notificationService';
 import { filmService } from '../../api/filmService';
 import NotificationMenu from './NotificationMenu';
 import AccountMenu from './AccountMenu';
+import LanguageSwitcher from './LanguageSwitcher';
 
 const NAVBAR_HEIGHT = 64;
 const SIDEBAR_EXPANDED_WIDTH = 300;
@@ -82,7 +83,7 @@ type SidebarBadgeKey = 'messages' | 'friendRequests' | 'notifications' | 'watchl
 
 interface SidebarMenuItem {
   id: string;
-  label: string;
+  labelKey: string;
   icon: typeof Home;
   path: string;
   badgeKey?: SidebarBadgeKey;
@@ -103,20 +104,20 @@ const EMPTY_SIDEBAR_COUNTS: SidebarCounts = {
 };
 
 const socialMenuItems = [
-  { id: 'home', label: 'Trang chủ', icon: Home, path: '/social' },
-  { id: 'messages', label: 'Nhắn tin', icon: Message, path: '/social/chat', badgeKey: 'messages' },
-  { id: 'friends', label: 'Bạn bè', icon: Group, path: '/social/friends', badgeKey: 'friendRequests' },
+  { id: 'home', labelKey: 'home', icon: Home, path: '/social' },
+  { id: 'messages', labelKey: 'chat', icon: Message, path: '/social/chat', badgeKey: 'messages' },
+  { id: 'friends', labelKey: 'friends', icon: Group, path: '/social/friends', badgeKey: 'friendRequests' },
 ] satisfies SidebarMenuItem[];
 
 const entertainmentMenuItems = [
-  { id: 'explore', label: 'Khám phá phim', icon: Explore, path: '/film' },
-  { id: 'search', label: 'Tìm kiếm phim', icon: Search, path: '/film/search' },
-  { id: 'watch-together', label: 'Xem chung', icon: Groups, path: '/film/watch-together' },
-  { id: 'watchlist', label: 'Thư viện của tôi', icon: Bookmark, path: '/film/library', badgeKey: 'watchlist' },
+  { id: 'explore', labelKey: 'exploreFilms', icon: Explore, path: '/film' },
+  { id: 'search', labelKey: 'searchFilms', icon: Search, path: '/film/search' },
+  { id: 'watch-together', labelKey: 'watchTogether', icon: Groups, path: '/film/watch-together' },
+  { id: 'watchlist', labelKey: 'myLibrary', icon: Bookmark, path: '/film/library', badgeKey: 'watchlist' },
 ] satisfies SidebarMenuItem[];
 
 const adminMenuItems = [
-  { id: 'admin', label: 'Quản trị hệ thống', icon: AdminPanelSettings, path: '/admin' },
+  { id: 'admin', labelKey: 'adminSystem', icon: AdminPanelSettings, path: '/admin' },
 ] satisfies SidebarMenuItem[];
 
 const listItemSx = (selected: boolean, isCollapsed: boolean, isLast?: boolean) => ({
@@ -204,6 +205,7 @@ const SidebarPanel = React.memo(function SidebarPanel({
   onToggleCollapse,
   onNavigate,
 }: SidebarPanelProps) {
+  const { t } = useTranslation();
   const isCollapsed = !isMobile && collapsedProp;
   const sidebarWidth = isMobile ? SIDEBAR_EXPANDED_WIDTH : (isCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH);
 
@@ -230,8 +232,9 @@ const SidebarPanel = React.memo(function SidebarPanel({
           const Icon = item.icon;
           const isLast = idx === items.length - 1;
           const badgeValue = item.badgeKey ? counts[item.badgeKey] : 0;
+          const label = t(item.labelKey);
           return (
-            <Tooltip key={item.id} title={isCollapsed ? item.label : ""} placement="right">
+            <Tooltip key={item.id} title={isCollapsed ? label : ""} placement="right">
               <ListItem disablePadding sx={{ mb: isLast ? 0 : 0.5 }}>
                 <ListItemButton
                   component={Link}
@@ -245,7 +248,7 @@ const SidebarPanel = React.memo(function SidebarPanel({
                       <Icon fontSize="medium" />
                     </Badge>
                   </ListItemIcon>
-                  <ListItemText primary={item.label} />
+                  <ListItemText primary={label} />
                   {badgeValue > 0 && !isCollapsed && (
                     <Box sx={{
                       minWidth: 22,
@@ -330,9 +333,9 @@ const SidebarPanel = React.memo(function SidebarPanel({
 
         <Divider sx={{ mx: isCollapsed ? 2 : 3, transition: sidebarTransition('margin') }} />
 
-        {renderMenuSection('MẠNG XÃ HỘI', socialMenuItems, 'error', 2)}
-        {renderMenuSection('GIẢI TRÍ', entertainmentMenuItems, 'primary', 1)}
-        {isAdmin && renderMenuSection('QUẢN TRỊ', adminMenuItems, 'primary', 1)}
+        {renderMenuSection(t('socialSection'), socialMenuItems, 'error', 2)}
+        {renderMenuSection(t('entertainmentSection'), entertainmentMenuItems, 'primary', 1)}
+        {isAdmin && renderMenuSection(t('adminSection'), adminMenuItems, 'primary', 1)}
 
         <Box sx={{ flexGrow: 1 }} />
       </Box>
@@ -340,10 +343,10 @@ const SidebarPanel = React.memo(function SidebarPanel({
       {/* Sidebar Toggle Button on Right Edge — a full circle straddling the border, sized as a
           real touch target (40px) instead of the sliver it used to be. */}
       {!isMobile && (
-        <Tooltip title={isCollapsed ? 'Mở rộng menu' : 'Thu gọn menu'} placement="right">
+        <Tooltip title={isCollapsed ? t('expandMenu') : t('collapseMenu')} placement="right">
           <IconButton
             onClick={onToggleCollapse}
-            aria-label={isCollapsed ? 'Mở rộng menu' : 'Thu gọn menu'}
+            aria-label={isCollapsed ? t('expandMenu') : t('collapseMenu')}
             sx={{
               position: 'absolute',
               right: 0,
@@ -394,7 +397,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
   const isAdmin = user?.roles.some((role) => role.name === 'ADMIN') ?? false;
 
-  const displayName = profileData?.displayName || user?.username || 'User';
+  const displayName = profileData?.displayName || user?.username || t('anonymousUser');
   const avatar = profileData?.avatar || '';
   const email = profileData?.email || user?.email || 'user@aireak.com';
 
@@ -514,6 +517,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           <Box sx={{ flexGrow: 1 }} />
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <LanguageSwitcher />
             {!isAuthenticated ? (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Button
@@ -547,7 +551,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                   active={location.pathname.startsWith('/social/notifications')}
                   onMarkedAllRead={handleNotificationsMarkedRead}
                 />
-                <Tooltip title={themeMode === 'dark' ? t('lightMode') || "Chế độ sáng" : t('darkMode') || "Chế độ tối"}>
+                <Tooltip title={themeMode === 'dark' ? t('lightMode') : t('darkMode')}>
                   <IconButton
                     onClick={() => dispatch(toggleThemeMode())}
                     sx={{
@@ -555,7 +559,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                       width: 44,
                       height: 44,
                       borderRadius: '12px',
-                      '&:hover': { bgcolor: 'rgba(0,168,78,0.08)' }
+                      bgcolor: (theme) =>
+                        theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      transition: 'all 0.2s ease',
+                      '&:hover': { bgcolor: 'rgba(0,168,78,0.08)', borderColor: 'primary.main', color: 'primary.main' }
                     }}
                   >
                     {themeMode === 'dark' ? <ThemeIcon fontSize="medium" /> : <DarkModeIcon fontSize="medium" />}

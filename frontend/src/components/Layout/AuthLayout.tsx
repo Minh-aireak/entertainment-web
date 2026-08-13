@@ -8,12 +8,20 @@ import {
   Button
 } from '@mui/material';
 import { Movie } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
+import LanguageSwitcher from './LanguageSwitcher';
 
 interface AuthLayoutProps {
   children: React.ReactNode;
+  // Lets a page (e.g. the split-screen Login) stretch its content edge-to-edge
+  // instead of being centered/padded, without changing the default layout
+  // used by Register/ForgotPassword/ResetPassword.
+  fullBleed?: boolean;
 }
 
-const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
+const AuthLayout: React.FC<AuthLayoutProps> = ({ children, fullBleed = false }) => {
+  const { t } = useTranslation();
+
   return (
     <Box
       sx={{
@@ -68,28 +76,31 @@ const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
 
           <Box
             sx={{
-              display: { xs: 'none', md: 'flex' },
+              display: 'flex',
               alignItems: 'center',
-              gap: 2,
+              gap: { xs: 0.5, md: 2 },
             }}
           >
+            <LanguageSwitcher />
             <Button
               component={RouterLink}
               to="/login"
               sx={{
+                display: { xs: 'none', md: 'inline-flex' },
                 color: 'text.primary',
                 textTransform: 'none',
                 fontWeight: 600,
                 '&:hover': { color: '#00A84E' },
               }}
             >
-              Đăng nhập
+              {t('login')}
             </Button>
             <Button
               component={RouterLink}
               to="/register"
               variant="contained"
               sx={{
+                display: { xs: 'none', sm: 'inline-flex' },
                 bgcolor: '#00A84E',
                 color: '#fff',
                 textTransform: 'none',
@@ -99,7 +110,7 @@ const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
                 '&:hover': { bgcolor: '#008F41' },
               }}
             >
-              Tham gia ngay
+              {t('joinNow')}
             </Button>
           </Box>
         </Toolbar>
@@ -110,9 +121,9 @@ const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
         sx={{
           flex: 1,
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          p: { xs: 2, sm: 4 },
+          alignItems: fullBleed ? 'stretch' : 'center',
+          justifyContent: fullBleed ? 'stretch' : 'center',
+          p: fullBleed ? 0 : { xs: 2, sm: 4 },
         }}
       >
         {children}
