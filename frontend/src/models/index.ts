@@ -311,9 +311,43 @@ export interface EpisodeRequest {
   filmId: string;
 }
 
+export interface EpisodeSummaryResponse {
+  id: string;
+  seasonNumber: number;
+  episodeNumber: number;
+  title: string;
+  videoFileId: string;
+  durationMinutes: number;
+  filmId: string;
+  filmTitle: string;
+  filmSeries?: boolean;
+  filmEpisodeCount: number;
+}
+
 export interface FilmAggregateResponse {
   topHotFilms: PageResponse<FilmSummaryResponse>;
   latestFilms: PageResponse<FilmSummaryResponse>;
+}
+
+export interface WatchProgressRequest {
+  filmId: string;
+  episodeId?: string;
+  positionSeconds: number;
+  durationSeconds: number;
+}
+
+export interface WatchProgressResponse {
+  filmId: string;
+  filmTitle: string;
+  thumbnailUrl?: string;
+  thumbnailFileId?: string;
+  series?: boolean;
+  episodeId?: string;
+  episodeNumber?: number;
+  totalEpisodes?: number;
+  positionSeconds: number;
+  durationSeconds: number;
+  updatedAt: string;
 }
 
 export type PostType =
@@ -331,14 +365,7 @@ export interface Post {
   endTime?: string;
   createdDate: string;
   modifiedDate?: string;
-  status?: string;
   listUsersJoin?: string[];
-}
-
-export interface ActionConfig {
-  requiredStatus: string;
-  newStatus: string;
-  messageTemplate: string;
 }
 
 export interface FriendRequestResponse {
@@ -615,7 +642,6 @@ export interface PostResponse {
   endTime?: string;
   createdDate: string;
   modifiedDate?: string;
-  status?: string;
   likeCount: number;
   liked: boolean;
   imageFileIds?: string[];
@@ -633,19 +659,6 @@ export interface PostResponse {
 export interface LikeResponse {
   liked: boolean;
   likeCount: number;
-}
-
-export interface StatusResponse {
-  quantityOnGoing: number;
-  quantityUpComing: number;
-}
-
-export interface StatusUpdateResponse {
-  userId: string;
-  scheduleId: string;
-  title: string;
-  newStatus: string;
-  message: string;
 }
 
 export interface ParticipantResponse {
@@ -852,6 +865,11 @@ export interface CompletedPart {
 export type RoomStatus = 'ACTIVE' | 'CLOSED';
 export type ParticipantRole = 'HOST' | 'VIEWER';
 export type PlaybackAction = 'PLAY' | 'PAUSE' | 'SEEK' | 'CHANGE_EPISODE' | 'HEARTBEAT';
+/** Mirrors PlaybackAction plus a 'JOIN' pseudo-action for the initial/reconnect REST snapshot
+ *  (not itself a playback action, but must sync exactly like one - hard). Used by
+ *  VideoPlayer.syncTo's per-action correction threshold and by WatchRoomSessionContext's derived
+ *  syncTarget. */
+export type SyncAction = PlaybackAction | 'JOIN';
 
 export interface CreateRoomRequest {
   filmId: string;
@@ -895,6 +913,13 @@ export interface RoomResponse {
   positionSeconds: number;
   playbackRate: number;
   lastActionAt?: string;
+  /** Ignore any snapshot/event whose revision is older than the last one applied (see
+   *  WatchRoomSessionContext) - prevents a reconnect resync race from rolling playback state
+   *  backwards. Defaults to 0 for rooms created before this field existed. */
+  playbackRevision: number;
+  /** Short-lived signed token proving this caller may subscribe to the room's WebSocket channel
+   *  - present only for participants (host or joined viewer), see useRoomSocket. */
+  wsToken?: string;
   participantCount: number;
   maxParticipants: number;
   createdDate?: string;
@@ -951,6 +976,7 @@ export interface RoomPlaybackChangedEvent {
   episodeId?: string;
   actorUserId: string;
   at: string;
+  playbackRevision: number;
 }
 
 export interface RoomParticipantChangedEvent {

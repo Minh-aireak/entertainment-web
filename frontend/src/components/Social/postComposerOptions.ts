@@ -22,20 +22,19 @@ export const BACKGROUND_TEXT_LIMIT = 180;
 export interface PostFeelingOption {
   key: string;
   emoji: string;
-  label: string;
 }
 
 export const POST_FEELINGS: PostFeelingOption[] = [
-  { key: 'HAPPY', emoji: '😄', label: 'vui vẻ' },
-  { key: 'EXCITED', emoji: '🤩', label: 'phấn khích' },
-  { key: 'LOVED', emoji: '🥰', label: 'yêu đời' },
-  { key: 'SAD', emoji: '😢', label: 'buồn' },
-  { key: 'TIRED', emoji: '😴', label: 'mệt mỏi' },
-  { key: 'HYPE', emoji: '🔥', label: 'hype' },
-  { key: 'WATCHING', emoji: '🎬', label: 'đang xem phim' },
-  { key: 'SNACKING', emoji: '🍿', label: 'đang ăn vặt' },
-  { key: 'CELEBRATING', emoji: '🥳', label: 'ăn mừng' },
-  { key: 'CHILL', emoji: '🧊', label: 'thư giãn' },
+  { key: 'HAPPY', emoji: '😄' },
+  { key: 'EXCITED', emoji: '🤩' },
+  { key: 'LOVED', emoji: '🥰' },
+  { key: 'SAD', emoji: '😢' },
+  { key: 'TIRED', emoji: '😴' },
+  { key: 'HYPE', emoji: '🔥' },
+  { key: 'WATCHING', emoji: '🎬' },
+  { key: 'SNACKING', emoji: '🍿' },
+  { key: 'CELEBRATING', emoji: '🥳' },
+  { key: 'CHILL', emoji: '🧊' },
 ];
 
 export const findBackground = (key?: string | null): PostBackgroundOption | undefined =>

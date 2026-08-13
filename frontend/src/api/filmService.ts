@@ -14,16 +14,20 @@ import type {
   RatingRequest,
   EpisodeResponse,
   EpisodeRequest,
+  EpisodeSummaryResponse,
   FilmCategory,
   FilmSortField,
   SortDirection,
   Country,
-  Genre
+  Genre,
+  WatchProgressRequest,
+  WatchProgressResponse
 } from '../models';
 
 const FILM_BASE_URL = '/films';
 const FOLLOW_BASE_URL = `${FILM_BASE_URL}/follows`;
 const EPISODE_BASE_URL = `${FILM_BASE_URL}/episodes`;
+const WATCH_PROGRESS_BASE_URL = `${FILM_BASE_URL}/watch-progress`;
 
 // Per-film debouncers map
 const toggleFollowDebouncers = new Map<string, (...args: any[]) => Promise<any>>();
@@ -185,6 +189,16 @@ export const filmService = {
     return response.data;
   },
 
+  getEpisodesPage: async (params: {
+    page: number;
+    size: number;
+    title?: string;
+    filmId?: string;
+  }): Promise<ApiResponse<PageResponse<EpisodeSummaryResponse>>> => {
+    const response = await axiosInstance.get(EPISODE_BASE_URL, { params });
+    return response.data;
+  },
+
   getEpisodesByFilm: async (filmId: string): Promise<ApiResponse<EpisodeResponse[]>> => {
     const response = await axiosInstance.get(`${EPISODE_BASE_URL}/film/${filmId}`, {
       // Episode numbers can be edited while another tab is already open. Avoid reusing a
@@ -202,6 +216,27 @@ export const filmService = {
 
   deleteEpisode: async (id: string): Promise<ApiResponse<void>> => {
     const response = await axiosInstance.delete(`${EPISODE_BASE_URL}/${id}`);
+    return response.data;
+  },
+
+  // Watch progress ("Continue Watching")
+  upsertWatchProgress: async (request: WatchProgressRequest): Promise<ApiResponse<void>> => {
+    const response = await axiosInstance.put(WATCH_PROGRESS_BASE_URL, request);
+    return response.data;
+  },
+
+  getMyContinueWatching: async (): Promise<ApiResponse<WatchProgressResponse[]>> => {
+    const response = await axiosInstance.get(`${WATCH_PROGRESS_BASE_URL}/my`);
+    return response.data;
+  },
+
+  getWatchProgress: async (filmId: string): Promise<ApiResponse<WatchProgressResponse | null>> => {
+    const response = await axiosInstance.get(`${WATCH_PROGRESS_BASE_URL}/${filmId}`);
+    return response.data;
+  },
+
+  removeWatchProgress: async (filmId: string): Promise<ApiResponse<void>> => {
+    const response = await axiosInstance.delete(`${WATCH_PROGRESS_BASE_URL}/${filmId}`);
     return response.data;
   },
 };

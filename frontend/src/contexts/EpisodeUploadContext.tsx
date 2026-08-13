@@ -8,24 +8,23 @@ import {
   type EpisodeUploadInput,
   type EpisodeUploadJob,
 } from './episodeUploadContextValue';
-
-const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : 'Có lỗi xảy ra trong quá trình upload tập phim';
+import { useTranslation } from 'react-i18next';
 
 export const EpisodeUploadProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
+  const { t } = useTranslation();
   const [job, setJob] = useState<EpisodeUploadJob | null>(null);
   const busyRef = useRef(false);
 
   const startUpload = useCallback(async (input: EpisodeUploadInput) => {
     if (busyRef.current) {
-      toast.error('Một tập phim khác đang được upload. Vui lòng chờ tác vụ hiện tại hoàn tất.');
+      toast.error(t('uploadInProgress'));
       return;
     }
 
     busyRef.current = true;
     const durationMinutes = Math.floor(input.durationSeconds / 60);
     setJob({ ...input, durationMinutes, progress: 0, status: 'uploading' });
-    toast.loading('Đang upload video...', { id: 'episode-upload' });
+    toast.loading(t('uploadingVideo'), { id: 'episode-upload' });
 
     try {
       const uploadResult = await fileService.uploadFileDirect(
@@ -38,7 +37,7 @@ export const EpisodeUploadProvider: React.FC<React.PropsWithChildren> = ({ child
 
       setJob((current) => current ? { ...current, progress: 100, status: 'saving' } : current);
       toast.loading(
-        input.mode === 'edit' ? 'Đang cập nhật tập phim...' : 'Đang tạo tập phim...',
+        input.mode === 'edit' ? t('updatingEpisode') : t('creatingEpisode'),
         { id: 'episode-upload' },
       );
 
@@ -56,22 +55,22 @@ export const EpisodeUploadProvider: React.FC<React.PropsWithChildren> = ({ child
         : await filmService.createEpisode(request);
 
       if (response.code !== 1000) {
-        throw new Error(response.message || 'Không thể lưu thông tin tập phim');
+        throw new Error(response.message || t('episodeSaveFailed'));
       }
 
       setJob((current) => current ? { ...current, progress: 100, status: 'success' } : current);
       toast.success(
-        input.mode === 'edit' ? 'Cập nhật tập phim thành công' : 'Thêm tập phim thành công',
+        input.mode === 'edit' ? t('episodeUpdated') : t('episodeCreated'),
         { id: 'episode-upload' },
       );
     } catch (error: unknown) {
-      const message = errorMessage(error);
+      const message = error instanceof Error ? error.message : t('episodeUploadError');
       setJob((current) => current ? { ...current, status: 'error', error: message } : current);
       toast.error(message, { id: 'episode-upload' });
     } finally {
       busyRef.current = false;
     }
-  }, []);
+  }, [t]);
 
   const clearJob = useCallback(() => {
     if (!busyRef.current) setJob(null);

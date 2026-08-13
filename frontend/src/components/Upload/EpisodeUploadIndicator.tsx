@@ -4,9 +4,11 @@ import { CheckCircle, Close, CloudUpload, DragIndicator, Error as ErrorIcon, Sav
 import { useNavigate } from 'react-router-dom';
 import { useEpisodeUpload } from '../../contexts/episodeUploadContextValue';
 import { useDraggableFloating } from '../../hooks/useDraggableFloating';
+import { useTranslation } from 'react-i18next';
 
 const EpisodeUploadIndicator: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { job, clearJob } = useEpisodeUpload();
   const { position, dragging, dragHandleProps } = useDraggableFloating('episode-upload-indicator-position', 340, 96);
 
@@ -16,15 +18,15 @@ const EpisodeUploadIndicator: React.FC = () => {
   const isSaving = job.status === 'saving';
   const canDismiss = job.status === 'error' || job.status === 'success';
   const statusLabel = isUploading
-    ? `Đang upload ${job.progress}%`
+    ? t('uploadProgress', { progress: job.progress })
     : isSaving
-      ? 'Đang lưu tập phim'
+      ? t('savingEpisode')
       : job.status === 'success'
-        ? 'Upload hoàn tất'
-        : 'Upload gặp lỗi';
+        ? t('uploadComplete')
+        : t('uploadError');
 
   return (
-    <Tooltip title="Nhấn để mở lại màn hình upload" placement="left">
+    <Tooltip title={t('reopenUpload')} placement="left">
       <Paper
         role="button"
         tabIndex={0}
@@ -58,8 +60,8 @@ const EpisodeUploadIndicator: React.FC = () => {
       >
         <Box
           {...dragHandleProps}
-          aria-label="Di chuyển trạng thái upload"
-          title="Giữ và kéo để di chuyển"
+          aria-label={t('moveUploadStatus')}
+          title={t('dragToMove')}
           onClick={(event) => event.stopPropagation()}
           sx={{
             alignSelf: 'stretch',
@@ -75,8 +77,8 @@ const EpisodeUploadIndicator: React.FC = () => {
         </Box>
         {canDismiss && (
           <IconButton
-            aria-label={job.status === 'error' ? 'Hủy thao tác upload lỗi' : 'Đóng thông báo upload'}
-            title={job.status === 'error' ? 'Hủy thao tác' : 'Đóng'}
+            aria-label={job.status === 'error' ? t('cancelFailedUpload') : t('closeUploadNotice')}
+            title={job.status === 'error' ? t('cancelAction') : t('close')}
             size="small"
             onClick={(event) => {
               event.stopPropagation();
@@ -109,7 +111,7 @@ const EpisodeUploadIndicator: React.FC = () => {
             {statusLabel}
           </Typography>
           <Typography variant="body2" noWrap color="text.secondary">
-            Mùa {job.seasonNumber} · Tập {job.episodeNumber}
+            {t('seasonEpisodeLabel', { season: job.seasonNumber, episode: job.episodeNumber })}
           </Typography>
           <Typography variant="caption" noWrap sx={{ display: 'block', maxWidth: 220 }}>
             {job.file.name}

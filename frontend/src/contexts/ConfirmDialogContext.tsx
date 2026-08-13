@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
 import { Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 
 interface ConfirmOptions {
   title?: string;
@@ -22,6 +23,7 @@ export const useConfirmDialog = (): ConfirmFn => {
 };
 
 export const ConfirmDialogProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
+  const { t } = useTranslation();
   const [options, setOptions] = useState<ConfirmOptions | null>(null);
   const resolveRef = useRef<((result: boolean) => void) | null>(null);
 
@@ -42,19 +44,19 @@ export const ConfirmDialogProvider: React.FC<React.PropsWithChildren> = ({ child
     <ConfirmDialogContext.Provider value={confirm}>
       {children}
       <Dialog open={!!options} onClose={() => handleClose(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>{options?.title ?? 'Xác nhận'}</DialogTitle>
+        <DialogTitle>{options?.title ?? t('confirm')}</DialogTitle>
         <DialogContent>
           <DialogContentText>{options?.message}</DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => handleClose(false)}>{options?.cancelText ?? 'Hủy'}</Button>
+          <Button onClick={() => handleClose(false)}>{options?.cancelText ?? t('cancel')}</Button>
           <Button
             onClick={() => handleClose(true)}
             color={options?.confirmColor ?? 'error'}
             variant="contained"
             autoFocus
           >
-            {options?.confirmText ?? 'Xác nhận'}
+            {options?.confirmText ?? t('confirm')}
           </Button>
         </DialogActions>
       </Dialog>

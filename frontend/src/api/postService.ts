@@ -5,7 +5,6 @@ import type {
   PostRequest,
   PostUpdateRequest,
   PageResponse,
-  StatusResponse,
   LikeResponse
 } from '../models';
 
@@ -27,9 +26,6 @@ export const postService = {
 
   toggleLike: (id: string) =>
     axiosInstance.post<ApiResponse<LikeResponse>>(`/posts/${id}/like`),
-
-  getStatus: () =>
-    axiosInstance.get<ApiResponse<StatusResponse>>('/posts/status'),
 
   getRandomPosts: (limit: number, excludeIds: string[] = []) =>
     axiosInstance.get<ApiResponse<PostResponse[]>>('/posts/random', {
