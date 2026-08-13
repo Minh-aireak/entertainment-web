@@ -5,7 +5,7 @@ services:
   mysql:
     image: ${MYSQL_IMAGE}
     container_name: ${MYSQL_CONTAINER_NAME}
-    restart: unless-stopped
+    restart: "no"
     command: 
       - --server-id=1
       - --log-bin=mysql-bin
@@ -30,7 +30,7 @@ services:
   mongodb:
     image: ${MONGODB_IMAGE}
     container_name: ${MONGODB_CONTAINER_NAME}
-    restart: unless-stopped
+    restart: "no"
     # Sinh keyFile từ MONGODB_REPLICA_SET_KEY trong /etc rồi delegate sang
     # docker-entrypoint.sh chính thức (cần chạy ở entrypoint level để có quyền root
     # tạo keyFile và vẫn giữ được luồng tạo root user lần đầu của image chính thức).
@@ -92,7 +92,7 @@ services:
   kafka:
     image: ${KAFKA_IMAGE}
     container_name: kafka
-    restart: unless-stopped
+    restart: "no"
     ports:
       - '9092:9092'
       - '9094:9094'
@@ -123,7 +123,7 @@ services:
   redis:
     image: ${REDIS_IMAGE}
     container_name: ${REDIS_CONTAINER_NAME}
-    restart: unless-stopped
+    restart: "no"
     command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
     ports:
       - "6379:6379"
@@ -139,7 +139,7 @@ services:
   elasticsearch:
     image: ${ELASTICSEARCH_IMAGE}
     container_name: ${ELASTICSEARCH_CONTAINER_NAME}
-    restart: unless-stopped
+    restart: "no"
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
@@ -168,7 +168,7 @@ services:
   connect:
     image: quay.io/debezium/connect:3.0
     container_name: debezium-connect
-    restart: unless-stopped
+    restart: "no"
     ports:
       - '8100:8083'
     environment:
@@ -422,7 +422,6 @@ services:
     env_file:
       - .env
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/post-service?createDatabaseIfNotExist=true&serverTimezone=Asia/Ho_Chi_Minh
       - SPRING_DATA_MONGODB_URI=mongodb://${MONGODB_ROOT_USERNAME}:${MONGODB_ROOT_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/post-service?authSource=admin
       - SPRING_KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS}
       - SPRING_DATA_REDIS_HOST=${REDIS_HOST}
@@ -436,8 +435,6 @@ services:
     depends_on:
       mongo-init:
         condition: service_completed_successfully
-      mysql:
-        condition: service_started
       mongodb:
         condition: service_healthy
       kafka:
@@ -460,6 +457,9 @@ services:
       - .env
     environment:
       - SPRING_DATA_MONGODB_URI=mongodb://${MONGODB_ROOT_USERNAME}:${MONGODB_ROOT_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/file-service?authSource=admin
+      - SPRING_DATA_REDIS_HOST=${REDIS_HOST}
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD}
+      - SPRING_DATA_REDIS_PORT=${REDIS_PORT}
       - B2_KEY_ID=${B2_KEY_ID}
       - B2_APPLICATION_KEY=${B2_APPLICATION_KEY}
       - B2_BUCKET_NAME=${B2_BUCKET_NAME}
@@ -489,6 +489,8 @@ services:
         condition: service_completed_successfully
       mongodb:
         condition: service_healthy
+      redis:
+        condition: service_started
     networks:
       - backend
 

@@ -17,16 +17,16 @@ if ($insertLines.Count -eq 0) {
 }
 
 $generated = [System.Collections.Generic.List[string]]::new()
-$generated.Add('-- Film-service catalog snapshot generated from the live development database on 2026-08-10.')
+$generated.Add('-- Film-service catalog snapshot generated from the live development database on 2026-08-13.')
 $generated.Add('-- Runtime outbox rows are intentionally excluded: replaying historical integration events is not seed data.')
 $generated.Add('-- The marker prevents spring.sql.init.mode=always from resurrecting episodes deleted after first initialization.')
-$generated.Add('-- All episode titles are Vietnamese with diacritics. Episode video_file_id stays NULL')
-$generated.Add('-- until the confirmed Vagabond source files are uploaded and their real file IDs are provided.')
+$generated.Add('-- All episode titles are Vietnamese with diacritics. Every episode now carries a real video_file_id: the')
+$generated.Add('-- 3 confirmed Vagabond source files (episodes 14, 15, 16) were randomly assigned across all episodes.')
 $generated.Add('')
 $generated.Add('SET NAMES utf8mb4;')
 $generated.Add('SET FOREIGN_KEY_CHECKS = 0;')
 $generated.Add('CREATE TABLE IF NOT EXISTS `film_seed_metadata` (`seed_key` varchar(100) NOT NULL, `applied_at` datetime(6) NOT NULL, PRIMARY KEY (`seed_key`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;')
-$generated.Add('SET @film_seed_required = NOT EXISTS (SELECT 1 FROM `film_seed_metadata` WHERE `seed_key` = ''catalog-2026-08-10'');')
+$generated.Add('SET @film_seed_required = NOT EXISTS (SELECT 1 FROM `film_seed_metadata` WHERE `seed_key` = ''catalog-2026-08-13'');')
 $generated.Add('')
 
 $matched = 0
@@ -54,7 +54,7 @@ $generated.Add('       JSON_OBJECT(''id'', f.`id`, ''title'', f.`title`, ''thumb
 $generated.Add('       ''film.sync''')
 $generated.Add('FROM `films` f WHERE @film_seed_required = 1;')
 $generated.Add('')
-$generated.Add('INSERT IGNORE INTO `film_seed_metadata` (`seed_key`, `applied_at`) SELECT ''catalog-2026-08-10'', CURRENT_TIMESTAMP(6) FROM DUAL WHERE @film_seed_required = 1;')
+$generated.Add('INSERT IGNORE INTO `film_seed_metadata` (`seed_key`, `applied_at`) SELECT ''catalog-2026-08-13'', CURRENT_TIMESTAMP(6) FROM DUAL WHERE @film_seed_required = 1;')
 $generated.Add('SET FOREIGN_KEY_CHECKS = 1;')
 
 $resolvedOutput = [System.IO.Path]::GetFullPath($OutputPath)
