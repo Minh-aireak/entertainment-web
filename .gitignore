@@ -97,3 +97,19 @@ kubeconfig.*
 !**/*.tfvars.example
 .terraform/
 cookies.txt
+
+### Local database dumps and one-off exports ###
+*.dump
+*.dump.gz
+*.backup
+*.sql.gz
+*.export.sql
+*.export.json
+*.export.csv
+*.tmp
+*.temp
+dumps/
+backups/
+exports/
+tmp/
+temp/
