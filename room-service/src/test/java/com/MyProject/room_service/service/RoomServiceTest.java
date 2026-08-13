@@ -17,6 +17,7 @@ import com.MyProject.room_service.repository.OutboxRepository;
 import com.MyProject.room_service.repository.RoomParticipantRepository;
 import com.MyProject.room_service.repository.RoomRepository;
 import com.MyProject.room_service.repository.httpclient.FilmClient;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.AfterEach;
@@ -54,6 +55,7 @@ class RoomServiceTest {
     @Mock RoomFilmExternalService roomFilmExternalService;
     @Mock com.MyProject.common.redis.RedisService redisService;
     @Mock MongoTemplate mongoTemplate;
+    @Mock RoomSubscriptionTokenService roomSubscriptionTokenService;
 
     RoomService roomService;
     RoomProperties roomProperties;
@@ -67,18 +69,72 @@ class RoomServiceTest {
 
         roomService = new RoomService(roomRepository, roomParticipantRepository, outboxRepository, roomProperties,
                 roomProfileExternalService, roomFilmExternalService, redisService,
-                new ObjectMapper().registerModule(new JavaTimeModule()), mongoTemplate);
+                new ObjectMapper().registerModule(new JavaTimeModule()), mongoTemplate, roomSubscriptionTokenService);
 
         securityUtils = mockStatic(SecurityUtils.class);
         securityUtils.when(SecurityUtils::getCurrentUserId).thenReturn(HOST_ID);
 
-        lenient().when(roomFilmExternalService.getFilmInfo(any())).thenReturn(Optional.empty());
+        lenient().when(roomFilmExternalService.getFilmInfo(any())).thenReturn(
+                Optional.of(new FilmClient.FilmInfo("film-1", "Film title", "thumb.jpg")));
+        lenient().when(roomFilmExternalService.getEpisodesByFilm(any())).thenReturn(List.of());
+        lenient().when(roomFilmExternalService.getCachedEpisode(any(), any())).thenReturn(Optional.empty());
         lenient().when(roomRepository.save(any(Room.class))).thenAnswer(inv -> {
             Room r = inv.getArgument(0);
             if (r.getId() == null) r.setId("room-1");
             return r;
         });
         lenient().when(roomProfileExternalService.getBulkUserProfiles(any())).thenReturn(java.util.Map.of());
+        lenient().when(roomSubscriptionTokenService.issueToken(any(), any())).thenReturn("ws-token");
+    }
+
+    /** updatePlayback persists via a compare-and-set MongoTemplate.findAndModify instead of
+     *  roomRepository.save, so tests simulate a successful CAS by applying the $set/$inc
+     *  operators from the real Update object onto `base` - this exercises the actual
+     *  computeNewState -> Update -> event pipeline instead of just echoing a canned result. */
+    private Room applyCas(Room base, Update update) {
+        Room result = new Room();
+        result.setId(base.getId());
+        result.setName(base.getName());
+        result.setHostUserId(base.getHostUserId());
+        result.setFilmId(base.getFilmId());
+        result.setFilmTitle(base.getFilmTitle());
+        result.setFilmThumbnail(base.getFilmThumbnail());
+        result.setEpisodeId(base.getEpisodeId());
+        result.setPublicRoom(base.isPublicRoom());
+        result.setInviteCode(base.getInviteCode());
+        result.setInvitedUserIds(base.getInvitedUserIds());
+        result.setStatus(base.getStatus());
+        result.setPlaying(base.isPlaying());
+        result.setPositionSeconds(base.getPositionSeconds());
+        result.setPlaybackRate(base.getPlaybackRate());
+        result.setLastActionAt(base.getLastActionAt());
+        result.setPlaybackRevision(base.getPlaybackRevision());
+        result.setParticipantCount(base.getParticipantCount());
+        result.setMaxParticipants(base.getMaxParticipants());
+        result.setCreatedDate(base.getCreatedDate());
+        result.setModifiedDate(base.getModifiedDate());
+
+        org.bson.Document raw = update.getUpdateObject();
+        org.bson.Document set = (org.bson.Document) raw.get("$set");
+        if (set != null) {
+            if (set.containsKey("playing")) result.setPlaying((Boolean) set.get("playing"));
+            if (set.containsKey("positionSeconds")) result.setPositionSeconds(((Number) set.get("positionSeconds")).doubleValue());
+            if (set.containsKey("playbackRate")) result.setPlaybackRate(((Number) set.get("playbackRate")).doubleValue());
+            if (set.containsKey("episodeId")) result.setEpisodeId((String) set.get("episodeId"));
+            if (set.containsKey("lastActionAt")) result.setLastActionAt((Instant) set.get("lastActionAt"));
+        }
+        org.bson.Document inc = (org.bson.Document) raw.get("$inc");
+        if (inc != null && inc.containsKey("playbackRevision")) {
+            result.setPlaybackRevision(result.getPlaybackRevision() + ((Number) inc.get("playbackRevision")).intValue());
+        }
+        return result;
+    }
+
+    /** CAS query matches only when it targets the given revision - lets tests simulate a miss
+     *  (stale revision) by stubbing this to return null for a specific revision value. */
+    private void stubCasSuccess(String roomId, Room base) {
+        lenient().when(mongoTemplate.findAndModify(any(Query.class), any(Update.class), any(FindAndModifyOptions.class), eq(Room.class)))
+                .thenAnswer(inv -> applyCas(base, inv.getArgument(1)));
     }
 
     @AfterEach
@@ -163,6 +219,22 @@ class RoomServiceTest {
         verify(roomRepository).save(argThat(r -> r.getName().equals("Xem chung: Inception")));
     }
 
+    @Test
+    void createRoom_episodeNotInFilm_rejectsBeforeSavingRoom() {
+        when(roomFilmExternalService.getEpisodesByFilm("film-1")).thenReturn(List.of());
+        CreateRoomRequest request = CreateRoomRequest.builder()
+                .filmId("film-1")
+                .episodeId("episode-from-another-film")
+                .build();
+
+        assertThatThrownBy(() -> roomService.createRoom(request))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo(ErrorCode.EPISODE_NOT_IN_FILM);
+
+        verify(roomRepository, never()).save(any());
+    }
+
     // ---------- getRoom ----------
 
     @Test
@@ -197,6 +269,33 @@ class RoomServiceTest {
         RoomResponse response = roomService.getRoom("room-1");
 
         assertThat(response.isHost()).isFalse();
+    }
+
+    @Test
+    void getRoom_nonParticipant_wsTokenIsNull() {
+        securityUtils.when(SecurityUtils::getCurrentUserId).thenReturn(VIEWER_ID);
+        Room room = activeRoomBuilder().publicRoom(true).build();
+        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
+        when(roomParticipantRepository.existsByRoomIdAndUserId("room-1", VIEWER_ID)).thenReturn(false);
+
+        RoomResponse response = roomService.getRoom("room-1");
+
+        assertThat(response.isParticipant()).isFalse();
+        assertThat(response.getWsToken()).isNull();
+        verifyNoInteractions(roomSubscriptionTokenService);
+    }
+
+    @Test
+    void getRoom_host_includesPlaybackRevisionAndWsToken() {
+        Room room = activeRoomBuilder().playbackRevision(7).publicRoom(true).build();
+        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
+        when(roomSubscriptionTokenService.issueToken(HOST_ID, "room-1")).thenReturn("signed-token");
+
+        RoomResponse response = roomService.getRoom("room-1");
+
+        assertThat(response.isHost()).isTrue();
+        assertThat(response.getPlaybackRevision()).isEqualTo(7);
+        assertThat(response.getWsToken()).isEqualTo("signed-token");
     }
 
     // ---------- joinRoom ----------
@@ -268,6 +367,40 @@ class RoomServiceTest {
         verify(outboxRepository).save(argThat(o -> o.getPayload().contains("JOINED")));
     }
 
+    @Test
+    void joinRoom_atomicReservationMiss_throwsRoomFullWithoutSavingParticipant() {
+        securityUtils.when(SecurityUtils::getCurrentUserId).thenReturn(VIEWER_ID);
+        Room room = activeRoomBuilder().publicRoom(true).participantCount(9).maxParticipants(10).build();
+        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
+        when(roomParticipantRepository.findByRoomIdAndUserId("room-1", VIEWER_ID)).thenReturn(Optional.empty());
+        when(mongoTemplate.findAndModify(any(Query.class), any(Update.class), any(FindAndModifyOptions.class), eq(Room.class)))
+                .thenReturn(null);
+
+        assertThatThrownBy(() -> roomService.joinRoom("room-1", null))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ROOM_FULL);
+
+        verify(roomParticipantRepository, never()).save(any());
+    }
+
+    @Test
+    void joinRoom_publicRoom_publishesUpdatedParticipantCountToLobby() {
+        securityUtils.when(SecurityUtils::getCurrentUserId).thenReturn(VIEWER_ID);
+        Room room = activeRoomBuilder().publicRoom(true).participantCount(1).build();
+        Room updated = activeRoomBuilder().publicRoom(true).participantCount(2).build();
+        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
+        when(roomParticipantRepository.findByRoomIdAndUserId("room-1", VIEWER_ID)).thenReturn(Optional.empty());
+        when(roomParticipantRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(mongoTemplate.findAndModify(any(Query.class), any(Update.class), any(FindAndModifyOptions.class), eq(Room.class)))
+                .thenReturn(updated);
+
+        roomService.joinRoom("room-1", null);
+
+        verify(outboxRepository).save(argThat(o -> o.getTopic().equals("room.lobby.updated")
+                && o.getPayload().contains("\"participantCount\":2")));
+    }
+
     // ---------- leaveRoom ----------
 
     @Test
@@ -310,6 +443,23 @@ class RoomServiceTest {
 
         verify(roomParticipantRepository).deleteByRoomIdAndUserId("room-1", VIEWER_ID);
         verify(outboxRepository).save(argThat(o -> o.getPayload().contains("LEFT")));
+    }
+
+    @Test
+    void leaveRoom_publicRoom_publishesUpdatedParticipantCountToLobby() {
+        securityUtils.when(SecurityUtils::getCurrentUserId).thenReturn(VIEWER_ID);
+        Room room = activeRoomBuilder().publicRoom(true).participantCount(2).build();
+        Room updated = activeRoomBuilder().publicRoom(true).participantCount(1).build();
+        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
+        when(roomParticipantRepository.findByRoomIdAndUserId("room-1", VIEWER_ID))
+                .thenReturn(Optional.of(RoomParticipant.builder().userId(VIEWER_ID).role(ParticipantRole.VIEWER).build()));
+        when(mongoTemplate.findAndModify(any(Query.class), any(Update.class), any(FindAndModifyOptions.class), eq(Room.class)))
+                .thenReturn(updated);
+
+        roomService.leaveRoom("room-1");
+
+        verify(outboxRepository).save(argThat(o -> o.getTopic().equals("room.lobby.updated")
+                && o.getPayload().contains("\"participantCount\":1")));
     }
 
     // ---------- closeRoom ----------
@@ -413,42 +563,123 @@ class RoomServiceTest {
 
     @Test
     void updatePlayback_play_setsPlayingTrueAndPublishesEvent() {
-        Room room = activeRoomBuilder().playing(false).positionSeconds(10).build();
+        Room room = activeRoomBuilder().playing(false).positionSeconds(10).playbackRevision(4).build();
         when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
+        stubCasSuccess("room-1", room);
 
         roomService.updatePlayback("room-1",
                 PlaybackUpdateRequest.builder().action(PlaybackAction.PLAY).positionSeconds(42.0).build());
 
-        assertThat(room.isPlaying()).isTrue();
-        assertThat(room.getPositionSeconds()).isEqualTo(42.0);
-        verify(outboxRepository).save(argThat(o -> o.getTopic().equals("room.playback.updated")));
+        verify(outboxRepository).save(argThat(o -> o.getTopic().equals("room.playback.updated")
+                && o.getPayload().contains("\"playing\":true")
+                && o.getPayload().contains("\"positionSeconds\":42.0")
+                && o.getPayload().contains("\"playbackRevision\":5")));
     }
 
     @Test
     void updatePlayback_seekWithPosition_updatesPositionOnly() {
         Room room = activeRoomBuilder().playing(true).build();
         when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
+        stubCasSuccess("room-1", room);
 
         roomService.updatePlayback("room-1",
                 PlaybackUpdateRequest.builder().action(PlaybackAction.SEEK).positionSeconds(99.0).build());
 
-        assertThat(room.getPositionSeconds()).isEqualTo(99.0);
-        assertThat(room.isPlaying()).isTrue();
+        verify(outboxRepository).save(argThat(o -> o.getTopic().equals("room.playback.updated")
+                && o.getPayload().contains("\"positionSeconds\":99.0")
+                && o.getPayload().contains("\"playing\":true")));
+    }
+
+    @Test
+    void updatePlayback_heartbeat_neverFlipsPlaying() {
+        Room room = activeRoomBuilder().playing(true).positionSeconds(5).build();
+        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
+        stubCasSuccess("room-1", room);
+
+        roomService.updatePlayback("room-1",
+                PlaybackUpdateRequest.builder().action(PlaybackAction.HEARTBEAT).positionSeconds(12.0).build());
+
+        verify(outboxRepository).save(argThat(o -> o.getTopic().equals("room.playback.updated")
+                && o.getPayload().contains("\"playing\":true")
+                && o.getPayload().contains("\"positionSeconds\":12.0")));
+    }
+
+    @Test
+    void updatePlayback_heartbeatWhilePlayingWithoutPosition_throwsAndDoesNotWrite() {
+        Room room = activeRoomBuilder().playing(true).positionSeconds(5).build();
+        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
+
+        assertThatThrownBy(() -> roomService.updatePlayback("room-1",
+                PlaybackUpdateRequest.builder().action(PlaybackAction.HEARTBEAT).build()))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_PLAYBACK_ACTION);
+
+        verifyNoInteractions(outboxRepository);
+        verify(mongoTemplate, never()).findAndModify(any(Query.class), any(Update.class), any(FindAndModifyOptions.class), eq(Room.class));
+    }
+
+    @Test
+    void updatePlayback_heartbeatWhilePaused_positionOptional() {
+        Room room = activeRoomBuilder().playing(false).positionSeconds(5).build();
+        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
+        stubCasSuccess("room-1", room);
+
+        roomService.updatePlayback("room-1", PlaybackUpdateRequest.builder().action(PlaybackAction.HEARTBEAT).build());
+
+        verify(outboxRepository).save(argThat(o -> o.getTopic().equals("room.playback.updated")
+                && o.getPayload().contains("\"positionSeconds\":5.0")));
+    }
+
+    @Test
+    void updatePlayback_negativePosition_throwsInvalidPosition() {
+        Room room = activeRoomBuilder().build();
+        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
+
+        assertThatThrownBy(() -> roomService.updatePlayback("room-1",
+                PlaybackUpdateRequest.builder().action(PlaybackAction.SEEK).positionSeconds(-1.0).build()))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_POSITION);
+    }
+
+    @Test
+    void updatePlayback_nonFinitePosition_throwsInvalidPosition() {
+        Room room = activeRoomBuilder().build();
+        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
+
+        assertThatThrownBy(() -> roomService.updatePlayback("room-1",
+                PlaybackUpdateRequest.builder().action(PlaybackAction.SEEK).positionSeconds(Double.NaN).build()))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_POSITION);
+    }
+
+    @Test
+    void updatePlayback_unsupportedPlaybackRate_throwsInvalidPlaybackRate() {
+        Room room = activeRoomBuilder().build();
+        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
+
+        assertThatThrownBy(() -> roomService.updatePlayback("room-1",
+                PlaybackUpdateRequest.builder().action(PlaybackAction.HEARTBEAT).playbackRate(1.75).build()))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_PLAYBACK_RATE);
     }
 
     @Test
     void updatePlayback_changeEpisode_updatesRoomAndPublicLobby() {
-        Room room = activeRoomBuilder().publicRoom(true).episodeId("episode-1").build();
+        Room room = activeRoomBuilder().publicRoom(true).filmId("film-1").episodeId("episode-1").build();
         when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
+        when(roomFilmExternalService.getEpisodesByFilm("film-1"))
+                .thenReturn(List.of(new FilmClient.EpisodeInfo("episode-12", "film-1", 20)));
+        stubCasSuccess("room-1", room);
 
         roomService.updatePlayback("room-1", PlaybackUpdateRequest.builder()
                 .action(PlaybackAction.CHANGE_EPISODE)
                 .episodeId("episode-12")
                 .build());
 
-        assertThat(room.getEpisodeId()).isEqualTo("episode-12");
-        assertThat(room.getPositionSeconds()).isZero();
-        assertThat(room.isPlaying()).isTrue();
         verify(outboxRepository).save(argThat(o -> o.getTopic().equals("room.playback.updated")
                 && o.getPayload().contains("episode-12")));
         verify(outboxRepository).save(argThat(o -> o.getTopic().equals("room.lobby.updated")
@@ -457,8 +688,11 @@ class RoomServiceTest {
 
     @Test
     void updatePlayback_changeEpisode_privateRoomDoesNotBroadcastToLobby() {
-        Room room = activeRoomBuilder().publicRoom(false).build();
+        Room room = activeRoomBuilder().publicRoom(false).filmId("film-1").build();
         when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
+        when(roomFilmExternalService.getEpisodesByFilm("film-1"))
+                .thenReturn(List.of(new FilmClient.EpisodeInfo("episode-2", "film-1", 20)));
+        stubCasSuccess("room-1", room);
 
         roomService.updatePlayback("room-1", PlaybackUpdateRequest.builder()
                 .action(PlaybackAction.CHANGE_EPISODE)
@@ -466,6 +700,172 @@ class RoomServiceTest {
                 .build());
 
         verify(outboxRepository, never()).save(argThat(o -> o.getTopic().equals("room.lobby.updated")));
+    }
+
+    @Test
+    void updatePlayback_changeEpisodeNotInFilm_throwsEpisodeNotInFilm() {
+        Room room = activeRoomBuilder().filmId("film-1").build();
+        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
+        when(roomFilmExternalService.getEpisodesByFilm("film-1")).thenReturn(List.of());
+
+        assertThatThrownBy(() -> roomService.updatePlayback("room-1", PlaybackUpdateRequest.builder()
+                .action(PlaybackAction.CHANGE_EPISODE)
+                .episodeId("episode-from-another-film")
+                .build()))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo(ErrorCode.EPISODE_NOT_IN_FILM);
+
+        verifyNoInteractions(outboxRepository);
+    }
+
+    @Test
+    void updatePlayback_zeroDurationMetadata_doesNotClampPositionToZero() {
+        Room room = activeRoomBuilder().filmId("film-1").episodeId("episode-1").playing(true).build();
+        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
+        when(roomFilmExternalService.getCachedEpisode("film-1", "episode-1"))
+                .thenReturn(Optional.of(new FilmClient.EpisodeInfo("episode-1", "film-1", 0)));
+        stubCasSuccess("room-1", room);
+
+        roomService.updatePlayback("room-1",
+                PlaybackUpdateRequest.builder().action(PlaybackAction.SEEK).positionSeconds(99.0).build());
+
+        verify(outboxRepository).save(argThat(o -> o.getTopic().equals("room.playback.updated")
+                && o.getPayload().contains("\"positionSeconds\":99.0")));
+    }
+
+    @Test
+    void updatePlayback_positiveDuration_clampsPositionToEpisodeEnd() {
+        Room room = activeRoomBuilder().filmId("film-1").episodeId("episode-1").playing(true).build();
+        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
+        when(roomFilmExternalService.getCachedEpisode("film-1", "episode-1"))
+                .thenReturn(Optional.of(new FilmClient.EpisodeInfo("episode-1", "film-1", 20)));
+        stubCasSuccess("room-1", room);
+
+        roomService.updatePlayback("room-1",
+                PlaybackUpdateRequest.builder().action(PlaybackAction.SEEK).positionSeconds(1300.0).build());
+
+        verify(outboxRepository).save(argThat(o -> o.getTopic().equals("room.playback.updated")
+                && o.getPayload().contains("\"positionSeconds\":1200.0")));
+    }
+
+    @Test
+    void updatePlayback_casMiss_retriesAgainstFreshStateInsteadOfLosingUpdate() {
+        // Simulates a HEARTBEAT racing a PAUSE: the read at the top of updatePlayback sees
+        // playbackRevision=1/playing=true, but by the time the CAS write runs, a concurrent PAUSE
+        // has already landed at revision 2/playing=false. The first CAS attempt (querying for
+        // revision=1) must miss, forcing a re-read and a retry computed against the fresher state
+        // instead of blindly reintroducing playing=true.
+        Room staleRead = activeRoomBuilder().playing(true).positionSeconds(10).playbackRevision(1).build();
+        Room concurrentlyPaused = activeRoomBuilder().playing(false).positionSeconds(15).playbackRevision(2).build();
+        when(roomRepository.findById("room-1"))
+                .thenReturn(Optional.of(staleRead))
+                .thenReturn(Optional.of(concurrentlyPaused));
+
+        when(mongoTemplate.findAndModify(any(Query.class), any(Update.class), any(FindAndModifyOptions.class), eq(Room.class)))
+                .thenAnswer(inv -> {
+                    Query query = inv.getArgument(0);
+                    boolean targetsStaleRevision = query.getQueryObject().get("playbackRevision").equals(1);
+                    if (targetsStaleRevision) return null; // CAS miss - another writer already moved it to revision 2
+                    return applyCas(concurrentlyPaused, inv.getArgument(1));
+                });
+
+        roomService.updatePlayback("room-1",
+                PlaybackUpdateRequest.builder().action(PlaybackAction.HEARTBEAT).positionSeconds(15.5).build());
+
+        verify(mongoTemplate, times(2)).findAndModify(any(Query.class), any(Update.class), any(FindAndModifyOptions.class), eq(Room.class));
+        verify(outboxRepository).save(argThat(o -> o.getTopic().equals("room.playback.updated")
+                // Retried against the freshly-read (paused) state, so playing stays false -
+                // the stale HEARTBEAT never resurrects playing=true.
+                && o.getPayload().contains("\"playing\":false")
+                && o.getPayload().contains("\"positionSeconds\":15.5")
+                && o.getPayload().contains("\"playbackRevision\":3")));
+    }
+
+    @Test
+    void updatePlayback_casMissExhaustsRetries_throwsPlaybackUpdateConflict() {
+        Room room = activeRoomBuilder().build();
+        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
+        when(mongoTemplate.findAndModify(any(Query.class), any(Update.class), any(FindAndModifyOptions.class), eq(Room.class)))
+                .thenReturn(null);
+
+        assertThatThrownBy(() -> roomService.updatePlayback("room-1",
+                PlaybackUpdateRequest.builder().action(PlaybackAction.PAUSE).build()))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PLAYBACK_UPDATE_CONFLICT);
+
+        verify(mongoTemplate, times(3)).findAndModify(any(Query.class), any(Update.class), any(FindAndModifyOptions.class), eq(Room.class));
+    }
+
+    // ---------- disconnected presence cleanup ----------
+
+    @Test
+    void expireDisconnectedParticipant_recentHeartbeat_keepsParticipant() {
+        RoomParticipant participant = RoomParticipant.builder()
+                .roomId("room-1").userId(VIEWER_ID).role(ParticipantRole.VIEWER)
+                .joinedAt(Instant.now().minusSeconds(600)).build();
+        when(roomParticipantRepository.findByRoomIdAndUserId("room-1", VIEWER_ID))
+                .thenReturn(Optional.of(participant));
+        when(redisService.hashGet(eq("presence:watch-room:last-seen:" + VIEWER_ID), eq("room-1"), any(TypeReference.class)))
+                .thenReturn(Instant.now().toEpochMilli());
+
+        boolean expired = roomService.expireDisconnectedParticipant(
+                "room-1", VIEWER_ID, Instant.now().minusSeconds(120));
+
+        assertThat(expired).isFalse();
+        verify(roomParticipantRepository, never()).deleteByRoomIdAndUserId(any(), any());
+    }
+
+    @Test
+    void expireDisconnectedParticipant_staleViewer_removesAndBroadcastsLobbyCount() {
+        Instant disconnectedAt = Instant.now().minusSeconds(300);
+        RoomParticipant participant = RoomParticipant.builder()
+                .roomId("room-1").userId(VIEWER_ID).role(ParticipantRole.VIEWER)
+                .joinedAt(disconnectedAt).build();
+        Room room = activeRoomBuilder().publicRoom(true).participantCount(2).build();
+        Room updated = activeRoomBuilder().publicRoom(true).participantCount(1).build();
+        when(roomParticipantRepository.findByRoomIdAndUserId("room-1", VIEWER_ID))
+                .thenReturn(Optional.of(participant));
+        when(redisService.hashGet(eq("presence:watch-room:last-seen:" + VIEWER_ID), eq("room-1"), any(TypeReference.class)))
+                .thenReturn(null);
+        when(redisService.hashGet(eq("presence:watch-room:last-disconnected:" + VIEWER_ID), eq("room-1"), any(TypeReference.class)))
+                .thenReturn(disconnectedAt.toEpochMilli());
+        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
+        when(mongoTemplate.findAndModify(any(Query.class), any(Update.class), any(FindAndModifyOptions.class), eq(Room.class)))
+                .thenReturn(updated);
+
+        boolean expired = roomService.expireDisconnectedParticipant(
+                "room-1", VIEWER_ID, Instant.now().minusSeconds(120));
+
+        assertThat(expired).isTrue();
+        verify(roomParticipantRepository).deleteByRoomIdAndUserId("room-1", VIEWER_ID);
+        verify(outboxRepository).save(argThat(o -> o.getTopic().equals("room.lobby.updated")
+                && o.getPayload().contains("\"participantCount\":1")));
+    }
+
+    @Test
+    void expireDisconnectedParticipant_staleHost_closesRoom() {
+        Instant disconnectedAt = Instant.now().minusSeconds(300);
+        RoomParticipant participant = RoomParticipant.builder()
+                .roomId("room-1").userId(HOST_ID).role(ParticipantRole.HOST)
+                .joinedAt(disconnectedAt).build();
+        Room room = activeRoomBuilder().build();
+        when(roomParticipantRepository.findByRoomIdAndUserId("room-1", HOST_ID))
+                .thenReturn(Optional.of(participant));
+        when(redisService.hashGet(eq("presence:watch-room:last-seen:" + HOST_ID), eq("room-1"), any(TypeReference.class)))
+                .thenReturn(null);
+        when(redisService.hashGet(eq("presence:watch-room:last-disconnected:" + HOST_ID), eq("room-1"), any(TypeReference.class)))
+                .thenReturn(disconnectedAt.toEpochMilli());
+        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
+
+        boolean expired = roomService.expireDisconnectedParticipant(
+                "room-1", HOST_ID, Instant.now().minusSeconds(120));
+
+        assertThat(expired).isTrue();
+        assertThat(room.getStatus()).isEqualTo(RoomStatus.CLOSED);
+        verify(outboxRepository).save(argThat(o -> o.getTopic().equals("room.closed")
+                && o.getPayload().contains("HOST_DISCONNECTED")));
     }
 
     // ---------- requireActiveRoomForParticipant ----------
