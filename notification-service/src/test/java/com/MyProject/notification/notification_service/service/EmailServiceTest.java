@@ -3,7 +3,6 @@ package com.MyProject.notification.notification_service.service;
 import com.MyProject.notification.notification_service.dto.request.EmailRequest;
 import com.MyProject.notification.notification_service.dto.request.Recipient;
 import feign.FeignException;
-import feign.Request;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -13,7 +12,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -57,16 +55,12 @@ class EmailServiceTest {
     }
 
     @Test
-    void sendEmail_externalServiceThrowsFeignException_isSwallowedAndLoggedRatherThanPropagated() {
+    void sendEmail_externalServiceThrowsFeignException_propagatesInsteadOfBeingSwallowed() {
         FeignException feignException = mock(FeignException.class);
-        Request feignRequest = Request.create(Request.HttpMethod.POST, "https://brevo/send",
-                java.util.Map.of(), null, java.nio.charset.StandardCharsets.UTF_8, null);
-        when(feignException.status()).thenReturn(500);
-        when(feignException.contentUTF8()).thenReturn("{\"error\":\"down\"}");
-        when(feignException.request()).thenReturn(feignRequest);
         doThrow(feignException).when(emailExternalService).sendEmail(eq(mockApiKey), any());
 
-        assertThatCode(() -> emailService.sendEmail(request("user@gmail.com"))).doesNotThrowAnyException();
+        assertThatThrownBy(() -> emailService.sendEmail(request("user@gmail.com")))
+                .isInstanceOf(FeignException.class);
     }
 
     @Test

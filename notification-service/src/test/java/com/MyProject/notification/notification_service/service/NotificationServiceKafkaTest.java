@@ -39,6 +39,94 @@ class NotificationServiceKafkaTest {
         return new ConsumerRecord<>("topic", 0, 0, "key", value);
     }
 
+    // ---------- sendEmail (email.sent) ----------
+
+    private static final String EMAIL_IDEMPOTENCY_KEY = "notification:idempotency:email:topic:0:0";
+
+    @Test
+    void sendEmail_validEvent_sendsEmailMarksIdempotencyAndAcksOnce() {
+        when(redisService.getAsString(EMAIL_IDEMPOTENCY_KEY)).thenReturn(null);
+        String payload = "{\"to\":[{\"email\":\"user@test.com\"}],\"subject\":\"Reset Your Password\",\"htmlContent\":\"<p>reset link</p>\"}";
+
+        notificationServiceKafka.sendEmail(record(payload), ack);
+
+        verify(emailService).sendEmail(argThat((EmailRequest req) ->
+                req.getTo().get(0).getEmail().equals("user@test.com") && req.getSubject().equals("Reset Your Password")));
+        verify(redisService).setWithExpiration(eq(EMAIL_IDEMPOTENCY_KEY), eq("processed"), eq(7L), any());
+        verify(ack, times(1)).acknowledge();
+    }
+
+    @Test
+    void sendEmail_duplicateEvent_skipsResendButStillAcks() {
+        when(redisService.getAsString(EMAIL_IDEMPOTENCY_KEY)).thenReturn("processed");
+        String payload = "{\"to\":[{\"email\":\"user@test.com\"}],\"subject\":\"Reset Your Password\",\"htmlContent\":\"<p>reset link</p>\"}";
+
+        notificationServiceKafka.sendEmail(record(payload), ack);
+
+        verifyNoInteractions(emailService);
+        verify(ack).acknowledge();
+    }
+
+    @Test
+    void sendEmail_malformedPayload_throwsAndDoesNotAck() {
+        assertThatThrownBy(() -> notificationServiceKafka.sendEmail(record("not-json"), ack))
+                .isInstanceOf(RuntimeException.class);
+
+        verifyNoInteractions(emailService, ack, redisService);
+    }
+
+    @Test
+    void sendEmail_missingRequiredFields_throwsAndDoesNotAckOrSend() {
+        String payload = "{\"to\":[],\"subject\":\"Reset Your Password\",\"htmlContent\":\"<p>reset link</p>\"}";
+
+        assertThatThrownBy(() -> notificationServiceKafka.sendEmail(record(payload), ack))
+                .isInstanceOf(RuntimeException.class);
+
+        verifyNoInteractions(emailService, ack, redisService);
+    }
+
+    @Test
+    void sendEmail_emailServiceThrows_doesNotMarkProcessedOrAckAndThrows() {
+        when(redisService.getAsString(EMAIL_IDEMPOTENCY_KEY)).thenReturn(null);
+        doThrow(new RuntimeException("Brevo unavailable")).when(emailService).sendEmail(any());
+        String payload = "{\"to\":[{\"email\":\"user@test.com\"}],\"subject\":\"Reset Your Password\",\"htmlContent\":\"<p>reset link</p>\"}";
+
+        assertThatThrownBy(() -> notificationServiceKafka.sendEmail(record(payload), ack))
+                .isInstanceOf(RuntimeException.class);
+
+        verify(redisService, never()).setWithExpiration(anyString(), any(), anyLong(), any());
+        verify(ack, never()).acknowledge();
+    }
+
+    @Test
+    void sendEmail_redisLookupThrows_doesNotAckAndThrows() {
+        when(redisService.getAsString(EMAIL_IDEMPOTENCY_KEY)).thenThrow(new RuntimeException("redis down"));
+        String payload = "{\"to\":[{\"email\":\"user@test.com\"}],\"subject\":\"Reset Your Password\",\"htmlContent\":\"<p>reset link</p>\"}";
+
+        assertThatThrownBy(() -> notificationServiceKafka.sendEmail(record(payload), ack))
+                .isInstanceOf(RuntimeException.class);
+
+        verifyNoInteractions(emailService, ack);
+    }
+
+    @Test
+    void sendEmail_identityServiceProducerPayloadShape_deserializesAndSendsSuccessfully() {
+        when(redisService.getAsString(EMAIL_IDEMPOTENCY_KEY)).thenReturn(null);
+        // Exact shape produced by identity-service's PasswordResetService: EmailRequest there
+        // only has to/subject/htmlContent (no "sender" field, unlike notification-service's DTO).
+        String payload = "{\"to\":[{\"name\":null,\"email\":\"user@test.com\"}],\"subject\":\"Reset Your Password\","
+                + "\"htmlContent\":\"Hi user,\\n\\nWe received a request to reset your password.\"}";
+
+        notificationServiceKafka.sendEmail(record(payload), ack);
+
+        verify(emailService).sendEmail(argThat((EmailRequest req) ->
+                req.getTo().size() == 1
+                        && req.getTo().get(0).getEmail().equals("user@test.com")
+                        && req.getSender() == null
+                        && req.getSubject().equals("Reset Your Password")));
+        verify(ack).acknowledge();
+    }
+
     // ---------- handleUserRegistered ----------
 
     @Test

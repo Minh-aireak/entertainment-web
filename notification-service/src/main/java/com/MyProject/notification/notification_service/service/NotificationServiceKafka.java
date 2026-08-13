@@ -31,7 +31,51 @@ public class NotificationServiceKafka {
     RedisService redisService;
 
     private static final String IDEMPOTENCY_KEY_PREFIX = "notification:idempotency:";
+    private static final String EMAIL_IDEMPOTENCY_KEY_PREFIX = IDEMPOTENCY_KEY_PREFIX + "email:";
     private static final long IDEMPOTENCY_TTL_DAYS = 7;
+
+    @KafkaListener(topics = "email.sent")
+    public void sendEmail(ConsumerRecord<String, String> record, Acknowledgment acknowledgment) {
+        String topic = record.topic();
+        int partition = record.partition();
+        long offset = record.offset();
+        // No stable eventId in the current EmailRequest contract (identity-service producer
+        // only sends to/subject/htmlContent), so fall back to the record coordinates.
+        String idempotencyKey = EMAIL_IDEMPOTENCY_KEY_PREFIX + topic + ":" + partition + ":" + offset;
+
+        try {
+            EmailRequest emailRequest = objectMapper.readValue(record.value(), EmailRequest.class);
+
+            if (isMissingRequiredEmailFields(emailRequest)) {
+                throw new IllegalArgumentException("email.sent payload is missing required field(s) (to/subject/htmlContent)");
+            }
+
+            if (redisService.getAsString(idempotencyKey) != null) {
+                log.info("Event already processed (idempotent): [{}-{}:{}]", topic, partition, offset);
+                acknowledgment.acknowledge();
+                return;
+            }
+
+            emailService.sendEmail(emailRequest);
+
+            // Only mark as processed and ack once the email has actually been sent successfully.
+            redisService.setWithExpiration(idempotencyKey, "processed", IDEMPOTENCY_TTL_DAYS, TimeUnit.DAYS);
+            log.info("Successfully processed email.sent event [{}-{}:{}]", topic, partition, offset);
+            acknowledgment.acknowledge();
+        } catch (JsonProcessingException e) {
+            log.error("Failed to deserialize email.sent event at [{}-{}:{}]", topic, partition, offset, e);
+            throw new RuntimeException("Failed to deserialize email.sent event", e);
+        } catch (Exception e) {
+            log.error("Failed to process email.sent event at [{}-{}:{}]", topic, partition, offset, e);
+            throw new RuntimeException("Failed to process email.sent event", e);
+        }
+    }
+
+    private boolean isMissingRequiredEmailFields(EmailRequest emailRequest) {
+        return emailRequest.getTo() == null || emailRequest.getTo().isEmpty()
+                || emailRequest.getSubject() == null || emailRequest.getSubject().isBlank()
+                || emailRequest.getHtmlContent() == null || emailRequest.getHtmlContent().isBlank();
+    }
 
     @KafkaListener(topics = "user.registered")
     public void handleUserRegistered(ConsumerRecord<String, String> record, Acknowledgment acknowledgment){

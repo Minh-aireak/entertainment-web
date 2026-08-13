@@ -2,7 +2,6 @@ package com.MyProject.notification.notification_service.service;
 
 import com.MyProject.notification.notification_service.dto.request.EmailRequest;
 import com.MyProject.notification.notification_service.dto.request.Sender;
-import feign.FeignException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import lombok.AccessLevel;
@@ -44,12 +43,7 @@ public class EmailService {
                 .subject(request.getSubject())
                 .htmlContent(request.getHtmlContent())
                 .build();
-        try {
-            log.info("Sending email to: {}", request.getTo());
-            emailExternalService.sendEmail(apiKey, emailRequest);
-        } catch (FeignException exception){
-            log.error("Feign error while sending email: Status={}, Content={}, Method={}, URL={}",
-                exception.status(), exception.contentUTF8(), exception.request().httpMethod(), exception.request().url());
-        }
+        log.info("Sending email to: {}", request.getTo());
+        emailExternalService.sendEmail(apiKey, emailRequest);
     }
 }
