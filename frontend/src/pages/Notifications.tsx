@@ -42,7 +42,7 @@ const NotificationsPage: React.FC = () => {
     if (notificationsResult.status === 'fulfilled') {
       setPageData(notificationsResult.value.result);
     } else {
-      setError('Không thể tải thông báo. Vui lòng thử lại.');
+      setError(t('notificationsLoadFailed'));
     }
 
     if (unreadResult.status === 'fulfilled') {
@@ -50,7 +50,7 @@ const NotificationsPage: React.FC = () => {
     }
 
     setLoading(false);
-  }, [page]);
+  }, [page, t]);
 
   useEffect(() => {
     fetchNotifications();
@@ -71,10 +71,10 @@ const NotificationsPage: React.FC = () => {
         data: current.data.map((notification) => ({ ...notification, read: true })),
       } : current);
       window.dispatchEvent(new Event('sidebar-counts:refresh'));
-      toast.success('Đã đánh dấu tất cả thông báo là đã đọc');
+      toast.success(t('notificationsMarkedRead'));
     } catch (markError) {
       console.error('Failed to mark notifications as read:', markError);
-      toast.error('Không thể cập nhật thông báo');
+      toast.error(t('notificationsUpdateFailed'));
     }
   };
 
@@ -91,7 +91,7 @@ const NotificationsPage: React.FC = () => {
             </Typography>
           </Box>
           <Typography color="text.secondary">
-            {unreadCount > 0 ? `${unreadCount} thông báo chưa đọc` : 'Bạn đã xem tất cả thông báo'}
+            {unreadCount > 0 ? t('unreadNotifications', { count: unreadCount }) : t('allNotificationsRead')}
           </Typography>
         </Box>
 

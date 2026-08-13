@@ -64,6 +64,7 @@ const runUploadWorkers = async (
   onResolve: (key: string, fileId: string, finalUrl?: string) => void,
   onReject: (key: string, message: string) => void,
   pendingRef: React.MutableRefObject<Map<string, File>>,
+  uploadFailedMessage: string,
 ) => {
   const entries = Array.from(pendingRef.current.entries());
   let cursor = 0;
@@ -81,11 +82,11 @@ const runUploadWorkers = async (
           const info = res.result as any;
           onResolve(key, info.id, info.url);
         } else {
-          const msg = (res?.message as string) || 'Upload thất bại';
+          const msg = (res?.message as string) || uploadFailedMessage;
           onReject(key, msg);
         }
       } catch (err: any) {
-        onReject(key, err?.message || 'Upload thất bại');
+        onReject(key, err?.message || uploadFailedMessage);
       }
     }
   };
@@ -129,9 +130,9 @@ const PostComposer: React.FC<PostComposerProps> = ({ avatar, displayName, onPost
   useEffect(() => {
     if (backgroundKey && content.length > BACKGROUND_TEXT_LIMIT) {
       setBackgroundKey(null);
-      toast('Nội dung quá dài để dùng màu nền, đã chuyển về nền trắng', { icon: 'ℹ️' });
+      toast(t('backgroundTextTooLong'), { icon: 'ℹ️' });
     }
-  }, [content, backgroundKey]);
+  }, [content, backgroundKey, t]);
 
   const resetForm = useCallback(() => {
     setTitle('');
@@ -199,7 +200,8 @@ const PostComposer: React.FC<PostComposerProps> = ({ avatar, displayName, onPost
             prev.map((p) => (p.key === key ? { ...p, error: message } : p))
           );
         },
-        pendingRef
+        pendingRef,
+        t('uploadFailed'),
       ).finally(() => {
         uploadLockRef.current = false;
       });
@@ -278,12 +280,12 @@ const PostComposer: React.FC<PostComposerProps> = ({ avatar, displayName, onPost
         onPostCreated(res.data.result as PostResponse as Post);
         resetForm();
         setExpanded(false);
-        toast.success(t ? (t as any)('postCreated') || 'Đăng bài thành công' : 'Đăng bài thành công');
+        toast.success(t('postCreated'));
       } else {
-        toast.error(res?.data?.message || 'Đăng bài thất bại');
+        toast.error(res?.data?.message || t('postCreateFailed'));
       }
     } catch (e: any) {
-      toast.error(e?.message || 'Đăng bài thất bại');
+      toast.error(e?.message || t('postCreateFailed'));
     } finally {
       setPosting(false);
     }
@@ -350,7 +352,7 @@ const PostComposer: React.FC<PostComposerProps> = ({ avatar, displayName, onPost
                 <TextField
                   inputRef={contentInputRef}
                   variant="standard"
-                  placeholder={t ? (t as any)('postContentPlaceholder') || 'Bạn đang nghĩ gì?' : 'Bạn đang nghĩ gì?'}
+                  placeholder={t('postContentPlaceholder')}
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
                   onFocus={() => setExpanded(true)}
@@ -376,7 +378,7 @@ const PostComposer: React.FC<PostComposerProps> = ({ avatar, displayName, onPost
               <TextField
                 size="small"
                 inputRef={contentInputRef}
-                placeholder={t ? (t as any)('postContentPlaceholder') || 'Bạn đang nghĩ gì?' : 'Bạn đang nghĩ gì?'}
+                placeholder={t('postContentPlaceholder')}
                 value={content}
                 onChange={(e) => {
                   setContent(e.target.value);
@@ -410,7 +412,7 @@ const PostComposer: React.FC<PostComposerProps> = ({ avatar, displayName, onPost
                 <Collapse in={!hideTitleField} timeout={150} unmountOnExit>
                   <TextField
                     size="small"
-                    placeholder={t ? (t as any)('postTitlePlaceholder') || 'Tiêu đề (tùy chọn)' : 'Tiêu đề (tùy chọn)'}
+                    placeholder={t('postTitlePlaceholder')}
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     fullWidth
@@ -458,7 +460,7 @@ const PostComposer: React.FC<PostComposerProps> = ({ avatar, displayName, onPost
                   {activeFeeling && (
                     <Chip
                       size="small"
-                      label={`${activeFeeling.emoji} đang cảm thấy ${activeFeeling.label}`}
+                      label={t('feelingStatus', { emoji: activeFeeling.emoji, feeling: t(`feeling.${activeFeeling.key}`) })}
                       onDelete={() => setFeelingKey(null)}
                       sx={{ ml: 0.5 }}
                     />
@@ -516,7 +518,7 @@ const PostComposer: React.FC<PostComposerProps> = ({ avatar, displayName, onPost
                       sx={{ borderRadius: 99, height: 6 }}
                     />
                     <Typography variant="caption" color="text.secondary">
-                      Kéo để sắp xếp lại thứ tự ảnh · ảnh đầu tiên là ảnh bìa
+                      {t('reorderImagesHint')}
                     </Typography>
                     <Grid container spacing={1}>
                       {pendingUploads.map((p, index) => (
@@ -561,7 +563,7 @@ const PostComposer: React.FC<PostComposerProps> = ({ avatar, displayName, onPost
                             />
                             {index === 0 && (
                               <Chip
-                                label="Ảnh bìa"
+                                label={t('coverImage')}
                                 size="small"
                                 sx={{
                                   position: 'absolute',
@@ -603,7 +605,7 @@ const PostComposer: React.FC<PostComposerProps> = ({ avatar, displayName, onPost
                                   fontSize: 10,
                                 }}
                               >
-                                Lỗi
+                                {t('errorLabel')}
                               </Box>
                             )}
                             <IconButton
@@ -631,7 +633,7 @@ const PostComposer: React.FC<PostComposerProps> = ({ avatar, displayName, onPost
                 <Box className="mt-1 flex justify-end gap-2">
                   {(title || content || pendingUploads.length > 0) && (
                     <Button size="small" color="inherit" onClick={handleCancel} disabled={posting}>
-                      {t ? (t as any)('cancel') || 'Hủy' : 'Hủy'}
+                      {t('cancel')}
                     </Button>
                   )}
                   <Button
@@ -641,13 +643,7 @@ const PostComposer: React.FC<PostComposerProps> = ({ avatar, displayName, onPost
                     disabled={!canSubmit || posting}
                     onClick={handleSubmit}
                   >
-                    {posting
-                      ? t
-                        ? (t as any)('posting') || 'Đang đăng'
-                        : 'Đang đăng'
-                      : t
-                      ? (t as any)('postSubmit') || 'Đăng'
-                      : 'Đăng'}
+                    {posting ? t('posting') : t('postSubmit')}
                   </Button>
                 </Box>
               </Box>
@@ -679,13 +675,13 @@ const PostComposer: React.FC<PostComposerProps> = ({ avatar, displayName, onPost
       >
         <Box sx={{ p: 1.5, width: 300 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-            Bạn đang cảm thấy thế nào?
+            {t('howAreYouFeeling')}
           </Typography>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
             {POST_FEELINGS.map((f) => (
               <Chip
                 key={f.key}
-                label={`${f.emoji} ${f.label}`}
+                label={`${f.emoji} ${t(`feeling.${f.key}`)}`}
                 size="small"
                 variant={feelingKey === f.key ? 'filled' : 'outlined'}
                 color={feelingKey === f.key ? 'primary' : 'default'}

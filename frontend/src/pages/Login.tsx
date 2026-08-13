@@ -11,7 +11,6 @@ import {
   Link,
   alpha,
 } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
 import { Visibility, VisibilityOff, Mail, Lock, Google } from '@mui/icons-material';
 import { useDispatch } from 'react-redux';
 import { toast } from 'react-hot-toast';
@@ -19,12 +18,14 @@ import { loginStart, loginSuccess, loginFailure } from '../store';
 import { identityService } from '../api/identityService';
 import { profileService } from '../api/profileService';
 import AuthLayout from '../components/Layout/AuthLayout';
+import LoginShowcase from '../components/Layout/LoginShowcase';
 import { Divider } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const theme = useTheme();
+  const { t } = useTranslation();
 
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -74,10 +75,10 @@ const Login: React.FC = () => {
         roles,
       };
       dispatch(loginSuccess({ user }));
-      toast.success("Đăng nhập thành công!");
+      toast.success(t('loginSuccess'));
       navigate("/social");
     } catch (error: any) {
-      const message = error.response?.data?.message || "Đăng nhập thất bại";
+      const message = error.response?.data?.message || t('loginFailed');
       dispatch(loginFailure(message));
       toast.error(message);
     } finally {
@@ -86,28 +87,47 @@ const Login: React.FC = () => {
   };
 
   return (
-    <AuthLayout>
+    <AuthLayout fullBleed>
       <Box
         sx={{
           flex: 1,
           display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          px: 2,
-          py: 8,
-          background: 'linear-gradient(180deg, rgba(0, 168, 78, 0.05) 0%, rgba(0, 0, 0, 0) 100%)',
+          flexDirection: { xs: 'column', md: 'row' },
+          width: '100%',
+          position: 'relative',
+          overflow: 'hidden',
+          background:
+            'radial-gradient(circle at 25% 20%, rgba(0,168,78,0.22) 0%, transparent 45%), ' +
+            'radial-gradient(circle at 78% 78%, rgba(0,199,92,0.16) 0%, transparent 50%), ' +
+            '#050b08',
         }}
       >
+        <LoginShowcase />
+
+        <Box
+          sx={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            px: 2,
+            py: 8,
+            position: 'relative',
+            zIndex: 1,
+          }}
+        >
         <Paper
           elevation={0}
           sx={{
             p: { xs: 4, sm: 6 },
             borderRadius: 4,
-            backgroundColor: 'background.paper',
+            bgcolor: alpha('#ffffff', 0.07),
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
             border: '1px solid',
-            borderColor: 'divider',
-            boxShadow: theme.palette.mode === 'dark' ? '0 24px 48px rgba(0, 0, 0, 0.4)' : '0 24px 48px rgba(0, 0, 0, 0.12)',
+            borderColor: alpha('#ffffff', 0.14),
+            boxShadow: '0 24px 48px rgba(0, 0, 0, 0.45)',
             width: '100%',
             maxWidth: '480px',
             animation: 'fadeIn 0.6s ease-out',
@@ -115,6 +135,10 @@ const Login: React.FC = () => {
               from: { opacity: 0, transform: 'translateY(20px)' },
               to: { opacity: 1, transform: 'translateY(0)' },
             },
+            // Overrides index.css's theme-toggle-dependent autofill vars, which otherwise paint
+            // browser-saved-credential inputs as an opaque block clashing with this glass card.
+            '--autofill-bg': '#10201a',
+            '--autofill-text': '#ffffff',
           }}
         >
           {/* Header */}
@@ -123,12 +147,12 @@ const Login: React.FC = () => {
               variant="h4"
               sx={{
                 fontWeight: 800,
-                color: 'text.primary',
+                color: '#fff',
                 mb: 1.5,
                 letterSpacing: '-0.02em',
               }}
             >
-              Chào mừng trở lại
+              {t('welcomeBackTitle')}
             </Typography>
           </Box>
 
@@ -140,7 +164,7 @@ const Login: React.FC = () => {
                 id="username"
                 name="username"
                 type="text"
-                label="Username"
+                label={t('username')}
                 variant="outlined"
                 placeholder="username"
                 value={formData.username}
@@ -150,7 +174,7 @@ const Login: React.FC = () => {
                   input: {
                     startAdornment: (
                       <InputAdornment position="start">
-                        <Mail sx={{ color: 'text.disabled', fontSize: 20 }} />
+                        <Mail sx={{ color: alpha('#ffffff', 0.5), fontSize: 20 }} />
                       </InputAdornment>
                     ),
                   },
@@ -158,13 +182,14 @@ const Login: React.FC = () => {
                 sx={{
                   '& .MuiOutlinedInput-root': {
                     borderRadius: 2,
-                    bgcolor: alpha(theme.palette.text.primary, 0.03),
-                    '&:hover fieldset': { borderColor: alpha(theme.palette.text.primary, 0.2) },
-                    '&.Mui-focused fieldset': { borderColor: '#00A84E' },
+                    bgcolor: alpha('#ffffff', 0.06),
+                    '& fieldset': { borderColor: alpha('#ffffff', 0.14) },
+                    '&:hover fieldset': { borderColor: alpha('#ffffff', 0.28) },
+                    '&.Mui-focused fieldset': { borderColor: '#00C75C' },
                   },
-                  '& .MuiInputLabel-root': { color: 'text.secondary' },
-                  '& .MuiInputLabel-root.Mui-focused': { color: '#00A84E' },
-                  '& .MuiOutlinedInput-input': { color: 'text.primary' },
+                  '& .MuiInputLabel-root': { color: alpha('#ffffff', 0.65) },
+                  '& .MuiInputLabel-root.Mui-focused': { color: '#00C75C' },
+                  '& .MuiOutlinedInput-input': { color: '#fff' },
                 }}
               />
             </Box>
@@ -175,7 +200,7 @@ const Login: React.FC = () => {
                 id="password"
                 name="password"
                 type={showPassword ? 'text' : 'password'}
-                label="Mật khẩu"
+                label={t('password')}
                 variant="outlined"
                 placeholder="••••••••"
                 value={formData.password}
@@ -185,7 +210,7 @@ const Login: React.FC = () => {
                   input: {
                     startAdornment: (
                       <InputAdornment position="start">
-                        <Lock sx={{ color: 'text.disabled', fontSize: 20 }} />
+                        <Lock sx={{ color: alpha('#ffffff', 0.5), fontSize: 20 }} />
                       </InputAdornment>
                     ),
                     endAdornment: (
@@ -193,7 +218,7 @@ const Login: React.FC = () => {
                         <IconButton
                           onClick={() => setShowPassword(!showPassword)}
                           edge="end"
-                          sx={{ color: 'text.disabled' }}
+                          sx={{ color: alpha('#ffffff', 0.6) }}
                         >
                           {showPassword ? <VisibilityOff /> : <Visibility />}
                         </IconButton>
@@ -204,13 +229,14 @@ const Login: React.FC = () => {
                 sx={{
                   '& .MuiOutlinedInput-root': {
                     borderRadius: 2,
-                    bgcolor: alpha(theme.palette.text.primary, 0.03),
-                    '&:hover fieldset': { borderColor: alpha(theme.palette.text.primary, 0.2) },
-                    '&.Mui-focused fieldset': { borderColor: '#00A84E' },
+                    bgcolor: alpha('#ffffff', 0.06),
+                    '& fieldset': { borderColor: alpha('#ffffff', 0.14) },
+                    '&:hover fieldset': { borderColor: alpha('#ffffff', 0.28) },
+                    '&.Mui-focused fieldset': { borderColor: '#00C75C' },
                   },
-                  '& .MuiInputLabel-root': { color: 'text.secondary' },
-                  '& .MuiInputLabel-root.Mui-focused': { color: '#00A84E' },
-                  '& .MuiOutlinedInput-input': { color: 'text.primary' },
+                  '& .MuiInputLabel-root': { color: alpha('#ffffff', 0.65) },
+                  '& .MuiInputLabel-root.Mui-focused': { color: '#00C75C' },
+                  '& .MuiOutlinedInput-input': { color: '#fff' },
                 }}
               />
             </Box>
@@ -227,7 +253,7 @@ const Login: React.FC = () => {
                   '&:hover': { textDecoration: 'underline' },
                 }}
               >
-                Quên mật khẩu?
+                {t('forgotPassword')}
               </Link>
             </Box>
 
@@ -250,15 +276,15 @@ const Login: React.FC = () => {
                 },
               }}
             >
-              {isLoading ? 'Đang đăng nhập...' : 'Đăng nhập'}
+              {isLoading ? t('loggingIn') : t('login')}
             </Button>
 
             <Box sx={{ my: 3, display: 'flex', alignItems: 'center' }}>
-              <Divider sx={{ flex: 1, borderColor: 'divider' }} />
-              <Typography sx={{ px: 2, color: 'text.disabled', fontSize: '0.875rem' }}>
-                HOẶC
+              <Divider sx={{ flex: 1, borderColor: alpha('#ffffff', 0.15) }} />
+              <Typography sx={{ px: 2, color: alpha('#ffffff', 0.5), fontSize: '0.875rem' }}>
+                {t('or')}
               </Typography>
-              <Divider sx={{ flex: 1, borderColor: 'divider' }} />
+              <Divider sx={{ flex: 1, borderColor: alpha('#ffffff', 0.15) }} />
             </Box>
 
             <Button
@@ -269,23 +295,23 @@ const Login: React.FC = () => {
               sx={{
                 py: 1.5,
                 borderRadius: 2,
-                borderColor: alpha(theme.palette.text.primary, 0.2),
-                color: 'text.primary',
+                borderColor: alpha('#ffffff', 0.25),
+                color: '#fff',
                 fontSize: '0.95rem',
                 fontWeight: 600,
                 textTransform: 'none',
                 '&:hover': {
-                  borderColor: 'text.primary',
-                  bgcolor: 'action.hover',
+                  borderColor: '#ffffff',
+                  bgcolor: alpha('#ffffff', 0.08),
                 },
               }}
             >
-              Tiếp tục với Google
+              {t('continueWithGoogle')}
             </Button>
 
             <Box sx={{ mt: 4, textAlign: 'center' }}>
-              <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
-                Chưa có tài khoản?{' '}
+              <Typography sx={{ color: alpha('#ffffff', 0.65), fontSize: '0.875rem' }}>
+                {t('noAccount')}{' '}
                 <Link
                   component={RouterLink}
                   to="/register"
@@ -297,28 +323,29 @@ const Login: React.FC = () => {
                     '&:hover': { textDecoration: 'underline' },
                   }}
                 >
-                  Đăng ký ngay
+                  {t('registerNow')}
                 </Link>
               </Typography>
             </Box>
           </Box>
         </Paper>
 
-        <Box sx={{ mt: 4, display: 'flex', gap: 3 }}>
-          {['Điều khoản', 'Bảo mật', 'Trợ giúp'].map((item) => (
+        <Box sx={{ mt: 4, display: 'flex', gap: 3, position: 'relative', zIndex: 1 }}>
+          {(['terms', 'privacy', 'help'] as const).map((item) => (
             <Link
               key={item}
               href="#"
               sx={{
-                color: 'text.disabled',
+                color: alpha('#ffffff', 0.45),
                 textDecoration: 'none',
                 fontSize: '0.75rem',
-                '&:hover': { color: 'text.secondary' },
+                '&:hover': { color: alpha('#ffffff', 0.75) },
               }}
             >
-              {item}
+              {t(item)}
             </Link>
           ))}
+        </Box>
         </Box>
       </Box>
     </AuthLayout>

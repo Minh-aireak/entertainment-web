@@ -22,11 +22,13 @@ import { profileService } from '../api/profileService';
 import { fileService } from '../api/fileService';
 import { notificationService } from '../api/notificationService';
 import type { NotificationResponse, ConversationResponse } from '../models';
+import { useTranslation } from 'react-i18next';
 
 type FormErrors = Partial<Record<'firstName' | 'lastName' | 'phoneNumber' | 'email' | 'displayName' | 'dob', string>>;
 
 const ProfilePage: React.FC = React.memo(() => {
   const dispatch = useDispatch();
+  const { t, i18n } = useTranslation();
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const { profileData, loading: profileLoading } = useSelector((state: RootState) => state.profile);
   const [isEditing, setIsEditing] = useState(false);
@@ -58,35 +60,35 @@ const ProfilePage: React.FC = React.memo(() => {
     switch (name) {
       case 'firstName':
       case 'lastName':
-        if (!value.trim()) return 'Trường này không được bỏ trống';
-        if (value.trim().length < 2) return 'Vui lòng nhập ít nhất 2 ký tự';
+        if (!value.trim()) return t('requiredField');
+        if (value.trim().length < 2) return t('minTwoCharacters');
         return null;
       case 'phoneNumber':
         if (!value.trim()) return null;
         const phoneRegex = /^(0[1-9])(\d){8}$/;
-        if (!phoneRegex.test(value)) return 'Số điện thoại không hợp lệ (phải là 10 số và bắt đầu bằng 0)';
+        if (!phoneRegex.test(value)) return t('invalidPhone');
         return null;
       case 'email':
-        if (!value.trim()) return 'Trường này không được bỏ trống';
+        if (!value.trim()) return t('requiredField');
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(value)) return 'Email không đúng định dạng';
+        if (!emailRegex.test(value)) return t('invalidEmail');
         return null;
       case 'displayName':
-        if (!value.trim()) return 'Trường này không được bỏ trống';
+        if (!value.trim()) return t('requiredField');
         return null;
       case 'dob':
         if (!value.trim()) return null;
         const dobDate = new Date(value);
         const today = new Date();
-        if (isNaN(dobDate.getTime())) return 'Ngày sinh không hợp lệ';
-        if (dobDate > today) return 'Ngày sinh không được lớn hơn hôm nay';
+        if (isNaN(dobDate.getTime())) return t('invalidBirthDate');
+        if (dobDate > today) return t('futureBirthDate');
         // Tính tuổi
         let age = today.getFullYear() - dobDate.getFullYear();
         const monthDiff = today.getMonth() - dobDate.getMonth();
         if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dobDate.getDate())) {
           age--;
         }
-        if (age < 16) return 'Bạn phải đủ ít nhất 16 tuổi';
+        if (age < 16) return t('minimumAge');
         return null;
       default:
         return null;
@@ -131,11 +133,11 @@ const ProfilePage: React.FC = React.memo(() => {
 
     } catch (error) {
       console.error('Failed to fetch profile data:', error);
-      toast.error('Không thể tải thông tin cá nhân');
+      toast.error(t('profileLoadFailed'));
     } finally {
       dispatch(setProfileLoading(false));
     }
-  }, [dispatch, profileData]);
+  }, [dispatch, profileData, t]);
 
   useEffect(() => {
     if (!profileData) {
@@ -192,7 +194,7 @@ const ProfilePage: React.FC = React.memo(() => {
 
   const handleSave = async () => {
     if (!validateForm()) {
-      toast.error('Vui lòng kiểm tra lại thông tin nhập vào');
+      toast.error(t('checkFormErrors'));
       return;
     }
 
@@ -207,15 +209,15 @@ const ProfilePage: React.FC = React.memo(() => {
         phoneNumber: formData.phoneNumber,
       });
       if (response.code === 1000) {
-        toast.success('Cập nhật thông tin thành công!');
+        toast.success(t('profileUpdated'));
         setIsEditing(false);
         fetchProfileData(true);
       } else {
-        toast.error(response.message || 'Cập nhật thất bại');
+        toast.error(response.message || t('profileUpdateFailed'));
       }
     } catch (error: any) {
       console.error('Failed to update profile:', error);
-      const errorMsg = error.response?.data?.message || 'Cập nhật thất bại';
+      const errorMsg = error.response?.data?.message || t('profileUpdateFailed');
       toast.error(errorMsg);
     }
   };
@@ -229,17 +231,17 @@ const ProfilePage: React.FC = React.memo(() => {
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      toast.error('Vui lòng chọn tệp hình ảnh');
+      toast.error(t('chooseImageFile'));
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      toast.error('Kích thước ảnh không được vượt quá 5MB');
+      toast.error(t('imageTooLarge'));
       return;
     }
 
     setUploading(true);
-    const toastId = toast.loading('Đang tải ảnh lên...');
+    const toastId = toast.loading(t('uploadingImage'));
     try {
       const uploadRes = await fileService.uploadFile(file);
       if (uploadRes.code === 1000) {
@@ -252,16 +254,16 @@ const ProfilePage: React.FC = React.memo(() => {
         if (updateRes.code === 1000) {
           setFormData(prev => ({ ...prev, avatar: newAvatarUrl }));
           fetchProfileData(true);
-          toast.success('Cập nhật ảnh đại diện thành công!', { id: toastId });
+          toast.success(t('avatarUpdated'), { id: toastId });
         } else {
-          toast.error(updateRes.message || 'Không thể cập nhật ảnh đại diện', { id: toastId });
+          toast.error(updateRes.message || t('avatarUpdateFailed'), { id: toastId });
         }
       } else {
-        toast.error('Tải ảnh lên thất bại: ' + (uploadRes.message || ''), { id: toastId });
+        toast.error(t('imageUploadFailed', { message: uploadRes.message || '' }), { id: toastId });
       }
     } catch (error: any) {
       console.error('Failed to upload avatar:', error);
-      const errorMsg = error.response?.data?.message || 'Có lỗi xảy ra khi tải ảnh lên';
+      const errorMsg = error.response?.data?.message || t('imageUploadError');
       toast.error(errorMsg, { id: toastId });
     } finally {
       setUploading(false);
@@ -336,13 +338,13 @@ const ProfilePage: React.FC = React.memo(() => {
                 <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
                   {profileData?.totalPosts ?? '-'}
                 </Typography>
-                <Typography variant="caption" color="text.secondary">Tổng lịch trình</Typography>
+                <Typography variant="caption" color="text.secondary">{t('totalPosts')}</Typography>
               </Grid>
               <Grid size={{ xs: 6 }}>
                 <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
                   {profileData?.totalFriends ?? '-'}
                 </Typography>
-                <Typography variant="caption" color="text.secondary">Bạn bè</Typography>
+                <Typography variant="caption" color="text.secondary">{t('friends')}</Typography>
               </Grid>
             </Grid>
           </Paper>
@@ -351,15 +353,15 @@ const ProfilePage: React.FC = React.memo(() => {
         <Grid size={{ xs: 12, md: 8 }}>
           <Paper sx={{ p: 4, borderRadius: 4 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-              <Typography variant="h6" sx={{ fontWeight: 'bold' }}>Thông tin cá nhân</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{t('personalInformation')}</Typography>
               {!isEditing ? (
                 <Button startIcon={<Edit />} variant="outlined" onClick={() => setIsEditing(true)}>
-                  Chỉnh sửa
+                  {t('edit')}
                 </Button>
               ) : (
                 <Box sx={{ display: 'flex', gap: 1 }}>
-                  <Button variant="outlined" onClick={() => setIsEditing(false)}>Hủy</Button>
-                  <Button variant="contained" onClick={handleSave}>Lưu</Button>
+                  <Button variant="outlined" onClick={() => setIsEditing(false)}>{t('cancel')}</Button>
+                  <Button variant="contained" onClick={handleSave}>{t('save')}</Button>
                 </Box>
               )}
             </Box>
@@ -368,7 +370,7 @@ const ProfilePage: React.FC = React.memo(() => {
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
-                  label="Tên đăng nhập"
+                  label={t('username')}
                   name="username"
                   value={formData.username}
                   disabled
@@ -377,7 +379,7 @@ const ProfilePage: React.FC = React.memo(() => {
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
-                  label="Email"
+                  label={t('email')}
                   name="email"
                   value={isEditing ? formData.email : maskEmail(formData.email)}
                   disabled={!isEditing}
@@ -390,7 +392,7 @@ const ProfilePage: React.FC = React.memo(() => {
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
-                  label="Tên hiển thị"
+                  label={t('displayName')}
                   name="displayName"
                   value={formData.displayName}
                   disabled={!isEditing}
@@ -403,7 +405,7 @@ const ProfilePage: React.FC = React.memo(() => {
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
-                  label="Họ"
+                  label={t('lastName')}
                   name="lastName"
                   value={formData.lastName}
                   disabled={!isEditing}
@@ -416,7 +418,7 @@ const ProfilePage: React.FC = React.memo(() => {
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
-                  label="Tên"
+                  label={t('firstName')}
                   name="firstName"
                   value={formData.firstName}
                   disabled={!isEditing}
@@ -429,7 +431,7 @@ const ProfilePage: React.FC = React.memo(() => {
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
-                  label="Số điện thoại"
+                  label={t('phoneNumber')}
                   name="phoneNumber"
                   value={isEditing ? formData.phoneNumber : maskPhone(formData.phoneNumber)}
                   disabled={!isEditing}
@@ -442,7 +444,7 @@ const ProfilePage: React.FC = React.memo(() => {
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
-                  label="Ngày sinh"
+                  label={t('dateOfBirth')}
                   name="dob"
                   type="date"
                   value={formData.dob}
@@ -470,7 +472,7 @@ const ProfilePage: React.FC = React.memo(() => {
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
-                  label="Thành phố"
+                  label={t('city')}
                   name="city"
                   value={isEditing ? formData.city : maskCity(formData.city)}
                   disabled={!isEditing}
@@ -480,11 +482,11 @@ const ProfilePage: React.FC = React.memo(() => {
             </Grid>
           </Paper>
 
-          <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 4, mb: 2 }}>Hoạt động gần đây</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 4, mb: 2 }}>{t('recentActivity')}</Typography>
           <Grid container spacing={2}>
             {recentActivities.notifications.length === 0 && recentActivities.conversations.length === 0 && (
               <Grid size={{ xs: 12 }}>
-                <Typography variant="body2" color="text.secondary">Không có hoạt động gần đây</Typography>
+                <Typography variant="body2" color="text.secondary">{t('noRecentActivity')}</Typography>
               </Grid>
             )}
             
@@ -498,7 +500,7 @@ const ProfilePage: React.FC = React.memo(() => {
                         {notif.message}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {new Date(notif.createdAt).toLocaleString()}
+                        {new Date(notif.createdAt).toLocaleString(i18n.language)}
                       </Typography>
                     </Box>
                   </CardContent>
@@ -513,10 +515,10 @@ const ProfilePage: React.FC = React.memo(() => {
                     <Message color="secondary" />
                     <Box>
                       <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
-                        Trò chuyện mới trong {(conv as any).conversationName || 'cuộc hội thoại'}
+                        {t('newConversationIn', { conversation: (conv as any).conversationName || t('conversationFallback') })}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {conv.modifiedDate ? new Date(conv.modifiedDate).toLocaleString() : ''}
+                        {conv.modifiedDate ? new Date(conv.modifiedDate).toLocaleString(i18n.language) : ''}
                       </Typography>
                     </Box>
                   </CardContent>

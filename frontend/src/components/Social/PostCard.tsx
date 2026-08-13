@@ -151,7 +151,7 @@ const PostCard: React.FC<PostCardProps> = React.memo(({ post, liking, onToggleLi
         subheader={
           <Typography variant="caption" color="text.secondary">
             {formatRelativeTime(post.createdDate, i18n.language)}
-            {feeling && ` · đang cảm thấy ${feeling.emoji} ${feeling.label}`}
+            {feeling && ` · ${t('feelingStatus', { emoji: feeling.emoji, feeling: t(`feeling.${feeling.key}`) })}`}
           </Typography>
         }
       />

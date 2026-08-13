@@ -35,6 +35,7 @@ import { REALTIME_FRIENDSHIP_EVENT } from '../contexts/WebSocketContext';
 import { useConfirmDialog } from '../contexts/ConfirmDialogContext';
 import type { RootState } from '../store/index';
 import type { UserRelationshipResponse, FriendRequestResponse, UserProfileResponse } from '../models';
+import { useTranslation } from 'react-i18next';
 
 interface FriendUI {
   id: string;
@@ -126,32 +127,33 @@ const tabPillSx = {
   },
 };
 
-const EMPTY_STATE_CONFIG: Record<number, { icon: typeof Groups; title: string; subtitle: string; ctaLabel?: string }> = {
+const EMPTY_STATE_CONFIG: Record<number, { icon: typeof Groups; titleKey: string; subtitleKey: string; ctaKey?: string }> = {
   0: {
     icon: PeopleAlt,
-    title: 'Bạn chưa có người bạn nào',
-    subtitle: 'Kết nối với mọi người để bắt đầu trò chuyện và chia sẻ khoảnh khắc cùng nhau.',
-    ctaLabel: 'Khám phá gợi ý',
+    titleKey: 'friendsEmptyTitle',
+    subtitleKey: 'friendsEmptyDescription',
+    ctaKey: 'discoverSuggestions',
   },
   1: {
     icon: PersonSearch,
-    title: 'Chưa có gợi ý nào lúc này',
-    subtitle: 'Hãy quay lại sau, chúng tôi sẽ tìm thêm những người bạn có thể biết.',
+    titleKey: 'suggestionsEmptyTitle',
+    subtitleKey: 'suggestionsEmptyDescription',
   },
   2: {
     icon: MailOutlined,
-    title: 'Không có lời mời kết bạn nào',
-    subtitle: 'Các lời mời kết bạn gửi đến bạn sẽ xuất hiện tại đây.',
+    titleKey: 'noFriendRequests',
+    subtitleKey: 'requestsEmptyDescription',
   },
   3: {
     icon: Send,
-    title: 'Bạn chưa gửi lời mời nào',
-    subtitle: 'Những lời mời bạn gửi trong phiên làm việc này sẽ hiển thị tại đây.',
+    titleKey: 'sentRequestsEmptyTitle',
+    subtitleKey: 'sentRequestsEmptyDescription',
   },
 };
 
 const FriendsPage: React.FC = React.memo(() => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const confirmDialog = useConfirmDialog();
   const currentUserId = useSelector((state: RootState) => state.auth.user?.id);
   const onlineUserIds = useSelector((state: RootState) => state.chat.onlineUsers);
@@ -232,11 +234,11 @@ const FriendsPage: React.FC = React.memo(() => {
 
     } catch (error) {
       console.error('Failed to fetch friend data:', error);
-      toast.error('Có lỗi xảy ra khi tải dữ liệu');
+      toast.error(t('friendsLoadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [currentUserId]);
+  }, [currentUserId, t]);
 
   useEffect(() => {
     fetchAllFriendData();
@@ -283,11 +285,11 @@ const FriendsPage: React.FC = React.memo(() => {
     try {
       const res = await friendService.friendRequestStatus(id, 'ACCEPTED');
       if (res.code === 1000) {
-        toast.success('Đã chấp nhận lời mời kết bạn');
+        toast.success(t('friendRequestAccepted'));
         fetchAllFriendData();
       }
     } catch {
-      toast.error('Thao tác thất bại');
+      toast.error(t('actionFailed'));
     }
   };
 
@@ -295,11 +297,11 @@ const FriendsPage: React.FC = React.memo(() => {
     try {
       const res = await friendService.friendRequestStatus(id, 'CANCEL');
       if (res.code === 1000) {
-        toast.success('Đã từ chối lời mời');
+        toast.success(t('friendRequestDeclined'));
         fetchAllFriendData();
       }
     } catch {
-      toast.error('Thao tác thất bại');
+      toast.error(t('actionFailed'));
     }
   };
 
@@ -307,7 +309,7 @@ const FriendsPage: React.FC = React.memo(() => {
     try {
       const res = await friendService.sendFriendRequest(id);
       if (res.code === 1000) {
-        toast.success('Đã gửi lời mời kết bạn');
+        toast.success(t('friendRequestSent'));
         // Move from suggestion to sent requests locally for immediate feedback
         const user = suggestions.find(s => s.id === id);
         if (user) {
@@ -320,7 +322,7 @@ const FriendsPage: React.FC = React.memo(() => {
         }
       }
     } catch {
-      toast.error('Không thể gửi lời mời');
+      toast.error(t('friendRequestSendFailed'));
     }
   };
 
@@ -330,20 +332,20 @@ const FriendsPage: React.FC = React.memo(() => {
 
   const handleRemoveFriend = async (id: string) => {
     const confirmed = await confirmDialog({
-      title: 'Hủy kết bạn',
-      message: 'Bạn có chắc chắn muốn hủy kết bạn?',
-      confirmText: 'Hủy kết bạn',
+      title: t('unfriend'),
+      message: t('unfriendConfirm'),
+      confirmText: t('unfriend'),
     });
     if (!confirmed) return;
 
     try {
       const res = await friendService.updateRelationshipStatus(id, 'UNFRIEND');
       if (res.code === 1000) {
-        toast.success('Đã hủy kết bạn');
+        toast.success(t('unfriended'));
         setFriends(prev => prev.filter(f => f.id !== id));
       }
     } catch {
-      toast.error('Thao tác thất bại');
+      toast.error(t('actionFailed'));
     }
   };
 
@@ -367,10 +369,10 @@ const FriendsPage: React.FC = React.memo(() => {
   const isSearchingWithNoResults = searchQuery.trim() !== '' && currentTabHasData && filteredData.length === 0;
 
   const tabDefs: TabDef[] = [
-    { label: 'Bạn bè', icon: PeopleAlt, count: friends.length },
-    { label: 'Gợi ý', icon: PersonSearch, count: suggestions.length },
-    { label: 'Lời mời đã nhận', icon: MailOutlined, count: receivedRequests.length, urgent: true },
-    { label: 'Lời mời đã gửi', icon: Send, count: sentRequests.length },
+    { label: t('friends'), icon: PeopleAlt, count: friends.length },
+    { label: t('suggestions'), icon: PersonSearch, count: suggestions.length },
+    { label: t('receivedRequests'), icon: MailOutlined, count: receivedRequests.length, urgent: true },
+    { label: t('sentRequests'), icon: Send, count: sentRequests.length },
   ];
 
   return (
@@ -385,15 +387,15 @@ const FriendsPage: React.FC = React.memo(() => {
             }}>
               <Groups sx={{ color: '#fff', fontSize: 24 }} />
             </Box>
-            Bạn bè
+            {t('friends')}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75, ml: '58px' }}>
-            {friends.length} người bạn
+            {t('friendCount', { count: friends.length })}
             {onlineFriendsCount > 0 && (
               <>
                 {' • '}
                 <Box component="span" sx={{ color: '#44b700', fontWeight: 700 }}>
-                  {onlineFriendsCount} đang hoạt động
+                  {t('activeCount', { count: onlineFriendsCount })}
                 </Box>
               </>
             )}
@@ -402,7 +404,7 @@ const FriendsPage: React.FC = React.memo(() => {
 
         <TextField
           size="small"
-          placeholder="Tìm kiếm bạn bè..."
+          placeholder={t('searchFriends')}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           slotProps={{
@@ -534,7 +536,7 @@ const FriendsPage: React.FC = React.memo(() => {
                   }}
                 >
                   {item.status === 'SUGGESTION' && (
-                    <Tooltip title="Ẩn gợi ý này">
+                    <Tooltip title={t('hideSuggestion')}>
                       <IconButton
                         size="small"
                         onClick={() => handleDismissSuggestion(item.id)}
@@ -560,22 +562,22 @@ const FriendsPage: React.FC = React.memo(() => {
 
                   {item.status === 'FRIEND' && (
                     <Typography variant="caption" sx={{ color: isOnline ? '#44b700' : 'text.secondary', fontWeight: 600, mb: 1.5 }}>
-                      {isOnline ? 'Đang hoạt động' : 'Ngoại tuyến'}
+                      {isOnline ? t('activeNow') : t('offline')}
                     </Typography>
                   )}
                   {item.status === 'SUGGESTION' && (
                     <Typography variant="caption" color="text.secondary" sx={{ mb: 1.5 }}>
-                      Gợi ý kết bạn
+                      {t('friendSuggestion')}
                     </Typography>
                   )}
                   {item.status === 'PENDING_RECEIVED' && (
                     <Typography variant="caption" sx={{ color: '#f39c12', fontWeight: 600, mb: 1.5 }}>
-                      Muốn kết bạn với bạn
+                      {t('wantsToConnect')}
                     </Typography>
                   )}
                   {item.status === 'PENDING_SENT' && (
                     <Typography variant="caption" color="text.secondary" sx={{ mb: 1.5 }}>
-                      Đang chờ phản hồi
+                      {t('awaitingResponse')}
                     </Typography>
                   )}
 
@@ -590,7 +592,7 @@ const FriendsPage: React.FC = React.memo(() => {
                           size="small"
                           sx={{ borderRadius: 999 }}
                         >
-                          Nhắn tin
+                          {t('chat')}
                         </Button>
                         <IconButton
                           onClick={(e) => openMenu(e, item.id)}
@@ -610,7 +612,7 @@ const FriendsPage: React.FC = React.memo(() => {
                         size="small"
                         sx={{ borderRadius: 999 }}
                       >
-                        Thêm bạn bè
+                        {t('addFriend')}
                       </Button>
                     )}
 
@@ -624,7 +626,7 @@ const FriendsPage: React.FC = React.memo(() => {
                           size="small"
                           sx={{ borderRadius: 999 }}
                         >
-                          Chấp nhận
+                          {t('acceptRequest')}
                         </Button>
                         <Button
                           fullWidth
@@ -634,7 +636,7 @@ const FriendsPage: React.FC = React.memo(() => {
                           size="small"
                           sx={{ borderRadius: 999 }}
                         >
-                          Xóa
+                          {t('delete')}
                         </Button>
                       </Box>
                     )}
@@ -648,7 +650,7 @@ const FriendsPage: React.FC = React.memo(() => {
                         size="small"
                         sx={{ borderRadius: 999 }}
                       >
-                        Đã gửi lời mời
+                        {t('requestSent')}
                       </Button>
                     )}
                   </Box>
@@ -661,26 +663,26 @@ const FriendsPage: React.FC = React.memo(() => {
             {isSearchingWithNoResults ? (
               <Box sx={{ textAlign: 'center', py: 10, px: 2, bgcolor: 'action.hover', borderRadius: 6, border: '2px dashed', borderColor: 'divider' }}>
                 <SearchOff sx={{ fontSize: 72, color: 'text.disabled', mb: 2 }} />
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>Không tìm thấy kết quả</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>{t('noSearchResults')}</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                  Không có kết quả nào khớp với "{searchQuery}".
+                  {t('noResultsForQuery', { query: searchQuery })}
                 </Typography>
                 <Button variant="outlined" onClick={() => setSearchQuery('')} sx={{ borderRadius: 999, px: 4 }}>
-                  Xóa tìm kiếm
+                  {t('clearSearch')}
                 </Button>
               </Box>
             ) : (
               <Box sx={{ textAlign: 'center', py: 10, px: 2, bgcolor: 'action.hover', borderRadius: 6, border: '2px dashed', borderColor: 'divider' }}>
                 {React.createElement(EMPTY_STATE_CONFIG[tabValue].icon, { sx: { fontSize: 72, color: 'text.disabled', mb: 2 } })}
                 <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
-                  {EMPTY_STATE_CONFIG[tabValue].title}
+                  {t(EMPTY_STATE_CONFIG[tabValue].titleKey)}
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 380, mx: 'auto', mb: EMPTY_STATE_CONFIG[tabValue].ctaLabel ? 3 : 0 }}>
-                  {EMPTY_STATE_CONFIG[tabValue].subtitle}
+                <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 380, mx: 'auto', mb: EMPTY_STATE_CONFIG[tabValue].ctaKey ? 3 : 0 }}>
+                  {t(EMPTY_STATE_CONFIG[tabValue].subtitleKey)}
                 </Typography>
-                {EMPTY_STATE_CONFIG[tabValue].ctaLabel && (
+                {EMPTY_STATE_CONFIG[tabValue].ctaKey && (
                   <Button variant="contained" onClick={() => setTabValue(1)} sx={{ borderRadius: 999, px: 4 }}>
-                    {EMPTY_STATE_CONFIG[tabValue].ctaLabel}
+                    {t(EMPTY_STATE_CONFIG[tabValue].ctaKey)}
                   </Button>
                 )}
               </Box>
@@ -700,7 +702,7 @@ const FriendsPage: React.FC = React.memo(() => {
           <ListItemIcon>
             <PersonRemove fontSize="small" color="error" />
           </ListItemIcon>
-          <ListItemText>Hủy kết bạn</ListItemText>
+          <ListItemText>{t('unfriend')}</ListItemText>
         </MenuItem>
       </Menu>
     </Box>

@@ -72,7 +72,7 @@ const SocialHome: React.FC = React.memo(() => {
         <Fab
           size="medium"
           onClick={handleScrollToTop}
-          aria-label="Cuộn lên đầu trang"
+          aria-label={t('scrollToTop')}
           sx={{
             position: 'fixed',
             bottom: 32,

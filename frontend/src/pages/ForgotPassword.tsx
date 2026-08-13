@@ -14,27 +14,29 @@ import { Mail, ArrowBack } from '@mui/icons-material';
 import { toast } from 'react-hot-toast';
 import { identityService } from '../api/identityService';
 import AuthLayout from '../components/Layout/AuthLayout';
+import { useTranslation } from 'react-i18next';
 
 const ForgotPassword: React.FC = () => {
   const navigate = useNavigate();
   const theme = useTheme();
+  const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) {
-      toast.error('Vui lòng nhập email');
+      toast.error(t('emailRequired'));
       return;
     }
 
     setIsLoading(true);
     try {
       await identityService.forgotPassword({ email });
-      toast.success('Yêu cầu đặt lại mật khẩu đã được gửi! Vui lòng kiểm tra email của bạn.');
+      toast.success(t('resetRequestSent'));
       navigate('/login');
     } catch (error: any) {
-      const message = error.response?.data?.message || 'Gửi yêu cầu thất bại';
+      const message = error.response?.data?.message || t('requestFailed');
       toast.error(message);
     } finally {
       setIsLoading(false);
@@ -75,16 +77,16 @@ const ForgotPassword: React.FC = () => {
               startIcon={<ArrowBack />}
               sx={{ color: 'text.secondary', textTransform: 'none', '&:hover': { color: 'text.primary' } }}
             >
-              Quay lại đăng nhập
+              {t('backToLogin')}
             </Button>
           </Box>
 
           <Box sx={{ mb: 5, textAlign: 'center' }}>
             <Typography variant="h4" sx={{ fontWeight: 800, color: 'text.primary', mb: 1.5 }}>
-              Quên mật khẩu?
+              {t('forgotPasswordTitle')}
             </Typography>
             <Typography sx={{ color: 'text.secondary' }}>
-              Nhập email của bạn và chúng tôi sẽ gửi liên kết để đặt lại mật khẩu.
+              {t('forgotPasswordDescription')}
             </Typography>
           </Box>
 
@@ -95,7 +97,7 @@ const ForgotPassword: React.FC = () => {
                 id="email"
                 name="email"
                 type="email"
-                label="Email"
+                label={t('email')}
                 variant="outlined"
                 placeholder="email@example.com"
                 value={email}
@@ -139,7 +141,7 @@ const ForgotPassword: React.FC = () => {
                 '&:hover': { bgcolor: '#008F41' },
               }}
             >
-              {isLoading ? 'Đang xử lý...' : 'Gửi yêu cầu'}
+              {isLoading ? t('processing') : t('sendRequest')}
             </Button>
           </Box>
         </Paper>

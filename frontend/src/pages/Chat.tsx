@@ -42,6 +42,8 @@ import { friendService } from '../api/friendService';
 import { fileService } from '../api/fileService';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { useConfirmDialog } from '../contexts/ConfirmDialogContext';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 
 const StyledBadge = styled(Badge)(({ theme }) => ({
   '& .MuiBadge-badge': {
@@ -106,33 +108,33 @@ const getMessageTypeFromMime = (mimeType: string): AttachmentMessageType => {
   return 'FILE';
 };
 
-const getMessagePreviewText = (msg: { messageType: MessageType; content?: string }): string => {
+const getMessagePreviewText = (msg: { messageType: MessageType; content?: string }, t: TFunction): string => {
   switch (msg.messageType) {
-    case 'IMAGE': return 'Đã gửi một ảnh';
-    case 'VIDEO': return 'Đã gửi một video';
-    case 'AUDIO': return 'Đã gửi một audio';
-    case 'FILE': return 'Đã gửi một tệp';
-    case 'DELETED_FOR_EVERYONE': return 'Tin nhắn đã được thu hồi';
+    case 'IMAGE': return t('sentImage');
+    case 'VIDEO': return t('sentVideo');
+    case 'AUDIO': return t('sentAudio');
+    case 'FILE': return t('sentFile');
+    case 'DELETED_FOR_EVERYONE': return t('messageRecalled');
     default: return msg.content || '';
   }
 };
 
-const getFileNameFromUrl = (url?: string): string => {
-  if (!url) return 'Tệp đính kèm';
+const getFileNameFromUrl = (url: string | undefined, t: TFunction): string => {
+  if (!url) return t('attachment');
   try {
     const clean = url.split('?')[0];
     const parts = clean.split('/');
-    return decodeURIComponent(parts[parts.length - 1]) || 'Tệp đính kèm';
+    return decodeURIComponent(parts[parts.length - 1]) || t('attachment');
   } catch {
-    return 'Tệp đính kèm';
+    return t('attachment');
   }
 };
 
-const renderMessageBody = (msg: ChatMessage) => {
+const renderMessageBody = (msg: ChatMessage, t: TFunction) => {
   if (msg.messageType === 'DELETED_FOR_EVERYONE') {
     return (
       <Typography variant="body2" sx={{ fontStyle: 'italic', opacity: 0.7 }}>
-        Tin nhắn đã được thu hồi
+        {t('messageRecalled')}
       </Typography>
     );
   }
@@ -169,7 +171,7 @@ const renderMessageBody = (msg: ChatMessage) => {
         >
           <InsertDriveFile fontSize="small" />
           <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
-            {getFileNameFromUrl(msg.attachmentFileUrl)}
+            {getFileNameFromUrl(msg.attachmentFileUrl, t)}
           </Typography>
         </Box>
       );
@@ -187,6 +189,7 @@ const ChatPage: React.FC = React.memo(() => {
   const location = useLocation();
   const navigate = useNavigate();
   const confirmDialog = useConfirmDialog();
+  const { t } = useTranslation();
   const { user } = useSelector((state: RootState) => state.auth);
   const { isConnected, send, subscribe } = useWebSocket();
 
@@ -400,7 +403,7 @@ const ChatPage: React.FC = React.memo(() => {
         }
       } catch (error) {
         console.error('Failed to open conversation:', error);
-        toast.error('Không thể mở cuộc trò chuyện');
+        toast.error(t('conversationOpenFailed'));
       }
     };
 
@@ -597,11 +600,11 @@ const ChatPage: React.FC = React.memo(() => {
       try {
         const response = await chatService.updateChatMessage({ chatMessageId: messageId, content: inputText });
         if (response.code !== 1000) {
-          toast.error(response.message || 'Không thể sửa tin nhắn');
+          toast.error(response.message || t('editMessageFailed'));
         }
       } catch (error) {
         console.error('Failed to update message:', error);
-        toast.error('Không thể sửa tin nhắn');
+        toast.error(t('editMessageFailed'));
       } finally {
         setEditingMessageId(null);
         setInputText('');
@@ -640,12 +643,12 @@ const ChatPage: React.FC = React.memo(() => {
     const messageType = getMessageTypeFromMime(file.type);
     const maxSize = ATTACHMENT_SIZE_LIMITS[messageType];
     if (file.size > maxSize) {
-      toast.error(`Kích thước tệp không được vượt quá ${Math.round(maxSize / (1024 * 1024))}MB`);
+      toast.error(t('fileTooLarge', { size: Math.round(maxSize / (1024 * 1024)) }));
       return;
     }
 
     setUploadingAttachment(true);
-    const toastId = toast.loading('Đang tải lên...');
+    const toastId = toast.loading(t('uploading'));
     try {
       const uploadRes = await fileService.uploadFile(file);
       if (uploadRes.code === 1000) {
@@ -658,17 +661,17 @@ const ChatPage: React.FC = React.memo(() => {
         };
         const response = await chatService.createChatMessage(request);
         if (response.code === 1000) {
-          toast.success('Đã gửi', { id: toastId });
+          toast.success(t('sent'), { id: toastId });
           setReplyTarget(null);
         } else {
-          toast.error(response.message || 'Gửi thất bại', { id: toastId });
+          toast.error(response.message || t('sendFailed'), { id: toastId });
         }
       } else {
-        toast.error('Tải tệp lên thất bại: ' + (uploadRes.message || ''), { id: toastId });
+        toast.error(t('fileUploadFailed', { message: uploadRes.message || '' }), { id: toastId });
       }
     } catch (error) {
       console.error('Failed to send attachment:', error);
-      toast.error('Có lỗi xảy ra khi gửi tệp đính kèm', { id: toastId });
+      toast.error(t('attachmentSendFailed'), { id: toastId });
     } finally {
       setUploadingAttachment(false);
     }
@@ -712,10 +715,10 @@ const ChatPage: React.FC = React.memo(() => {
     if (!target || target.messageType !== 'TEXT') return;
     try {
       await navigator.clipboard.writeText(target.content);
-      toast.success('Đã sao chép');
+      toast.success(t('copied'));
     } catch (error) {
       console.error('Failed to copy message:', error);
-      toast.error('Không thể sao chép');
+      toast.error(t('copyFailed'));
     }
   };
 
@@ -741,20 +744,20 @@ const ChatPage: React.FC = React.memo(() => {
     handleCloseMessageMenu();
     if (!target || !activeConversationId) return;
     const confirmed = await confirmDialog({
-      title: 'Thu hồi tin nhắn',
-      message: 'Bạn có chắc chắn muốn thu hồi tin nhắn này?',
-      confirmText: 'Thu hồi',
+      title: t('recallMessage'),
+      message: t('recallMessageConfirm'),
+      confirmText: t('recall'),
     });
     if (!confirmed) return;
 
     try {
       const response = await chatService.deleteChatMessage({ chatMessageId: target.id, conversationId: activeConversationId });
       if (response.data.code !== 1000) {
-        toast.error(response.data.message || 'Không thể thu hồi tin nhắn');
+        toast.error(response.data.message || t('recallMessageFailed'));
       }
     } catch (error) {
       console.error('Failed to delete message:', error);
-      toast.error('Không thể thu hồi tin nhắn');
+      toast.error(t('recallMessageFailed'));
     }
   };
 
@@ -858,19 +861,19 @@ const ChatPage: React.FC = React.memo(() => {
           dispatch(setConversations([{ ...created, type: created.type as ConversationType } as any, ...conversations]));
         }
         dispatch(setActiveConversation(created.id));
-        toast.success('Đã tạo cuộc trò chuyện');
+        toast.success(t('conversationCreated'));
         setNewConvOpen(false);
       }
     } catch (error) {
       console.error('Failed to create conversation:', error);
-      toast.error('Không thể tạo cuộc trò chuyện');
+      toast.error(t('conversationCreateFailed'));
     } finally {
       setCreatingConversation(false);
     }
   };
 
   const getConversationName = (conv: any) => {
-    return conv.conversationName || 'Unknown';
+    return conv.conversationName || t('unknown');
   };
 
   const applyConversationUpdate = (conversationId: string, patch: { conversationName?: string; conversationAvatar?: string }) => {
@@ -901,12 +904,12 @@ const ChatPage: React.FC = React.memo(() => {
       const response = await chatService.updateConversation(activeConversationId, { conversationName: name });
       if (response.code === 1000) {
         applyConversationUpdate(activeConversationId, { conversationName: response.result.conversationName });
-        toast.success('Đã đổi tên nhóm');
+        toast.success(t('groupRenamed'));
         setRenameDialogOpen(false);
       }
     } catch (error) {
       console.error('Failed to rename conversation:', error);
-      toast.error('Không thể đổi tên nhóm');
+      toast.error(t('groupRenameFailed'));
     } finally {
       setRenamingGroup(false);
     }
@@ -923,32 +926,32 @@ const ChatPage: React.FC = React.memo(() => {
     if (!file || !activeConversationId) return;
 
     if (!file.type.startsWith('image/')) {
-      toast.error('Vui lòng chọn tệp hình ảnh');
+      toast.error(t('chooseImageFile'));
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      toast.error('Kích thước ảnh không được vượt quá 5MB');
+      toast.error(t('imageTooLarge'));
       return;
     }
 
     setUploadingGroupAvatar(true);
-    const toastId = toast.loading('Đang tải ảnh lên...');
+    const toastId = toast.loading(t('uploadingImage'));
     try {
       const uploadRes = await fileService.uploadFile(file);
       if (uploadRes.code === 1000) {
         const updateRes = await chatService.updateConversation(activeConversationId, { groupAvatarFileId: uploadRes.result.id });
         if (updateRes.code === 1000) {
           applyConversationUpdate(activeConversationId, { conversationAvatar: updateRes.result.conversationAvatar });
-          toast.success('Đã đổi ảnh nhóm', { id: toastId });
+          toast.success(t('groupAvatarChanged'), { id: toastId });
         } else {
-          toast.error(updateRes.message || 'Không thể cập nhật ảnh nhóm', { id: toastId });
+          toast.error(updateRes.message || t('groupAvatarUpdateFailed'), { id: toastId });
         }
       } else {
-        toast.error('Tải ảnh lên thất bại: ' + (uploadRes.message || ''), { id: toastId });
+        toast.error(t('imageUploadFailed', { message: uploadRes.message || '' }), { id: toastId });
       }
     } catch (error) {
       console.error('Failed to update group avatar:', error);
-      toast.error('Có lỗi xảy ra khi đổi ảnh nhóm', { id: toastId });
+      toast.error(t('groupAvatarChangeFailed'), { id: toastId });
     } finally {
       setUploadingGroupAvatar(false);
     }
@@ -956,7 +959,7 @@ const ChatPage: React.FC = React.memo(() => {
 
   const getLastMessage = (conv: any) => {
     const msgs = messages[conv.id] || [];
-    return msgs.length > 0 ? getMessagePreviewText(msgs[msgs.length - 1]) : 'No messages yet';
+    return msgs.length > 0 ? getMessagePreviewText(msgs[msgs.length - 1], t) : t('noMessagesYet');
   };
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
@@ -1001,7 +1004,7 @@ const ChatPage: React.FC = React.memo(() => {
           <TextField
             fullWidth
             size="small"
-            placeholder="Search Messenger"
+            placeholder={t('searchMessenger')}
             variant="outlined"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -1027,7 +1030,7 @@ const ChatPage: React.FC = React.memo(() => {
           />
           <IconButton
             onClick={handleOpenNewConversation}
-            title="Cuộc trò chuyện mới"
+            title={t('newConversation')}
             sx={{
               flexShrink: 0,
               width: 36,
@@ -1049,7 +1052,7 @@ const ChatPage: React.FC = React.memo(() => {
           )}
           {isSearchingMode && !searching && displayedConversations.length === 0 && (
             <Box sx={{ textAlign: 'center', py: 4 }}>
-              <Typography sx={{ color: 'text.secondary', fontSize: '0.9rem' }}>Không tìm thấy hội thoại</Typography>
+              <Typography sx={{ color: 'text.secondary', fontSize: '0.9rem' }}>{t('noConversationsFound')}</Typography>
             </Box>
           )}
           {displayedConversations.map((conv) => {
@@ -1189,7 +1192,7 @@ const ChatPage: React.FC = React.memo(() => {
                 <Box>
                   <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.primary' }}>{getConversationName(activeConversation!)}</Typography>
                   <Typography variant="caption" sx={{ display: 'block', mt: -0.25, color: isUserOnline(getOtherParticipantId(activeConversation!)) ? '#44b700' : 'text.secondary' }}>
-                    {isUserOnline(getOtherParticipantId(activeConversation!)) ? 'Đang trực tuyến' : 'Ngoại tuyến'}
+                    {isUserOnline(getOtherParticipantId(activeConversation!)) ? t('online') : t('offline')}
                   </Typography>
                 </Box>
               </Box>
@@ -1258,10 +1261,10 @@ const ChatPage: React.FC = React.memo(() => {
                 const replyQuote = msg.replyToMessageId && !isDeleted ? (
                   <>
                     <Typography variant="caption" sx={{ fontWeight: 700, display: 'block' }}>
-                      {msg.replyToSenderName || 'Người dùng'}
+                      {msg.replyToSenderName || t('anonymousUser')}
                     </Typography>
                     <Typography variant="caption" sx={{ display: 'block', wordBreak: 'break-word' }}>
-                      {msg.replyToContent || getMessagePreviewText({ messageType: msg.replyToMessageType || 'TEXT' })}
+                      {msg.replyToContent || getMessagePreviewText({ messageType: msg.replyToMessageType || 'TEXT' }, t)}
                     </Typography>
                   </>
                 ) : null;
@@ -1340,7 +1343,7 @@ const ChatPage: React.FC = React.memo(() => {
                                 {replyQuote}
                               </Box>
                             )}
-                            {renderMessageBody(msg)}
+                            {renderMessageBody(msg, t)}
                           </Box>
                         ) : (
                           <Paper
@@ -1360,7 +1363,7 @@ const ChatPage: React.FC = React.memo(() => {
                                 {replyQuote}
                               </Box>
                             )}
-                            {renderMessageBody(msg)}
+                            {renderMessageBody(msg, t)}
                           </Paper>
                         )}
                       </Box>
@@ -1446,7 +1449,7 @@ const ChatPage: React.FC = React.memo(() => {
                 }}
               >
                 <ArrowDownIcon fontSize="small" />
-                Tin nhắn mới
+                {t('newMessages')}
               </Box>
             )}
             </Box>
@@ -1457,11 +1460,11 @@ const ChatPage: React.FC = React.memo(() => {
                 <Box sx={{ px: 2, pt: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
                   <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', borderLeft: '3px solid', borderColor: 'primary.main', pl: 1 }}>
                     <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 700 }}>
-                      {editingMessageId ? 'Đang chỉnh sửa tin nhắn' : `Trả lời ${replyTarget?.senderName || 'tin nhắn'}`}
+                      {editingMessageId ? t('editingMessage') : t('replyingTo', { name: replyTarget?.senderName || t('messageFallback') })}
                     </Typography>
                     {replyTarget && (
                       <Typography variant="caption" sx={{ color: 'text.secondary', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {getMessagePreviewText(replyTarget)}
+                        {getMessagePreviewText(replyTarget, t)}
                       </Typography>
                     )}
                   </Box>
@@ -1481,7 +1484,7 @@ const ChatPage: React.FC = React.memo(() => {
                 <TextField
                   fullWidth
                   size="small"
-                  placeholder="Nhập tin nhắn..."
+                  placeholder={t('messagePlaceholder')}
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   onKeyDown={(e) => {
@@ -1535,10 +1538,10 @@ const ChatPage: React.FC = React.memo(() => {
           >
             <ChatIcon sx={{ fontSize: 72, mb: 2, opacity: 0.3, color: 'primary.main' }} />
             <Typography variant="h5" sx={{ color: 'text.primary', fontWeight: 700, mb: 0.5 }}>
-              Chọn một hội thoại để bắt đầu
+              {t('chooseConversation')}
             </Typography>
             <Typography variant="body2" sx={{ color: 'text.disabled' }}>
-              Tin nhắn của bạn sẽ hiện ở đây
+              {t('messagesAppearHere')}
             </Typography>
           </Box>
         )}
@@ -1546,13 +1549,13 @@ const ChatPage: React.FC = React.memo(() => {
     </Box>
 
     <Dialog open={newConvOpen} onClose={handleCloseNewConversation} fullWidth maxWidth="xs">
-      <DialogTitle>Cuộc trò chuyện mới</DialogTitle>
+      <DialogTitle>{t('newConversation')}</DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <TextField
           autoFocus
           fullWidth
           size="small"
-          placeholder="Tìm bạn bè..."
+          placeholder={t('searchFriends')}
           value={friendQuery}
           onChange={(e) => setFriendQuery(e.target.value)}
           slotProps={{
@@ -1571,7 +1574,7 @@ const ChatPage: React.FC = React.memo(() => {
           </Box>
         ) : friendOptions.length === 0 ? (
           <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 3 }}>
-            Không tìm thấy bạn bè
+            {t('noFriendsFound')}
           </Typography>
         ) : (
           <List sx={{ maxHeight: 320, overflowY: 'auto' }}>
@@ -1588,13 +1591,13 @@ const ChatPage: React.FC = React.memo(() => {
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleCloseNewConversation} disabled={creatingConversation}>Hủy</Button>
+        <Button onClick={handleCloseNewConversation} disabled={creatingConversation}>{t('cancel')}</Button>
         <Button
           variant="contained"
           disabled={selectedFriendIds.length === 0 || creatingConversation}
           onClick={handleCreateConversation}
         >
-          {creatingConversation ? <CircularProgress size={18} sx={{ color: '#fff' }} /> : 'Tạo'}
+          {creatingConversation ? <CircularProgress size={18} sx={{ color: '#fff' }} /> : t('create')}
         </Button>
       </DialogActions>
     </Dialog>
@@ -1602,35 +1605,35 @@ const ChatPage: React.FC = React.memo(() => {
     <Menu anchorEl={groupMenuAnchor} open={Boolean(groupMenuAnchor)} onClose={handleCloseGroupMenu}>
       <MenuItem onClick={handleOpenRenameDialog}>
         <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>
-        Đổi tên nhóm
+        {t('renameGroup')}
       </MenuItem>
       <MenuItem onClick={handleGroupAvatarClick} disabled={uploadingGroupAvatar}>
         <ListItemIcon><PhotoCamera fontSize="small" /></ListItemIcon>
-        Đổi ảnh nhóm
+        {t('changeGroupPicture')}
       </MenuItem>
     </Menu>
 
     <Menu anchorEl={messageMenuAnchor} open={Boolean(messageMenuAnchor)} onClose={handleCloseMessageMenu}>
       <MenuItem onClick={handleReplyClick}>
         <ListItemIcon><ReplyIcon fontSize="small" /></ListItemIcon>
-        Trả lời
+        {t('reply')}
       </MenuItem>
       {selectedMessage?.messageType === 'TEXT' && (
         <MenuItem onClick={handleCopyMessageClick}>
           <ListItemIcon><CopyIcon fontSize="small" /></ListItemIcon>
-          Sao chép
+          {t('copy')}
         </MenuItem>
       )}
       {selectedMessage?.senderId === user?.id && selectedMessage?.messageType === 'TEXT' && (
         <MenuItem onClick={handleEditMessageClick}>
           <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>
-          Sửa
+          {t('edit')}
         </MenuItem>
       )}
       {selectedMessage?.senderId === user?.id && (
         <MenuItem onClick={handleDeleteMessageClick} sx={{ color: 'error.main' }}>
           <ListItemIcon><DeleteIcon fontSize="small" color="error" /></ListItemIcon>
-          Thu hồi
+          {t('recall')}
         </MenuItem>
       )}
     </Menu>
@@ -1651,14 +1654,14 @@ const ChatPage: React.FC = React.memo(() => {
     />
 
     <Dialog open={renameDialogOpen} onClose={() => !renamingGroup && setRenameDialogOpen(false)} fullWidth maxWidth="xs">
-      <DialogTitle>Đổi tên nhóm</DialogTitle>
+      <DialogTitle>{t('renameGroup')}</DialogTitle>
       <DialogContent>
         <TextField
           autoFocus
           fullWidth
           size="small"
           margin="dense"
-          placeholder="Tên nhóm"
+          placeholder={t('groupName')}
           value={renameValue}
           onChange={(e) => setRenameValue(e.target.value)}
           onKeyDown={(e) => {
@@ -1670,13 +1673,13 @@ const ChatPage: React.FC = React.memo(() => {
         />
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => setRenameDialogOpen(false)} disabled={renamingGroup}>Hủy</Button>
+        <Button onClick={() => setRenameDialogOpen(false)} disabled={renamingGroup}>{t('cancel')}</Button>
         <Button
           variant="contained"
           disabled={!renameValue.trim() || renamingGroup}
           onClick={handleConfirmRename}
         >
-          {renamingGroup ? <CircularProgress size={18} sx={{ color: '#fff' }} /> : 'Lưu'}
+          {renamingGroup ? <CircularProgress size={18} sx={{ color: '#fff' }} /> : t('save')}
         </Button>
       </DialogActions>
     </Dialog>

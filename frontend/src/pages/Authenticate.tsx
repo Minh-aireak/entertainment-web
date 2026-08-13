@@ -6,11 +6,13 @@ import { toast } from 'react-hot-toast';
 import { loginSuccess } from '../store';
 import { identityService } from '../api/identityService';
 import { profileService } from '../api/profileService';
+import { useTranslation } from 'react-i18next';
 
 const Authenticate: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useDispatch();
+  const { t } = useTranslation();
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -64,14 +66,14 @@ const Authenticate: React.FC = () => {
           dispatch(loginSuccess({ user: null }));
         }
 
-        toast.success('Đăng nhập Google thành công!');
+        toast.success(t('googleLoginSuccess'));
         navigate('/social');
       } else {
-        throw new Error(response.message || 'Đăng nhập thất bại');
+        throw new Error(response.message || t('loginFailed'));
       }
     } catch (error: any) {
       console.error('Authentication error:', error);
-      toast.error(error.message || 'Có lỗi xảy ra khi xác thực với Google');
+      toast.error(error.message || t('googleAuthenticationFailed'));
       navigate('/login');
     }
   };
@@ -91,10 +93,10 @@ const Authenticate: React.FC = () => {
     >
       <CircularProgress sx={{ color: '#00A84E' }} />
       <Typography variant="h6" sx={{ fontWeight: 600 }}>
-        Đang xác thực tài khoản...
+        {t('authenticatingAccount')}
       </Typography>
       <Typography sx={{ color: 'text.secondary' }}>
-        Vui lòng đợi trong giây lát
+        {t('pleaseWait')}
       </Typography>
     </Box>
   );

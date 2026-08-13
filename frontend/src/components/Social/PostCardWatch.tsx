@@ -31,9 +31,9 @@ const PostCardWatch: React.FC<PostCardWatchProps> = ({
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(watchInviteCode || '');
-      toast.success(t ? (t as any)('inviteCodeCopied') || 'Đã sao chép mã mời' : 'Đã sao chép mã mời');
+      toast.success(t('inviteCodeCopied'));
     } catch {
-      toast.error('Không thể sao chép');
+      toast.error(t('copyFailed'));
     }
   };
 
@@ -90,13 +90,13 @@ const PostCardWatch: React.FC<PostCardWatchProps> = ({
             size="small"
             variant="outlined"
             icon={<PeopleAlt sx={{ fontSize: 16 }} />}
-            label={`${watchParticipantCount ?? 1} người trong phòng`}
+            label={t('participantsInRoom', { count: watchParticipantCount ?? 1 })}
             sx={{ alignSelf: 'flex-start' }}
           />
         </Box>
 
         <Typography variant="h6" sx={{ fontWeight: 800, lineHeight: 1.2, wordBreak: 'break-word' }} noWrap>
-          {watchFilmTitle || 'Xem cùng'}
+          {watchFilmTitle || t('watchTogetherTitle')}
         </Typography>
 
         <Box sx={{ flex: 1 }} />
@@ -109,7 +109,7 @@ const PostCardWatch: React.FC<PostCardWatchProps> = ({
             onClick={handleCopy}
             disabled={!watchInviteCode}
           >
-            Sao chép mã
+            {t('copyInviteCode')}
           </Button>
           <Button
             size="small"
@@ -118,7 +118,7 @@ const PostCardWatch: React.FC<PostCardWatchProps> = ({
             onClick={handleJoin}
             disabled={roomClosed || !watchInviteCode}
           >
-            {roomClosed ? 'Phòng đã đóng' : 'THAM GIA'}
+            {roomClosed ? t('roomClosedLabel') : t('joinRoom')}
           </Button>
         </Box>
       </Box>

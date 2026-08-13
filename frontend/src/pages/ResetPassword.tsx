@@ -15,11 +15,13 @@ import { Lock, Visibility, VisibilityOff } from '@mui/icons-material';
 import { toast } from 'react-hot-toast';
 import { identityService } from '../api/identityService';
 import AuthLayout from '../components/Layout/AuthLayout';
+import { useTranslation } from 'react-i18next';
 
 const ResetPassword: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
+  const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [token, setToken] = useState('');
@@ -30,32 +32,32 @@ const ResetPassword: React.FC = () => {
     const params = new URLSearchParams(location.search);
     const tokenParam = params.get('token');
     if (!tokenParam) {
-      toast.error('Token không hợp lệ hoặc đã hết hạn');
+      toast.error(t('invalidResetToken'));
       navigate('/login');
     } else {
       setToken(tokenParam);
     }
-  }, [location, navigate]);
+  }, [location, navigate, t]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password !== confirmPassword) {
-      toast.error('Mật khẩu xác nhận không khớp');
+      toast.error(t('confirmPasswordMismatch'));
       return;
     }
 
     if (password.length < 8) {
-      toast.error('Mật khẩu phải có ít nhất 8 ký tự');
+      toast.error(t('passwordMinLength'));
       return;
     }
 
     setIsLoading(true);
     try {
       await identityService.resetPassword({ token, password });
-      toast.success('Mật khẩu đã được đặt lại thành công! Vui lòng đăng nhập lại.');
+      toast.success(t('resetPasswordSuccess'));
       navigate('/login');
     } catch (error: any) {
-      const message = error.response?.data?.message || 'Đặt lại mật khẩu thất bại';
+      const message = error.response?.data?.message || t('resetPasswordFailed');
       toast.error(message);
     } finally {
       setIsLoading(false);
@@ -91,10 +93,10 @@ const ResetPassword: React.FC = () => {
         >
           <Box sx={{ mb: 5, textAlign: 'center' }}>
             <Typography variant="h4" sx={{ fontWeight: 800, color: 'text.primary', mb: 1.5 }}>
-              Đặt lại mật khẩu
+              {t('resetPassword')}
             </Typography>
             <Typography sx={{ color: 'text.secondary' }}>
-              Vui lòng nhập mật khẩu mới của bạn bên dưới.
+              {t('resetPasswordDescription')}
             </Typography>
           </Box>
 
@@ -105,7 +107,7 @@ const ResetPassword: React.FC = () => {
                 id="password"
                 name="password"
                 type={showPassword ? 'text' : 'password'}
-                label="Mật khẩu mới"
+                label={t('newPassword')}
                 variant="outlined"
                 placeholder="••••••••"
                 value={password}
@@ -151,7 +153,7 @@ const ResetPassword: React.FC = () => {
                 id="confirmPassword"
                 name="confirmPassword"
                 type={showPassword ? 'text' : 'password'}
-                label="Xác nhận mật khẩu"
+                label={t('confirmPassword')}
                 variant="outlined"
                 placeholder="••••••••"
                 value={confirmPassword}
@@ -195,7 +197,7 @@ const ResetPassword: React.FC = () => {
                 '&:hover': { bgcolor: '#008F41' },
               }}
             >
-              {isLoading ? 'Đang cập nhật...' : 'Đặt lại mật khẩu'}
+              {isLoading ? t('updating') : t('resetPassword')}
             </Button>
           </Box>
         </Paper>

@@ -17,10 +17,12 @@ import { Visibility, VisibilityOff, Mail, Lock, Person } from '@mui/icons-materi
 import { toast } from 'react-hot-toast';
 import { identityService } from '../api/identityService';
 import AuthLayout from '../components/Layout/AuthLayout';
+import { useTranslation } from 'react-i18next';
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
   const theme = useTheme();
+  const { t } = useTranslation();
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -39,7 +41,7 @@ const Register: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.password !== formData.confirmPassword) {
-      toast.error('Mật khẩu không khớp');
+      toast.error(t('passwordsDoNotMatch'));
       return;
     }
     setIsLoading(true);
@@ -49,10 +51,10 @@ const Register: React.FC = () => {
         email: formData.email,
         password: formData.password,
       });
-      toast.success('Đăng ký thành công! Hãy đăng nhập.');
+      toast.success(t('registerSuccess'));
       navigate('/login');
     } catch (error: any) {
-      const message = error.response?.data?.message || 'Đăng ký thất bại';
+      const message = error.response?.data?.message || t('registerFailed');
       toast.error(message);
     } finally {
       setIsLoading(false);
@@ -102,7 +104,7 @@ const Register: React.FC = () => {
                 letterSpacing: '-0.02em',
               }}
             >
-              Tạo tài khoản mới
+              {t('createAccount')}
             </Typography>
           </Box>
 
@@ -113,7 +115,7 @@ const Register: React.FC = () => {
                 fullWidth
                 id="username"
                 name="username"
-                label="Tên đăng nhập"
+                label={t('username')}
                 variant="outlined"
                 placeholder="your_username"
                 value={formData.username}
@@ -148,7 +150,7 @@ const Register: React.FC = () => {
                 id="email"
                 name="email"
                 type="email"
-                label="Email"
+                label={t('email')}
                 variant="outlined"
                 placeholder="email@example.com"
                 value={formData.email}
@@ -184,7 +186,7 @@ const Register: React.FC = () => {
                   id="password"
                   name="password"
                   type={showPassword ? 'text' : 'password'}
-                  label="Mật khẩu"
+                  label={t('password')}
                   variant="outlined"
                   placeholder="••••••••"
                   value={formData.password}
@@ -229,7 +231,7 @@ const Register: React.FC = () => {
                   id="confirmPassword"
                   name="confirmPassword"
                   type={showConfirmPassword ? 'text' : 'password'}
-                  label="Xác nhận"
+                  label={t('confirmPassword')}
                   variant="outlined"
                   placeholder="••••••••"
                   value={formData.confirmPassword}
@@ -289,12 +291,12 @@ const Register: React.FC = () => {
                 },
               }}
             >
-              {isLoading ? 'Đang đăng ký...' : 'Đăng ký tài khoản'}
+              {isLoading ? t('registering') : t('registerAccount')}
             </Button>
 
             <Box sx={{ mt: 4, textAlign: 'center' }}>
               <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
-                Đã có tài khoản?{' '}
+                {t('alreadyHaveAccount')}{' '}
                 <Link
                   component={RouterLink}
                   to="/login"
@@ -306,7 +308,7 @@ const Register: React.FC = () => {
                     '&:hover': { textDecoration: 'underline' },
                   }}
                 >
-                  Đăng nhập
+                  {t('login')}
                 </Link>
               </Typography>
             </Box>
