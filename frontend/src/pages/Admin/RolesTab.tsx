@@ -22,6 +22,7 @@ import { toast } from 'react-hot-toast';
 import { identityService } from '../../api/identityService';
 import type { RoleResponse } from '../../models';
 import { useConfirmDialog } from '../../contexts/ConfirmDialogContext';
+import { useTranslation } from 'react-i18next';
 
 interface RoleFormState {
   name: string;
@@ -32,6 +33,7 @@ const EMPTY_FORM: RoleFormState = { name: '', description: '' };
 
 const RolesTab: React.FC = () => {
   const confirm = useConfirmDialog();
+  const { t } = useTranslation();
   const [roles, setRoles] = useState<RoleResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -45,7 +47,7 @@ const RolesTab: React.FC = () => {
       const rolesRes = await identityService.getRoles();
       if (rolesRes.code === 1000 && rolesRes.result) setRoles(rolesRes.result);
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Không thể tải dữ liệu vai trò');
+      toast.error(error.response?.data?.message || t('rolesLoadFailed'));
     } finally {
       setLoading(false);
     }
@@ -72,7 +74,7 @@ const RolesTab: React.FC = () => {
 
   const handleSave = async () => {
     if (!form.name.trim()) {
-      toast.error('Tên vai trò không được để trống');
+      toast.error(t('roleNameRequired'));
       return;
     }
     setSaving(true);
@@ -82,14 +84,14 @@ const RolesTab: React.FC = () => {
         : await identityService.createRole(form);
 
       if (response.code === 1000) {
-        toast.success(response.message || 'Lưu vai trò thành công');
+        toast.success(response.message || t('roleSaved'));
         setDialogOpen(false);
         loadData();
       } else {
-        toast.error(response.message || 'Lưu vai trò thất bại');
+        toast.error(response.message || t('roleSaveFailed'));
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Lưu vai trò thất bại');
+      toast.error(error.response?.data?.message || t('roleSaveFailed'));
     } finally {
       setSaving(false);
     }
@@ -97,21 +99,21 @@ const RolesTab: React.FC = () => {
 
   const handleDelete = async (role: RoleResponse) => {
     const confirmed = await confirm({
-      title: 'Xóa vai trò',
-      message: `Bạn có chắc muốn xóa vai trò "${role.name}"? Vai trò đang được gán cho người dùng sẽ không thể xóa.`,
+      title: t('deleteRole'),
+      message: t('deleteRoleConfirm', { name: role.name }),
     });
     if (!confirmed) return;
 
     try {
       const response = await identityService.deleteRole(role.name);
       if (response.code === 1000) {
-        toast.success(response.message || 'Xóa vai trò thành công');
+        toast.success(response.message || t('roleDeleted'));
         setRoles((prev) => prev.filter((r) => r.name !== role.name));
       } else {
-        toast.error(response.message || 'Xóa vai trò thất bại');
+        toast.error(response.message || t('roleDeleteFailed'));
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Xóa vai trò thất bại');
+      toast.error(error.response?.data?.message || t('roleDeleteFailed'));
     }
   };
 
@@ -119,7 +121,7 @@ const RolesTab: React.FC = () => {
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
         <Button variant="contained" startIcon={<Add />} onClick={openCreateDialog}>
-          Thêm vai trò
+          {t('addRole')}
         </Button>
       </Box>
 
@@ -127,9 +129,9 @@ const RolesTab: React.FC = () => {
         <Table sx={{ minWidth: 650 }}>
           <TableHead sx={{ bgcolor: 'rgba(255, 255, 255, 0.05)' }}>
             <TableRow>
-              <TableCell sx={{ fontWeight: 'bold' }}>Tên</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Mô tả</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>Thao tác</TableCell>
+              <TableCell sx={{ fontWeight: 'bold' }}>{t('name')}</TableCell>
+              <TableCell sx={{ fontWeight: 'bold' }}>{t('description')}</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>{t('actions')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -139,7 +141,7 @@ const RolesTab: React.FC = () => {
               </TableRow>
             ) : roles.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={3} align="center" sx={{ py: 6 }}>Chưa có vai trò nào</TableCell>
+                <TableCell colSpan={3} align="center" sx={{ py: 6 }}>{t('noRoles')}</TableCell>
               </TableRow>
             ) : (
               roles.map((role) => (
@@ -147,10 +149,10 @@ const RolesTab: React.FC = () => {
                   <TableCell sx={{ fontWeight: 'medium' }}>{role.name}</TableCell>
                   <TableCell>{role.description}</TableCell>
                   <TableCell align="right">
-                    <IconButton color="primary" title="Chỉnh sửa" onClick={() => openEditDialog(role)}>
+                    <IconButton color="primary" title={t('editing')} onClick={() => openEditDialog(role)}>
                       <Edit fontSize="small" />
                     </IconButton>
-                    <IconButton color="error" title="Xóa" onClick={() => handleDelete(role)}>
+                    <IconButton color="error" title={t('delete')} onClick={() => handleDelete(role)}>
                       <Delete fontSize="small" />
                     </IconButton>
                   </TableCell>
@@ -162,10 +164,10 @@ const RolesTab: React.FC = () => {
       </TableContainer>
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{editingName ? 'Chỉnh sửa vai trò' : 'Thêm vai trò mới'}</DialogTitle>
+        <DialogTitle>{editingName ? t('editRole') : t('addNewRole')}</DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <TextField
-            label="Tên vai trò"
+            label={t('roleName')}
             value={form.name}
             disabled={!!editingName}
             onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value.toUpperCase() }))}
@@ -174,7 +176,7 @@ const RolesTab: React.FC = () => {
             sx={{ mt: 1 }}
           />
           <TextField
-            label="Mô tả"
+            label={t('description')}
             value={form.description}
             onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
             fullWidth
@@ -183,9 +185,9 @@ const RolesTab: React.FC = () => {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>Hủy</Button>
+          <Button onClick={() => setDialogOpen(false)}>{t('cancel')}</Button>
           <Button variant="contained" onClick={handleSave} disabled={saving}>
-            {saving ? 'Đang lưu...' : 'Lưu'}
+            {saving ? t('saving') : t('save')}
           </Button>
         </DialogActions>
       </Dialog>

@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useState } from 'react';
+import React, { memo, useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Table,
@@ -24,7 +24,6 @@ import {
   Chip,
   Checkbox,
   FormControlLabel,
-  TablePagination,
   IconButton,
   Typography,
   InputAdornment,
@@ -34,14 +33,23 @@ import { Add, Delete, Edit, Search, Clear } from '@mui/icons-material';
 import { toast } from 'react-hot-toast';
 import { filmService } from '../../api/filmService';
 import type { FilmSummaryResponse, DirectorResponse, ActorResponse, FilmStatus, Genre, Country } from '../../models';
-import { GENRE_VALUES, COUNTRY_VALUES, GENRE_LABELS_VI, COUNTRY_LABELS_VI } from '../../constants/film';
+import { GENRE_VALUES, COUNTRY_VALUES } from '../../constants/film';
 import { extractYouTubeVideoId } from '../../utils/youtube';
 import AvatarUploadField from './AvatarUploadField';
+import { useTranslation } from 'react-i18next';
+import {
+  AdminPagination,
+  Pill,
+  adminHeaderCellSx,
+  adminInputSx,
+  adminTableContainerSx,
+  adminToolbarSx,
+} from './adminUiKit';
 
 const STATUSES: FilmStatus[] = ['ONGOING', 'COMPLETED'];
-const STATUS_LABEL: Record<FilmStatus, string> = {
-  ONGOING: 'Đang cập nhật',
-  COMPLETED: 'Hoàn thành',
+const STATUS_KEY: Record<FilmStatus, string> = {
+  ONGOING: 'filmStatus.ongoing',
+  COMPLETED: 'filmStatus.completed',
 };
 
 interface CastRow {
@@ -69,15 +77,19 @@ interface FilmsTabProps {
 }
 
 const FilmsTab: React.FC<FilmsTabProps> = ({ active = true }) => {
+  const { t } = useTranslation();
   const [films, setFilms] = useState<FilmSummaryResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const rowsPerPage = 10;
   const [totalElements, setTotalElements] = useState(0);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const isSearchMode = debouncedSearchTerm.length > 0;
+  const [genreFilter, setGenreFilter] = useState<Genre | 'ALL'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<FilmStatus | 'ALL'>('ALL');
+  const filtersActive = genreFilter !== 'ALL' || statusFilter !== 'ALL';
 
   const [directors, setDirectors] = useState<DirectorResponse[]>([]);
   const [actors, setActors] = useState<ActorResponse[]>([]);
@@ -98,7 +110,7 @@ const FilmsTab: React.FC<FilmsTabProps> = ({ active = true }) => {
         setTotalElements(response.result.totalElement);
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Không thể tải danh sách phim');
+      toast.error(error.response?.data?.message || t('filmsLoadFailed'));
     } finally {
       setLoading(false);
     }
@@ -113,7 +125,7 @@ const FilmsTab: React.FC<FilmsTabProps> = ({ active = true }) => {
         setTotalElements(response.result.length);
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Không thể tìm kiếm phim');
+      toast.error(error.response?.data?.message || t('filmSearchFailed'));
     } finally {
       setLoading(false);
     }
@@ -145,7 +157,7 @@ const FilmsTab: React.FC<FilmsTabProps> = ({ active = true }) => {
       if (directorsRes.code === 1000 && directorsRes.result) setDirectors(directorsRes.result.data);
       if (actorsRes.code === 1000 && actorsRes.result) setActors(actorsRes.result.data);
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Không thể tải danh sách diễn viên/đạo diễn');
+      toast.error(error.response?.data?.message || t('peopleLoadFailed'));
     }
   };
 
@@ -192,10 +204,10 @@ const FilmsTab: React.FC<FilmsTabProps> = ({ active = true }) => {
             .map((c) => ({ actorId: c.actor.id, characterName: c.characterName }))
         );
       } else {
-        toast.error(response.message || 'Không thể tải thông tin phim');
+        toast.error(response.message || t('filmDetailsLoadFailed'));
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Không thể tải thông tin phim');
+      toast.error(error.response?.data?.message || t('filmDetailsLoadFailed'));
     } finally {
       setLoadingFilmDetail(false);
     }
@@ -218,7 +230,7 @@ const FilmsTab: React.FC<FilmsTabProps> = ({ active = true }) => {
 
   const handleSave = async () => {
     if (!form.title.trim() || !form.description.trim() || form.directorIds.length === 0 || !form.country || form.genres.length === 0) {
-      toast.error('Vui lòng điền đầy đủ tiêu đề, mô tả, đạo diễn, quốc gia và ít nhất 1 thể loại');
+      toast.error(t('filmRequiredFields'));
       return;
     }
 
@@ -248,28 +260,34 @@ const FilmsTab: React.FC<FilmsTabProps> = ({ active = true }) => {
         : await filmService.createFilm(request);
 
       if (response.code === 1000) {
-        toast.success(editingId ? 'Cập nhật phim thành công' : 'Tạo phim thành công');
+        toast.success(editingId ? t('filmUpdated') : t('filmCreated'));
         setDialogOpen(false);
         loadFilms();
       } else {
-        toast.error(response.message || (editingId ? 'Cập nhật phim thất bại' : 'Tạo phim thất bại'));
+        toast.error(response.message || (editingId ? t('filmUpdateFailed') : t('filmCreateFailed')));
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.message || (editingId ? 'Cập nhật phim thất bại' : 'Tạo phim thất bại'));
+      toast.error(error.response?.data?.message || (editingId ? t('filmUpdateFailed') : t('filmCreateFailed')));
     } finally {
       setSaving(false);
     }
   };
 
+  const filteredFilms = useMemo(() => films.filter((film) => {
+    if (genreFilter !== 'ALL' && !(film.genres || []).includes(genreFilter)) return false;
+    if (statusFilter !== 'ALL' && (film.status || 'ONGOING') !== statusFilter) return false;
+    return true;
+  }), [films, genreFilter, statusFilter]);
+
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, mb: 2 }}>
+      <Box sx={adminToolbarSx}>
         <TextField
           size="small"
-          placeholder="Tìm kiếm phim theo tên..."
+          placeholder={t('searchFilmsByTitle')}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          sx={{ width: 320 }}
+          sx={{ width: 280, ...adminInputSx }}
           slotProps={{
             input: {
               startAdornment: (
@@ -287,38 +305,82 @@ const FilmsTab: React.FC<FilmsTabProps> = ({ active = true }) => {
             },
           }}
         />
-        <Button variant="contained" startIcon={<Add />} onClick={openCreateDialog}>
-          Thêm phim mới
+        <FormControl size="small" sx={{ minWidth: 170, ...adminInputSx }}>
+          <InputLabel id="genre-filter-label">{t('filterByGenre')}</InputLabel>
+          <Select labelId="genre-filter-label" label={t('filterByGenre')} value={genreFilter} onChange={(e) => setGenreFilter(e.target.value as Genre | 'ALL')}>
+            <MenuItem value="ALL">{t('allGenres')}</MenuItem>
+            {GENRE_VALUES.map((g) => (
+              <MenuItem key={g} value={g}>{t(`genre.${g}`)}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <FormControl size="small" sx={{ minWidth: 170, ...adminInputSx }}>
+          <InputLabel id="film-status-filter-label">{t('filterByStatus')}</InputLabel>
+          <Select labelId="film-status-filter-label" label={t('filterByStatus')} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as FilmStatus | 'ALL')}>
+            <MenuItem value="ALL">{t('allStatuses')}</MenuItem>
+            {STATUSES.map((s) => (
+              <MenuItem key={s} value={s}>{t(STATUS_KEY[s])}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <Box sx={{ flexGrow: 1 }} />
+        <Button variant="contained" startIcon={<Add />} onClick={openCreateDialog} sx={{ borderRadius: '10px' }}>
+          {t('addNewFilm')}
         </Button>
       </Box>
 
-      <TableContainer component={Paper} sx={{ borderRadius: 3 }}>
+      <TableContainer component={Paper} sx={adminTableContainerSx}>
         <Table sx={{ minWidth: 650 }}>
-          <TableHead sx={{ bgcolor: 'rgba(255, 255, 255, 0.05)' }}>
+          <TableHead>
             <TableRow>
-              <TableCell sx={{ fontWeight: 'bold' }}>Ảnh</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Tiêu đề</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Trạng thái</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Số tập</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Đánh giá</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }} align="right">Thao tác</TableCell>
+              <TableCell sx={adminHeaderCellSx}>{t('films')}</TableCell>
+              <TableCell sx={adminHeaderCellSx}>{t('filterByGenre')}</TableCell>
+              <TableCell sx={adminHeaderCellSx}>{t('status')}</TableCell>
+              <TableCell sx={adminHeaderCellSx}>{t('episodeNumber')}</TableCell>
+              <TableCell sx={adminHeaderCellSx}>{t('rating')}</TableCell>
+              <TableCell sx={{ ...adminHeaderCellSx, textAlign: 'right' }}>{t('actions')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {loading ? (
               <TableRow><TableCell colSpan={6} align="center" sx={{ py: 6 }}><CircularProgress size={28} /></TableCell></TableRow>
-            ) : films.length === 0 ? (
+            ) : filteredFilms.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
-                  {isSearchMode ? 'Không tìm thấy phim nào phù hợp' : 'Chưa có phim nào'}
+                  {isSearchMode ? t('noMatchingAdminFilms') : t('noFilms')}
                 </TableCell>
               </TableRow>
             ) : (
-              films.map((film) => (
+              filteredFilms.map((film) => (
                 <TableRow key={film.id} hover>
-                  <TableCell><Avatar variant="rounded" src={film.thumbnailUrl || undefined} /></TableCell>
-                  <TableCell sx={{ fontWeight: 'medium' }}>{film.title}</TableCell>
-                  <TableCell><Chip size="small" label={film.status ? STATUS_LABEL[film.status] : 'Đang cập nhật'} color={film.status === 'ONGOING' ? 'success' : 'default'} /></TableCell>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                      <Avatar variant="rounded" src={film.thumbnailUrl || undefined} sx={{ width: 44, height: 44 }} />
+                      <Box>
+                        <Box sx={{ fontWeight: 600 }}>{film.title}</Box>
+                        <Box sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                          {film.series ? t('seriesFilms') : t('standaloneFilm')}
+                        </Box>
+                      </Box>
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', maxWidth: 220 }}>
+                      {(film.genres || []).slice(0, 2).map((g) => (
+                        <Chip key={g} size="small" variant="outlined" label={t(`genre.${g}`)} />
+                      ))}
+                      {(film.genres || []).length > 2 && (
+                        <Chip size="small" variant="outlined" label={`+${(film.genres || []).length - 2}`} />
+                      )}
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    <Pill
+                      label={t(film.status ? STATUS_KEY[film.status] : 'filmStatus.ongoing')}
+                      tone={film.status === 'ONGOING' ? 'success' : 'default'}
+                      dot
+                    />
+                  </TableCell>
                   <TableCell>{film.episodeCount}</TableCell>
                   <TableCell>{film.averageRating.toFixed(1)} ({film.ratingCount})</TableCell>
                   <TableCell align="right">
@@ -331,24 +393,18 @@ const FilmsTab: React.FC<FilmsTabProps> = ({ active = true }) => {
             )}
           </TableBody>
         </Table>
-        {!isSearchMode && (
-          <TablePagination
-            component="div"
-            count={totalElements}
-            page={page - 1}
-            onPageChange={(_e, newPage) => setPage(newPage + 1)}
-            rowsPerPage={rowsPerPage}
-            onRowsPerPageChange={(e) => {
-              setRowsPerPage(parseInt(e.target.value, 10));
-              setPage(1);
-            }}
-            labelRowsPerPage="Số dòng/trang"
-          />
+        {!isSearchMode && !filtersActive && (
+          <AdminPagination page={page} rowsPerPage={rowsPerPage} totalElements={totalElements} onPageChange={setPage} itemLabel={t('films').toLowerCase()} />
+        )}
+        {(isSearchMode || filtersActive) && (
+          <Box sx={{ px: 2.5, py: 2, borderTop: '1px solid', borderColor: 'divider', fontSize: '0.85rem', color: 'text.secondary' }}>
+            {t('showingFilms', { count: filteredFilms.length })}
+          </Box>
         )}
       </TableContainer>
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>{editingId ? 'Chỉnh sửa phim' : 'Thêm phim mới'}</DialogTitle>
+        <DialogTitle>{editingId ? t('editFilm') : t('addNewFilm')}</DialogTitle>
         {loadingFilmDetail ? (
           <DialogContent sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
             <CircularProgress size={28} />
@@ -356,16 +412,16 @@ const FilmsTab: React.FC<FilmsTabProps> = ({ active = true }) => {
         ) : (
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <TextField
-            label="Tiêu đề"
+            label={t('title')}
             value={form.title}
             onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
             fullWidth
             required
             sx={{ mt: 1 }}
           />
-          <TextField label="Mô tả" value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} fullWidth multiline minRows={2} required />
+          <TextField label={t('description')} value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} fullWidth multiline minRows={2} required />
           <AvatarUploadField
-            label="Ảnh thumbnail"
+            label={t('thumbnailImage')}
             value={form.thumbnailUrl}
             onChange={(url) => setForm((p) => ({ ...p, thumbnailUrl: url }))}
             onFileIdChange={setThumbnailFileId}
@@ -373,29 +429,29 @@ const FilmsTab: React.FC<FilmsTabProps> = ({ active = true }) => {
           />
 
           <TextField
-            label="Link trailer YouTube"
+            label={t('youtubeTrailerLink')}
             value={form.trailerUrl}
             onChange={(e) => setForm((p) => ({ ...p, trailerUrl: e.target.value }))}
             fullWidth
             placeholder="https://www.youtube.com/watch?v=..."
             helperText={
               form.trailerUrl && !extractYouTubeVideoId(form.trailerUrl)
-                ? 'Không nhận diện được link YouTube - kiểm tra lại URL'
-                : 'Dán link video YouTube (watch?v=..., youtu.be/..., hoặc embed/...) làm trailer cho phim'
+                ? t('invalidYoutubeLink')
+                : t('youtubeTrailerHint')
             }
             error={Boolean(form.trailerUrl) && !extractYouTubeVideoId(form.trailerUrl)}
           />
 
           <Box sx={{ display: 'flex', gap: 2 }}>
             <TextField
-              label="Thời lượng (phút)"
+              label={t('durationMinutes')}
               type="number"
               value={form.durationMinutes}
               onChange={(e) => setForm((p) => ({ ...p, durationMinutes: parseInt(e.target.value, 10) || 0 }))}
               fullWidth
             />
             <TextField
-              label="Ngày phát hành"
+              label={t('releaseDate')}
               type="date"
               value={form.releaseDate}
               onChange={(e) => setForm((p) => ({ ...p, releaseDate: e.target.value }))}
@@ -403,7 +459,7 @@ const FilmsTab: React.FC<FilmsTabProps> = ({ active = true }) => {
               slotProps={{ inputLabel: { shrink: true } }}
             />
             <TextField
-              label="Mùa (Season)"
+              label={t('seasonField')}
               type="number"
               value={form.season}
               onChange={(e) => setForm((p) => ({ ...p, season: parseInt(e.target.value, 10) || 1 }))}
@@ -413,18 +469,18 @@ const FilmsTab: React.FC<FilmsTabProps> = ({ active = true }) => {
 
           <FormControlLabel
             control={<Checkbox checked={form.series} onChange={(e) => setForm((p) => ({ ...p, series: e.target.checked }))} />}
-            label="Phim bộ (nhiều tập)"
+            label={t('multiEpisodeFilm')}
           />
 
           <FormControl fullWidth required>
-            <InputLabel id="director-label">Đạo diễn</InputLabel>
+            <InputLabel id="director-label">{t('director')}</InputLabel>
             <Select
               labelId="director-label"
               multiple
-              label="Đạo diễn"
+              label={t('director')}
               value={form.directorIds}
               onChange={handleDirectorsChange}
-              input={<OutlinedInput label="Đạo diễn" />}
+              input={<OutlinedInput label={t('director')} />}
               renderValue={(selected) => (
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                   {(selected as string[]).map((id) => (
@@ -441,66 +497,66 @@ const FilmsTab: React.FC<FilmsTabProps> = ({ active = true }) => {
 
           <Box sx={{ display: 'flex', gap: 2 }}>
             <FormControl fullWidth required>
-              <InputLabel id="country-label">Quốc gia</InputLabel>
+              <InputLabel id="country-label">{t('countryLabel')}</InputLabel>
               <Select
                 labelId="country-label"
-                label="Quốc gia"
+                label={t('countryLabel')}
                 value={form.country}
                 onChange={(e) => setForm((p) => ({ ...p, country: e.target.value as Country }))}
               >
                 {COUNTRY_VALUES.map((c) => (
-                  <MenuItem key={c} value={c}>{COUNTRY_LABELS_VI[c]}</MenuItem>
+                  <MenuItem key={c} value={c}>{t(`country.${c}`)}</MenuItem>
                 ))}
               </Select>
             </FormControl>
 
             <FormControl fullWidth>
-              <InputLabel id="status-label">Trạng thái</InputLabel>
+              <InputLabel id="status-label">{t('status')}</InputLabel>
               <Select
                 labelId="status-label"
-                label="Trạng thái"
+                label={t('status')}
                 value={form.status}
                 onChange={(e) => setForm((p) => ({ ...p, status: e.target.value as FilmStatus }))}
               >
                 {STATUSES.map((s) => (
-                  <MenuItem key={s} value={s}>{STATUS_LABEL[s]}</MenuItem>
+                  <MenuItem key={s} value={s}>{t(STATUS_KEY[s])}</MenuItem>
                 ))}
               </Select>
             </FormControl>
           </Box>
 
           <FormControl fullWidth required>
-            <InputLabel id="genres-label">Thể loại</InputLabel>
+            <InputLabel id="genres-label">{t('genreLabel')}</InputLabel>
             <Select
               labelId="genres-label"
               multiple
               value={form.genres}
               onChange={handleGenresChange}
-              input={<OutlinedInput label="Thể loại" />}
+              input={<OutlinedInput label={t('genreLabel')} />}
               renderValue={(selected) => (
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                  {(selected as Genre[]).map((v) => <Chip key={v} label={GENRE_LABELS_VI[v]} size="small" />)}
+                  {(selected as Genre[]).map((v) => <Chip key={v} label={t(`genre.${v}`)} size="small" />)}
                 </Box>
               )}
             >
               {GENRE_VALUES.map((g) => (
-                <MenuItem key={g} value={g}>{GENRE_LABELS_VI[g]}</MenuItem>
+                <MenuItem key={g} value={g}>{t(`genre.${g}`)}</MenuItem>
               ))}
             </Select>
           </FormControl>
 
           <Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-              <Typography variant="subtitle2">Diễn viên tham gia</Typography>
-              <Button size="small" startIcon={<Add />} onClick={addCastRow}>Thêm diễn viên</Button>
+              <Typography variant="subtitle2">{t('participatingActors')}</Typography>
+              <Button size="small" startIcon={<Add />} onClick={addCastRow}>{t('addActorToCast')}</Button>
             </Box>
             {casts.map((row, index) => (
               <Box key={index} sx={{ display: 'flex', gap: 2, mb: 1, alignItems: 'center' }}>
                 <FormControl fullWidth size="small">
-                  <InputLabel id={`cast-actor-${index}`}>Diễn viên</InputLabel>
+                  <InputLabel id={`cast-actor-${index}`}>{t('actors')}</InputLabel>
                   <Select
                     labelId={`cast-actor-${index}`}
-                    label="Diễn viên"
+                    label={t('actors')}
                     value={row.actorId}
                     onChange={(e) => updateCastRow(index, { actorId: e.target.value })}
                   >
@@ -511,7 +567,7 @@ const FilmsTab: React.FC<FilmsTabProps> = ({ active = true }) => {
                 </FormControl>
                 <TextField
                   size="small"
-                  label="Vai diễn"
+                  label={t('characterRole')}
                   value={row.characterName}
                   onChange={(e) => updateCastRow(index, { characterName: e.target.value })}
                   fullWidth
@@ -525,9 +581,9 @@ const FilmsTab: React.FC<FilmsTabProps> = ({ active = true }) => {
         </DialogContent>
         )}
         <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>Hủy</Button>
+          <Button onClick={() => setDialogOpen(false)}>{t('cancel')}</Button>
           <Button variant="contained" onClick={handleSave} disabled={saving || loadingFilmDetail}>
-            {saving ? 'Đang lưu...' : editingId ? 'Lưu thay đổi' : 'Tạo phim'}
+            {saving ? t('saving') : editingId ? t('saveChanges') : t('createFilm')}
           </Button>
         </DialogActions>
       </Dialog>

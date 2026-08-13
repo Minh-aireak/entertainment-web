@@ -3,6 +3,7 @@ import { Avatar, Box, Button, CircularProgress, TextField, Typography } from '@m
 import { CloudUpload } from '@mui/icons-material';
 import { toast } from 'react-hot-toast';
 import { fileService } from '../../api/fileService';
+import { useTranslation } from 'react-i18next';
 
 interface AvatarUploadFieldProps {
   label: string;
@@ -23,6 +24,7 @@ const AvatarUploadField: React.FC<AvatarUploadFieldProps> = ({
   allowManualUrl = true,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
+  const { t } = useTranslation();
   const [uploading, setUploading] = useState(false);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -36,10 +38,10 @@ const AvatarUploadField: React.FC<AvatarUploadFieldProps> = ({
         onChange(response.result.url);
         onFileIdChange(response.result.id);
       } else {
-        toast.error(response.message || 'Tải ảnh thất bại');
+        toast.error(response.message || t('imageUploadAdminFailed'));
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Tải ảnh thất bại');
+      toast.error(error.response?.data?.message || t('imageUploadAdminFailed'));
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = '';
@@ -67,7 +69,7 @@ const AvatarUploadField: React.FC<AvatarUploadFieldProps> = ({
             {label}
           </Typography>
           <Typography variant="caption" color={value ? 'success.main' : 'text.disabled'}>
-            {value ? 'Đã có ảnh' : 'Chưa có ảnh'}
+            {value ? t('imageAvailable') : t('imageMissing')}
           </Typography>
         </Box>
       )}
@@ -78,7 +80,7 @@ const AvatarUploadField: React.FC<AvatarUploadFieldProps> = ({
         startIcon={uploading ? <CircularProgress size={16} /> : <CloudUpload />}
         sx={{ whiteSpace: 'nowrap' }}
       >
-        Tải ảnh
+        {t('uploadImage')}
         <input ref={inputRef} type="file" hidden accept="image/*" onChange={handleFileChange} />
       </Button>
     </Box>
