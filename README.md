@@ -39,8 +39,6 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\scripts\rotate-local-secrets.ps1
 ```
 
-`Set-ExecutionPolicy -Scope Process` chỉ áp dụng cho terminal hiện tại và cần thiết khi Windows đang chặn script local.
-
 Trên Linux/macOS:
 
 ```bash
@@ -78,13 +76,29 @@ Role: USER
 
 ![Trao đổi tin nhắn realtime giữa hai người dùng](docs/screenshots/chat-realtime.gif)
 
+### Bạn bè và gợi ý kết bạn
+
+![Danh sách bạn bè và gợi ý kết bạn](docs/screenshots/friends.png)
+
+### Khám phá phim
+
+![Danh sách phim](docs/screenshots/explore.gif)
+
+### Tìm kiếm phim
+
+![Tìm kiếm phim](docs/screenshots/search.gif)
+
 ### Chi tiết phim và xem phim
 
 ![Thông tin chi tiết và danh sách tập phim](docs/screenshots/film-detail.png)
 
 ### Xem phim
 
-![Trình phát video streaming HLS](docs/screenshots/film-player.png)
+![Trình phát video streaming HLS](docs/screenshots/film-player.gif)
+
+### Tiếp tục xem
+
+![Danh sách phim đang xem dở, có thanh tiến độ và thời gian còn lại](docs/screenshots/continue-watching.png)
 
 ### Xem cùng nhau
 
@@ -98,6 +112,14 @@ Role: USER
 
 ![Giao diện quản lý phim](docs/screenshots/admin-films.png)
 
+### Quản lý tập phim
+
+![Giao diện quản lý tập phim](docs/screenshots/admin-episodes.png)
+
+### Quản lý diễn viên & đạo diễn
+
+![Giao diện quản lý diễn viên & đạo diễn](docs/screenshots/admin-actors.png)
+
 ### Upload và cập nhật tập phim
 
 ![Giao diện upload và cập nhật tập phim](docs/screenshots/admin-episode-upload.png)
@@ -107,7 +129,7 @@ Role: USER
 **Tài khoản và bảo mật**
 
 - Đăng ký/đăng nhập bằng username-password và Google OAuth2.
-- JWT, quên/đặt lại mật khẩu qua email, phân quyền `ADMIN`/`USER`.
+- JWT, đặt lại mật khẩu và phân quyền `ADMIN`/`USER`. Luồng quên mật khẩu hiện tạo token/outbox nhưng email tự động đang bị chặn bởi regression consumer nêu ở mục Giới hạn.
 - Rate limit tại API Gateway và từng identity endpoint nhạy cảm.
 
 **Mạng xã hội**
@@ -120,10 +142,11 @@ Role: USER
 
 **Phim**
 
-- Danh mục, tìm kiếm, chi tiết phim, thư viện cá nhân và đánh giá.
+- Danh mục, tìm kiếm, chi tiết phim, đánh giá và mục "Xem & Yêu thích" (theo dõi phim + tiếp tục xem).
 - Streaming HLS bằng `hls.js`, quản lý/upload tập phim.
-- Phòng xem cùng nhau đồng bộ play/pause/tua theo thời gian thực.
-- Trang quản trị phim, tập phim, diễn viên, đạo diễn, role và người dùng.
+- Tự động lưu vị trí đang xem và xem tiếp đúng chỗ đã dừng (Tiếp tục xem).
+- Phòng xem cùng nhau có lobby/chat realtime, quyền Host/Viewer, đồng bộ tập phim, vị trí và tốc độ phát.
+- Trang quản trị phim, tập phim (tìm kiếm/lọc toàn bộ tập phim theo phim và trạng thái), diễn viên & đạo diễn, vai trò và người dùng.
 
 **Dữ liệu và tích hợp**
 
@@ -155,7 +178,7 @@ Role: USER
 
 ## Sơ đồ kiến trúc
 
-![Sơ đồ kiến trúc hệ thống](docs/architecture.png)
+![Sơ đồ kiến trúc hệ thống](docs/screenshots/architecture.png)
 
 ## Cấu trúc thư mục
 
@@ -165,7 +188,7 @@ entertainment-web/
 ├── api-gateway/                # Gateway, JWT và routing
 ├── identity-service/           # Auth, role và user (MySQL)
 ├── profile-service/            # Hồ sơ người dùng (MongoDB)
-├── post-service/               # Bài đăng (MySQL + MongoDB)
+├── post-service/               # Bài đăng (MongoDB + Elasticsearch)
 ├── comment-service/            # Bình luận (MongoDB)
 ├── friend-service/             # Quan hệ bạn bè và tìm kiếm
 ├── chat-service/               # Hội thoại/tin nhắn (MongoDB)
@@ -177,8 +200,8 @@ entertainment-web/
 ├── debezium-manager/           # Quản lý Debezium connector
 ├── common*/                    # Thư viện dùng chung
 ├── infrastructure/db-init/     # Init database và seed dữ liệu
-├── scripts/                    # Script secret/env hỗ trợ local
-├── docs/                       # Kiến trúc, ảnh và tài liệu chi tiết
+├── scripts/                    # Công cụ local, bảo mật và bảo trì seed
+├── docs/                       # Sơ đồ kiến trúc và ảnh minh họa
 ├── docker-compose.yml
 ├── pom.xml
 └── .env.example
@@ -188,6 +211,16 @@ entertainment-web/
 
 `docker compose up -d --build` chạy hạ tầng, init/seed database, các microservice và frontend. `mongo-init` phải hoàn tất trước những service dùng MongoDB. Seed dùng ID cố định và thao tác idempotent nên chạy lại không tạo bản ghi trùng; dữ liệu người dùng khác không bị xóa.
 
+Các container hạ tầng (`mysql`, `mongodb`, `kafka`, `redis`, `elasticsearch`, `connect` và job `mongo-init`) đều dùng `restart: "no"`. Vì vậy chúng không tự chạy lại chỉ vì Docker daemon/Docker Desktop khởi động; chúng chỉ chạy khi người dùng chủ động dùng `docker compose up`, `docker compose start` hoặc script vận hành. Tuy nhiên, `docker compose up <service>` vẫn có thể khởi động các dependency trong `depends_on`; script `start-compose-sequential.ps1` cũng chủ đích khởi động toàn bộ stack.
+
+Khi chỉ rebuild một service và toàn bộ dependency đã sẵn sàng, dùng `--no-deps` để không kéo hạ tầng hoặc service liên quan lên lại:
+
+```powershell
+docker compose up -d --build --no-deps room
+docker compose up -d --build --no-deps socket
+docker compose up -d --build --no-deps web-app
+```
+
 Các file `data.sql` của `identity-service` và `film_service` được kiểm tra mỗi lần service khởi động. Marker/`INSERT IGNORE` bảo vệ dữ liệu đã tồn tại thay vì reset toàn bộ database.
 
 Máy yếu dùng script tuần tự; script luôn chờ service hiện tại mở cổng trước khi build/chạy service kế tiếp:
@@ -196,9 +229,9 @@ Máy yếu dùng script tuần tự; script luôn chờ service hiện tại m�
 .\scripts\start-compose-sequential.ps1
 ```
 
-Linux/macOS dùng `pwsh -File ./scripts/start-compose-sequential.ps1`.
+Linux/macOS dùng `pwsh -File ./scripts/start-compose-sequential.ps1`. Xem [scripts/README.md](scripts/README.md) để biết tác dụng và side effect của từng script.
 
-Không dùng `--no-deps` nếu dependency chưa chạy.
+Mọi lệnh rebuild riêng service trong tài liệu đều dùng `--no-deps`. Chỉ thực hiện khi dependency cần thiết đã chạy; nếu chưa, hãy start dependency bằng một lệnh riêng trước.
 
 Dừng nhưng giữ dữ liệu:
 
@@ -286,19 +319,9 @@ npm run dev
 
 Vite mặc định chạy tại http://localhost:5173.
 
-## Biến môi trường và bảo mật
+## Biến môi trường
 
 Docker Compose đọc `.env`. File này bị Git ignore và chỉ file mẫu (`.env.example`) được phép commit.
-
-Quy tắc bắt buộc:
-
-- Không commit `.env`, private key, certificate hoặc credential thật.
-- Username CDC là `debezium`; `DEBEZIUM_DB_PASSWORD` không có giá trị mặc định.
-- Xoay credential riêng cho từng môi trường và revoke ngay nếu từng xuất hiện trong Git history.
-- Script local không thể revoke Google OAuth2, Brevo hoặc Backblaze B2; phải thao tác trên dashboard nhà cung cấp.
-- Không giữ `BOOTSTRAP_ADMIN_ENABLED=true` sau khi tạo admin.
-
-Production nên dùng external secret manager, encryption at rest, TLS, firewall/network rule phù hợp, backup và giám sát.
 
 ## Kiểm thử và build
 
@@ -320,8 +343,6 @@ npm run lint
 npm audit --omit=dev
 npm run build
 ```
-
-Không ghi cố định số lượng test/vulnerability vào README vì các con số thay đổi theo code và lockfile; kết quả của lệnh/CI hiện tại mới là nguồn xác nhận.
 
 ## Troubleshooting
 
@@ -348,6 +369,3 @@ docker compose down -v
 
 Chỉ chạy lệnh trên khi chắc chắn không cần dữ liệu hiện tại. Nếu metadata ảnh/video tồn tại nhưng media không tải được, hãy kiểm tra credential, bucket và object thật trên Backblaze B2.
 
-## License
-
-Repository hiện chưa phát hành dưới một giấy phép mã nguồn mở. Cần chọn và thêm file `LICENSE` trước khi công bố điều khoản sử dụng/phân phối chính thức.
