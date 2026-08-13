@@ -1,8 +1,10 @@
 package com.MyProject.film.film_service.service;
 
+import com.MyProject.common.dto.response.PageResponse;
 import com.MyProject.film.film_service.dto.event.NotificationEvent;
 import com.MyProject.film.film_service.dto.request.EpisodeRequest;
 import com.MyProject.film.film_service.dto.response.EpisodeResponse;
+import com.MyProject.film.film_service.dto.response.EpisodeSummaryResponse;
 import com.MyProject.film.film_service.dto.response.FileResponse;
 import com.MyProject.film.film_service.entity.Episode;
 import com.MyProject.film.film_service.entity.Film;
@@ -24,6 +26,9 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,6 +60,21 @@ public class EpisodeService {
         return episodeRepository.findByFilm_IdOrderBySeasonNumberAscEpisodeNumberAsc(filmId).stream()
                 .map(episodeMapper::toEpisodeResponse)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<EpisodeSummaryResponse> getEpisodesPage(int page, int size, String filmId, String title) {
+        String normalizedTitle = (title == null || title.isBlank()) ? null : title.trim();
+        Pageable pageable = PageRequest.of(page - 1, size);
+        Page<Episode> pageData = episodeRepository.searchEpisodes(filmId, normalizedTitle, pageable);
+
+        return PageResponse.<EpisodeSummaryResponse>builder()
+                .currentPage(page)
+                .pageSize(size)
+                .totalPages(pageData.getTotalPages())
+                .totalElement(pageData.getTotalElements())
+                .data(pageData.getContent().stream().map(episodeMapper::toEpisodeSummaryResponse).toList())
+                .build();
     }
 
     @Transactional

@@ -1,8 +1,10 @@
 package com.MyProject.film.film_service.controller;
 
 import com.MyProject.common.dto.response.ApiResponse;
+import com.MyProject.common.dto.response.PageResponse;
 import com.MyProject.film.film_service.dto.request.EpisodeRequest;
 import com.MyProject.film.film_service.dto.response.EpisodeResponse;
+import com.MyProject.film.film_service.dto.response.EpisodeSummaryResponse;
 import com.MyProject.film.film_service.service.EpisodeService;
 import jakarta.annotation.security.RolesAllowed;
 import lombok.AccessLevel;
@@ -23,6 +25,18 @@ public class EpisodeController {
     public ApiResponse<List<EpisodeResponse>> getEpisodesByFilm(@PathVariable String filmId) {
         return ApiResponse.<List<EpisodeResponse>>builder()
                 .result(episodeService.getEpisodesByFilm(filmId))
+                .build();
+    }
+
+    @GetMapping
+    @RolesAllowed("ADMIN")
+    public ApiResponse<PageResponse<EpisodeSummaryResponse>> getEpisodesPage(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String title,
+            @RequestParam(required = false) String filmId) {
+        return ApiResponse.<PageResponse<EpisodeSummaryResponse>>builder()
+                .result(episodeService.getEpisodesPage(page, size, filmId, title))
                 .build();
     }
 
