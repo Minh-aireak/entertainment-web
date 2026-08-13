@@ -33,3 +33,16 @@ app:
       url: http://localhost:8084
     notification:
       url: http://localhost:8085
+  rate-limit:
+    profile-write:
+      limit-for-period: 15
+      limit-refresh-period: 3s
+    profile-read:
+      limit-for-period: 50
+      limit-refresh-period: 5s
+    profile-search:
+      limit-for-period: 8
+      limit-refresh-period: 10s
+    profile-summary:
+      limit-for-period: 30
+      limit-refresh-period: 10s

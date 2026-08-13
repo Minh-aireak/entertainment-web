@@ -14,6 +14,7 @@ import com.MyProject.profile.profile_service.exception.ErrorCode;
 import com.MyProject.profile.profile_service.repository.elasticsearch.UserProfileElasticRepository;
 import com.MyProject.profile.profile_service.repository.mongo.OutboxRepository;
 import com.MyProject.profile.profile_service.repository.mongo.UserProfileRepository;
+import com.MyProject.profile.profile_service.service.ProfileApiRateLimitService;
 import com.MyProject.profile.profile_service.service.UserProfileService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.util.List;
 import java.util.Map;
@@ -36,9 +38,16 @@ import java.util.Map;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * Controller now derives the caller from a JWT (SecurityUtils.getCurrentUserId(), used for
+ * ProfileApiRateLimitService) for every non-public route, so @WithMockUser alone is only good
+ * enough for tests that never reach the method body (validation failures) - anything that
+ * exercises the real service call needs a genuine JwtAuthenticationToken via the jwt() post-processor.
+ */
 @WebMvcTest(UserProfileController.class)
 @Import({SecurityConfig.class, CommonJwtAuthenticationEntryPoint.class, CommonJwtDecoder.class,
         UserProfileControllerTest.TestBeans.class})
@@ -60,6 +69,9 @@ class UserProfileControllerTest {
     UserProfileService userProfileService;
 
     @MockitoBean
+    ProfileApiRateLimitService profileApiRateLimitService;
+
+    @MockitoBean
     UserProfileRepository userProfileRepository;
 
     @MockitoBean
@@ -70,16 +82,21 @@ class UserProfileControllerTest {
 
     final ObjectMapper objectMapper = new ObjectMapper();
 
+    private RequestPostProcessor asUser(String userId) {
+        return jwt().jwt(builder -> builder.claim("userId", userId));
+    }
+
     @Test
-    @WithMockUser
     void getMyProfile_authenticated_returnsProfile() throws Exception {
         when(userProfileService.getMyProfile()).thenReturn(
                 UserProfileResponse.builder().userId("user-1").displayName("Aireak").build());
 
-        mockMvc.perform(MockMvcRequestBuilders.get("/my-profile"))
+        mockMvc.perform(MockMvcRequestBuilders.get("/my-profile").with(asUser("user-1")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("result.userId").value("user-1"))
                 .andExpect(jsonPath("result.displayName").value("Aireak"));
+
+        verify(profileApiRateLimitService).checkProfileRead("user-1");
     }
 
     @Test
@@ -91,17 +108,15 @@ class UserProfileControllerTest {
     }
 
     @Test
-    @WithMockUser
     void getMyProfile_notFound_returns404() throws Exception {
         when(userProfileService.getMyProfile()).thenThrow(new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
-        mockMvc.perform(MockMvcRequestBuilders.get("/my-profile"))
+        mockMvc.perform(MockMvcRequestBuilders.get("/my-profile").with(asUser("user-1")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("code").value(ErrorCode.PROFILE_NOT_FOUND.getCode()));
     }
 
     @Test
-    @WithMockUser
     void updateProfile_validRequest_returnsUpdatedProfile() throws Exception {
         UserProfileUpdateRequest request = UserProfileUpdateRequest.builder()
                 .displayName("New Name").lastName("Nguyen").phoneNumber("0987654321").build();
@@ -109,10 +124,13 @@ class UserProfileControllerTest {
                 UserProfileResponse.builder().userId("user-1").displayName("New Name").build());
 
         mockMvc.perform(MockMvcRequestBuilders.put("/my-profile")
+                        .with(asUser("user-1"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("result.displayName").value("New Name"));
+
+        verify(profileApiRateLimitService).checkProfileWrite("user-1");
     }
 
     @Test
@@ -145,50 +163,55 @@ class UserProfileControllerTest {
     }
 
     @Test
-    @WithMockUser
     void updateAvatar_validFileId_delegatesToServiceWithExtractedFileId() throws Exception {
         UpdateAvatarRequest request = UpdateAvatarRequest.builder().avatarFileId("file-1").build();
         when(userProfileService.updateAvatar("file-1")).thenReturn(
                 UserProfileResponse.builder().userId("user-1").avatar("https://cdn/file-1").build());
 
         mockMvc.perform(MockMvcRequestBuilders.put("/my-profile/avatar")
+                        .with(asUser("user-1"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("result.avatar").value("https://cdn/file-1"));
+
+        verify(profileApiRateLimitService).checkProfileWrite("user-1");
     }
 
     @Test
-    @WithMockUser
     void getProfile_notFound_returns404() throws Exception {
         when(userProfileService.getProfile("missing")).thenThrow(new AppException(ErrorCode.PROFILE_NOT_FOUND));
 
-        mockMvc.perform(MockMvcRequestBuilders.get("/missing"))
+        mockMvc.perform(MockMvcRequestBuilders.get("/missing").with(asUser("user-1")))
                 .andExpect(status().isNotFound());
+
+        verify(profileApiRateLimitService).checkProfileRead("user-1");
     }
 
     @Test
-    @WithMockUser
     void getAllProfiles_returnsPage() throws Exception {
         when(userProfileService.getAllProfiles(0, 10)).thenReturn(
                 PageResponse.<UserProfileResponse>builder().currentPage(0).pageSize(10)
                         .data(List.of(UserProfileResponse.builder().userId("u1").build())).build());
 
-        mockMvc.perform(MockMvcRequestBuilders.get("/suggestions"))
+        mockMvc.perform(MockMvcRequestBuilders.get("/suggestions").with(asUser("user-1")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("result.data[0].userId").value("u1"));
+
+        verify(profileApiRateLimitService).checkProfileRead("user-1");
     }
 
     @Test
-    @WithMockUser
     void searchProfile_returnsMatchingPage() throws Exception {
         when(userProfileService.searchProfile("aireak", 0, 10)).thenReturn(
                 PageResponse.<UserProfileResponse>builder().currentPage(0).pageSize(10)
                         .data(List.of(UserProfileResponse.builder().userId("u1").username("aireak").build())).build());
 
-        mockMvc.perform(MockMvcRequestBuilders.post("/search/aireak"))
+        mockMvc.perform(MockMvcRequestBuilders.post("/search/aireak").with(asUser("user-1")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("result.data[0].username").value("aireak"));
+
+        verify(profileApiRateLimitService).checkProfileSearch("user-1");
     }
 
     @Test

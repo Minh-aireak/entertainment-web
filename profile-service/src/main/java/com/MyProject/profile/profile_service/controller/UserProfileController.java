@@ -5,8 +5,10 @@ import com.MyProject.common.dto.request.ProfileSuggestionRequest;
 import com.MyProject.common.dto.response.ApiResponse;
 import com.MyProject.common.dto.response.PageResponse;
 import com.MyProject.common.dto.response.UserProfileResponse;
+import com.MyProject.common.security.SecurityUtils;
 import com.MyProject.profile.profile_service.dto.request.UpdateAvatarRequest;
 import com.MyProject.profile.profile_service.dto.request.UserProfileUpdateRequest;
+import com.MyProject.profile.profile_service.service.ProfileApiRateLimitService;
 import com.MyProject.profile.profile_service.service.UserProfileService;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
@@ -24,9 +26,11 @@ import java.util.Map;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class UserProfileController {
     UserProfileService userProfileService;
+    ProfileApiRateLimitService profileApiRateLimitService;
 
     @PutMapping("/my-profile")
     ApiResponse<UserProfileResponse> updateProfile(@RequestBody @Valid UserProfileUpdateRequest request){
+        profileApiRateLimitService.checkProfileWrite(SecurityUtils.getCurrentUserId());
         return ApiResponse.<UserProfileResponse>builder()
                 .result(userProfileService.updateProfile(request))
                 .build();
@@ -34,6 +38,7 @@ public class UserProfileController {
 
     @GetMapping("/my-profile")
     ApiResponse<UserProfileResponse> getMyProfile(){
+        profileApiRateLimitService.checkProfileRead(SecurityUtils.getCurrentUserId());
         return ApiResponse.<UserProfileResponse>builder()
                 .result(userProfileService.getMyProfile())
                 .build();
@@ -41,6 +46,7 @@ public class UserProfileController {
 
     @PutMapping("/my-profile/avatar")
     ApiResponse<UserProfileResponse> updateAvatar(@RequestBody @Valid UpdateAvatarRequest request){
+        profileApiRateLimitService.checkProfileWrite(SecurityUtils.getCurrentUserId());
         return ApiResponse.<UserProfileResponse>builder()
                 .result(userProfileService.updateAvatar(request.getAvatarFileId()))
                 .build();
@@ -50,6 +56,7 @@ public class UserProfileController {
     ApiResponse<PageResponse<UserProfileResponse>> getAllProfiles(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size){
+        profileApiRateLimitService.checkProfileRead(SecurityUtils.getCurrentUserId());
         return ApiResponse.<PageResponse<UserProfileResponse>>builder()
                 .result(userProfileService.getAllProfiles(page, size))
                 .build();
@@ -60,6 +67,7 @@ public class UserProfileController {
             @PathVariable("displayName") String displayName,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size){
+        profileApiRateLimitService.checkProfileSearch(SecurityUtils.getCurrentUserId());
         return ApiResponse.<PageResponse<UserProfileResponse>>builder()
                 .result(userProfileService.searchProfile(displayName, page, size))
                 .build();
@@ -67,6 +75,7 @@ public class UserProfileController {
 
     @GetMapping("/{userId}")
     ApiResponse<UserProfileResponse> getProfile(@PathVariable String userId){
+        profileApiRateLimitService.checkProfileRead(SecurityUtils.getCurrentUserId());
         return ApiResponse.<UserProfileResponse>builder()
                 .result(userProfileService.getProfile(userId))
                 .build();
