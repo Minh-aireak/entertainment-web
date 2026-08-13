@@ -129,36 +129,10 @@ resilience4j:
         writable-stack-trace-enabled: false
         ignore-exceptions:
           - com.MyProject.identity.identity_service.exception.AppException
-          - io.github.resilience4j.ratelimiter.RequestNotPermitted
-    instances: {}
-  ratelimiter:
-    configs:
-      default:
-        timeout-duration: 0s
-        limit-for-period: 100
-        limit-refresh-period: 10s
     instances:
-      userRegistration:
+      outboundIdentity:
         base-config: default
-      changePassword:
-        base-config: default
-      forgotPassword:
-        base-config: default
-      resetPassword:
-        base-config: default
-      userManagement:
-        base-config: default
-      roleManagement:
-        base-config: default
-      login:
-        base-config: default
-      introspect:
-        base-config: default
-      logout:
-        base-config: default
-      refreshToken:
-        base-config: default
-      outboundGoogle:
+      outboundUserClient:
         base-config: default
   retry:
     configs:
@@ -169,9 +143,12 @@ resilience4j:
         exponential-backoff-multiplier: 2
         ignore-exceptions:
           - com.MyProject.identity.identity_service.exception.AppException
-          - io.github.resilience4j.ratelimiter.RequestNotPermitted
           - io.github.resilience4j.circuitbreaker.CallNotPermittedException
-    instances: {}
+    instances:
+      outboundIdentity:
+        base-config: default
+      outboundUserClient:
+        base-config: default
 
 management:
   health:

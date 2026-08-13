@@ -42,6 +42,7 @@ public class UserService {
     RoleRepository roleRepository;
     PasswordEncoder passwordEncoder;
     OutboxEventPublisher outboxEventPublisher;
+    AuthenticationService authenticationService;
 
     @Transactional(rollbackFor = Exception.class)
     public UserResponse createUser(UserCreationRequest request) {
@@ -92,9 +93,12 @@ public class UserService {
 
         if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword()))
             throw new AppException(ErrorCode.PASSWORD_INCORRECT);
-        
+
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
+
+        // Force every other session (and the one that just changed the password) to re-login.
+        authenticationService.revokeAllUserTokens(user.getId());
     }
 
     @Transactional(readOnly = true)
@@ -123,6 +127,11 @@ public class UserService {
         User user = userRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
         user.setActive(!user.isActive());
         userRepository.save(user);
+
+        if (!user.isActive()) {
+            authenticationService.revokeAllUserTokens(user.getId());
+        }
+
         return user.isActive() ? "Account activated successfully!" : "Account deactivated successfully!";
     }
 }

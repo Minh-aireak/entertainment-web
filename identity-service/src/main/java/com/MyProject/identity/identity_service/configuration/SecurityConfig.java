@@ -13,20 +13,23 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.util.matcher.RequestMatcher;
+import org.springframework.util.StringUtils;
 
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
-    private final String[] publicEndpoint = {
-            "/auth/login",
-            "/auth/introspect",
-            "/auth/outbound/google",
-            "/auth/refresh-token",
-            "/auth/logout",
-            "/users/forgot-password",
-            "/users/reset-password",
-            "/users/registration/**"
+    // Single source of truth for "is this request public" - CookieBearerTokenResolver also
+    // reuses IdentityRequestClassifier with this same context-path-stripping logic, so both
+    // always agree instead of risking silent drift between independently-maintained lists.
+    private static final RequestMatcher PUBLIC_MATCHER = request -> {
+        String path = request.getRequestURI();
+        String contextPath = request.getContextPath();
+        if (StringUtils.hasText(contextPath) && path.startsWith(contextPath)) {
+            path = path.substring(contextPath.length());
+        }
+        return IdentityRequestClassifier.isPublicRequest(path);
     };
 
     private final CommonJwtDecoder jwtDecoder;
@@ -44,7 +47,7 @@ public class SecurityConfig {
         httpSecurity.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
         httpSecurity.authorizeHttpRequests(request ->
-                request.requestMatchers(publicEndpoint).permitAll()
+                request.requestMatchers(PUBLIC_MATCHER).permitAll()
                         .anyRequest()
                         .authenticated());
 

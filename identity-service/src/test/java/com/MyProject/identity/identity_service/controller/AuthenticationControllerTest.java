@@ -158,7 +158,17 @@ class AuthenticationControllerTest {
                 .andExpect(cookie().maxAge("access_token", 0))
                 .andExpect(cookie().maxAge("refresh_token", 0));
 
-        verify(authenticationService).logout("refresh-456");
+        verify(authenticationService).logout(null, "refresh-456");
+    }
+
+    @Test
+    void logout_withAccessAndRefreshTokenCookies_passesBothToService() throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.post("/auth/logout")
+                        .cookie(new Cookie("access_token", "access-123"))
+                        .cookie(new Cookie("refresh_token", "refresh-456")))
+                .andExpect(status().isOk());
+
+        verify(authenticationService).logout("access-123", "refresh-456");
     }
 
     @Test

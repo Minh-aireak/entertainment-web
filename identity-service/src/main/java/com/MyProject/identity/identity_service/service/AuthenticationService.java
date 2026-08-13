@@ -15,8 +15,7 @@ import com.MyProject.identity.identity_service.entity.Role;
 import com.MyProject.identity.identity_service.repository.RefreshTokenRepository;
 import com.MyProject.identity.identity_service.repository.ResetPasswordRepository;
 import com.MyProject.identity.identity_service.repository.RoleRepository;
-import com.MyProject.identity.identity_service.repository.httpclient.OutboundIdentityClient;
-import com.MyProject.identity.identity_service.repository.httpclient.OutboundUserClient;
+import com.MyProject.common.security.TokenBlacklistService;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -55,16 +54,12 @@ import lombok.experimental.NonFinal;
 public class AuthenticationService {
     UserRepository userRepository;
     PasswordEncoder passwordEncoder;
-    OutboundIdentityClient outboundIdentityClient;
-    OutboundUserClient outboundUserClient;
+    GoogleOAuthClient googleOAuthClient;
     RoleRepository roleRepository;
     ResetPasswordRepository resetPasswordRepository;
     OutboxEventPublisher outboxEventPublisher;
     RefreshTokenRepository refreshTokenRepository;
-
-    private String getInvalidatedTokenKey(String jid) {
-        return "invalidated_token:" + jid;
-    }
+    TokenBlacklistService tokenBlacklistService;
 
     @NonFinal
     @Value("${jwt.signerKey}")
@@ -164,6 +159,10 @@ public class AuthenticationService {
         List<RefreshToken> tokens = refreshTokenRepository.findByUserIdAndRevokedFalse(userId);
         tokens.forEach(token -> token.setRevoked(true));
         refreshTokenRepository.saveAll(tokens);
+
+        // Refresh tokens are rows we can flip, but access tokens are stateless - the only way to
+        // kill every one already issued to this user is to reject anything minted before now.
+        tokenBlacklistService.invalidateAllTokensForUser(userId, validDuration);
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -175,8 +174,27 @@ public class AuthenticationService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public void logout(String refreshTokenStr) {
+    public void logout(String accessTokenStr, String refreshTokenStr) {
+        if (accessTokenStr != null && !accessTokenStr.isBlank()) {
+            blacklistAccessToken(accessTokenStr);
+        }
         revokeRefreshToken(refreshTokenStr);
+    }
+
+    private void blacklistAccessToken(String accessTokenStr) {
+        try {
+            SignedJWT signedJWT = SignedJWT.parse(accessTokenStr);
+            if (!signedJWT.verify(new MACVerifier(signerKey.getBytes()))) {
+                return;
+            }
+            String jti = signedJWT.getJWTClaimsSet().getJWTID();
+            Date expiryTime = signedJWT.getJWTClaimsSet().getExpirationTime();
+            if (jti != null && expiryTime != null) {
+                tokenBlacklistService.blacklistAccessToken(jti, expiryTime.toInstant());
+            }
+        } catch (ParseException | JOSEException e) {
+            log.warn("Could not verify access token during logout, skipping blacklist");
+        }
     }
 
     public IntrospectResponse introspectResponse(String token) {
@@ -235,10 +253,20 @@ public class AuthenticationService {
 
             if (!(verified && expiryTime.after(new Date()))) throw new AppException(ErrorCode.TOKEN_INVALID);
 
-            String jid = signedJWT.getJWTClaimsSet().getJWTID();
-            
-            // Skip Redis check as requested
-            
+            if (!isRefresh) {
+                String jti = signedJWT.getJWTClaimsSet().getJWTID();
+                if (tokenBlacklistService.isAccessTokenBlacklisted(jti)) {
+                    throw new AppException(ErrorCode.TOKEN_ALREADY_INVALIDATED);
+                }
+
+                Object userIdClaim = signedJWT.getJWTClaimsSet().getClaim("userId");
+                Date issueTime = signedJWT.getJWTClaimsSet().getIssueTime();
+                if (userIdClaim != null && issueTime != null
+                        && tokenBlacklistService.isIssuedBeforeUserCutoff(userIdClaim.toString(), issueTime.toInstant())) {
+                    throw new AppException(ErrorCode.TOKEN_ALREADY_INVALIDATED);
+                }
+            }
+
             return signedJWT;
         } catch (JOSEException | ParseException e) {
             throw new AppException(ErrorCode.VERIFY_TOKEN_FAILED);
@@ -258,9 +286,9 @@ public class AuthenticationService {
         data.add("redirect_uri", redirectUri);
         data.add("grant_type", authorizationCode);
 
-        var response = outboundIdentityClient.exchangeToken(data);
+        var response = googleOAuthClient.exchangeToken(data);
 
-        var userInfo = outboundUserClient.getInfo("json", response.getAccessToken());
+        var userInfo = googleOAuthClient.getInfo("json", response.getAccessToken());
 
         var user = findOrCreateUser(userInfo);
 

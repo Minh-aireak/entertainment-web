@@ -1,7 +1,6 @@
 package com.MyProject.identity.identity_service.exception;
 
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
-import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import java.util.Map;
 import java.util.Objects;
 
@@ -51,11 +50,6 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(value = AccessDeniedException.class)
     public ResponseEntity<ApiResponse<Object>> handlingAccessDeniedException() {
         return ErrorCode.toResponseEntity(ErrorCode.UNAUTHORIZED);
-    }
-
-    @ExceptionHandler(value = RequestNotPermitted.class)
-    public ResponseEntity<ApiResponse<Object>> handlingRequestNotPermittedException() {
-        return ErrorCode.toResponseEntity(ErrorCode.RATE_LIMIT_EXCEEDED);
     }
 
     @ExceptionHandler(value = CallNotPermittedException.class)

@@ -6,8 +6,6 @@ import com.MyProject.identity.identity_service.repository.RefreshTokenRepository
 import com.MyProject.identity.identity_service.repository.ResetPasswordRepository;
 import com.MyProject.identity.identity_service.repository.RoleRepository;
 import com.MyProject.identity.identity_service.repository.UserRepository;
-import com.MyProject.identity.identity_service.repository.httpclient.OutboundIdentityClient;
-import com.MyProject.identity.identity_service.repository.httpclient.OutboundUserClient;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -32,8 +30,6 @@ import static org.mockito.Mockito.when;
 class RefreshTokenRotationTest {
     @Mock UserRepository userRepository;
     @Mock PasswordEncoder passwordEncoder;
-    @Mock OutboundIdentityClient outboundIdentityClient;
-    @Mock OutboundUserClient outboundUserClient;
     @Mock RoleRepository roleRepository;
     @Mock ResetPasswordRepository resetPasswordRepository;
     @Mock OutboxEventPublisher outboxEventPublisher;

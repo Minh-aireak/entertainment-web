@@ -128,7 +128,8 @@ public class AuthenticationController {
         String refreshToken = getRefreshTokenFromCookie(request);
         if (refreshToken != null) {
             identityApiRateLimitService.checkLogout(refreshToken);
-            authenticationService.logout(refreshToken);
+            String accessToken = getAccessTokenFromCookie(request);
+            authenticationService.logout(accessToken, refreshToken);
         }
         clearAccessTokenCookie(response);
         clearRefreshTokenCookie(response);

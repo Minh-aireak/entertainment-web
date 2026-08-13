@@ -61,6 +61,9 @@ class UserServiceTest {
     @Mock
     OutboxEventPublisher outboxEventPublisher;
 
+    @Mock
+    AuthenticationService authenticationService;
+
     User user;
     UserResponse userResponse;
     Role role1;
@@ -192,6 +195,7 @@ class UserServiceTest {
         verify(passwordEncoder, times(1)).matches(anyString(), anyString());
         verify(passwordEncoder, times(1)).encode(changePasswordRequest.getNewPassword());
         verify(userRepository).save(user);
+        verify(authenticationService).revokeAllUserTokens(user.getId());
     }
 
     @Test
@@ -271,6 +275,7 @@ class UserServiceTest {
         assertEquals("Account deactivated successfully!", message);
         verify(userRepository, times(1)).findById("123456789");
         verify(userRepository, times(1)).save(user);
+        verify(authenticationService).revokeAllUserTokens(user.getId());
     }
 
     @Test
@@ -283,6 +288,7 @@ class UserServiceTest {
 
         assertTrue(user.isActive());
         assertEquals("Account activated successfully!", message);
+        verify(authenticationService, never()).revokeAllUserTokens(any());
     }
 
     @Test
