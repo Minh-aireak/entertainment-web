@@ -46,7 +46,7 @@ const Chip = MuiChip;
 const Grid = MuiGrid;
 
 const FilmDetail: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const [data, setData] = useState<FilmDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -74,13 +74,13 @@ const FilmDetail: React.FC = () => {
         setEpisodes(episodesResponse.result ?? []);
       } catch (error) {
         console.error('Failed to fetch film details:', error);
-        toast.error('Không thể tải thông tin phim');
+        toast.error(t('filmLoadFailed'));
       } finally {
         setLoading(false);
       }
     };
     fetchDetail();
-  }, [id]);
+  }, [id, t]);
 
   const seasons = useMemo(() => {
     if (!episodes.length) return [];
@@ -116,9 +116,9 @@ const FilmDetail: React.FC = () => {
     try {
       await filmService.rateFilm(id, newValue);
       setUserRating(newValue);
-      toast.success('Đã cập nhật đánh giá');
+      toast.success(t('ratingUpdated'));
     } catch {
-      toast.error('Không thể cập nhật đánh giá');
+      toast.error(t('ratingUpdateFailed'));
     }
   };
 
@@ -128,9 +128,9 @@ const FilmDetail: React.FC = () => {
       await filmService.processFollowAction(id, followed);
       setFollowed(!followed);
       window.dispatchEvent(new Event('sidebar-counts:refresh'));
-      toast.success(followed ? 'Đã xóa khỏi thư viện' : 'Đã thêm vào thư viện');
+      toast.success(followed ? t('removedFromLibrary') : t('addedToLibrary'));
     } catch {
-      toast.error('Không thể cập nhật trạng thái theo dõi');
+      toast.error(t('followUpdateFailed'));
     }
   };
 
@@ -148,7 +148,7 @@ const FilmDetail: React.FC = () => {
       window.open(data.film.trailerUrl, '_blank', 'noopener,noreferrer');
       return;
     }
-    toast.error('Phim chưa có tập hoặc trailer để phát');
+    toast.error(t('nothingToPlay'));
   };
 
   const handleShare = async () => {
@@ -158,7 +158,7 @@ const FilmDetail: React.FC = () => {
         await navigator.share(shareData);
       } else {
         await navigator.clipboard.writeText(window.location.href);
-        toast.success('Đã sao chép liên kết phim');
+        toast.success(t('filmLinkCopied'));
       }
     } catch (shareError) {
       console.error('Failed to share film:', shareError);
@@ -176,8 +176,8 @@ const FilmDetail: React.FC = () => {
   if (!data) {
     return (
       <Container sx={{ mt: 4 }}>
-        <Typography variant="h5">Không tìm thấy phim</Typography>
-        <Button onClick={() => navigate('/film')}>Quay lại</Button>
+        <Typography variant="h5">{t('filmNotFound')}</Typography>
+        <Button onClick={() => navigate('/film')}>{t('back')}</Button>
       </Container>
     );
   }
@@ -185,9 +185,9 @@ const FilmDetail: React.FC = () => {
   const { film } = data;
   const trailerVideoId = extractYouTubeVideoId(film.trailerUrl);
 
-  const STATUS_LABEL: Record<FilmStatus, string> = {
-    ONGOING: 'Đang cập nhật',
-    COMPLETED: 'Hoàn thành',
+  const STATUS_KEY: Record<FilmStatus, string> = {
+    ONGOING: 'filmStatus.ongoing',
+    COMPLETED: 'filmStatus.completed',
   };
 
   const getStatusColor = (status: FilmStatus) => {
@@ -241,7 +241,7 @@ const FilmDetail: React.FC = () => {
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
                   {film.status && (
                     <Chip 
-                      label={STATUS_LABEL[film.status]}
+                      label={t(STATUS_KEY[film.status])}
                       color={getStatusColor(film.status)} 
                       size="small" 
                       sx={{ fontWeight: 700 }} 
@@ -250,7 +250,7 @@ const FilmDetail: React.FC = () => {
                   {film.genres.map(genre => (
                     <Chip 
                       key={genre} 
-                      label={genre} 
+                      label={t(`genre.${genre}`, { defaultValue: genre })}
                       size="small" 
                       sx={{ bgcolor: alpha(theme.palette.primary.main, 0.2), color: 'primary.light', fontWeight: 600 }} 
                     />
@@ -260,7 +260,7 @@ const FilmDetail: React.FC = () => {
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                     <Star sx={{ color: '#FFD700' }} />
                     <Typography sx={{ fontWeight: 700, fontSize: '1.2rem' }}>{film.averageRating.toFixed(1)}</Typography>
-                    <Typography variant="caption" sx={{ color: 'text.secondary', ml: 0.5 }}>({film.ratingCount} đánh giá)</Typography>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', ml: 0.5 }}>({t('ratingCount', { count: film.ratingCount })})</Typography>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'text.secondary' }}>
                     <CalendarToday fontSize="small" />
@@ -268,11 +268,11 @@ const FilmDetail: React.FC = () => {
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'text.secondary' }}>
                     <AccessTime fontSize="small" />
-                    <Typography variant="body2">{film.durationMinutes} phút</Typography>
+                    <Typography variant="body2">{t('minutes', { count: film.durationMinutes })}</Typography>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'text.secondary' }}>
                     <Public fontSize="small" />
-                    <Typography variant="body2">{film.country}</Typography>
+                    <Typography variant="body2">{t(`country.${film.country}`, { defaultValue: film.country })}</Typography>
                   </Box>
                 </Box>
               </Box>
@@ -285,7 +285,7 @@ const FilmDetail: React.FC = () => {
                   onClick={handleWatch}
                   sx={{ borderRadius: 2, px: 4, py: 1.2 }}
                 >
-                  {episodes.length > 0 ? t('watchNow') : 'Xem trailer'}
+                  {episodes.length > 0 ? t('watchNow') : t('trailer')}
                 </Button>
                 <Button 
                   variant="outlined" 
@@ -299,7 +299,7 @@ const FilmDetail: React.FC = () => {
                     color: followed ? 'primary.main' : 'text.primary'
                   }}
                 >
-                  {followed ? 'Đã lưu vào thư viện' : 'Thêm vào thư viện'}
+                  {followed ? t('savedToLibrary') : t('addToLibrary')}
                 </Button>
                 {film.trailerUrl && (
                   <Button
@@ -319,7 +319,7 @@ const FilmDetail: React.FC = () => {
                       '&:hover': { borderColor: 'text.primary', bgcolor: alpha(theme.palette.text.primary, 0.1) },
                     }}
                   >
-                    Xem trailer
+                    {t('trailer')}
                   </Button>
                 )}
                 <IconButton onClick={handleShare} sx={{ bgcolor: alpha(theme.palette.text.primary, 0.1), color: 'text.primary' }}>
@@ -360,7 +360,7 @@ const FilmDetail: React.FC = () => {
                   onClick={() => setDescExpanded((prev) => !prev)}
                   sx={{ mt: 0.5, px: 0, minWidth: 0, textTransform: 'none', fontWeight: 700 }}
                 >
-                  {descExpanded ? 'Thu gọn' : 'Xem thêm'}
+                  {descExpanded ? t('readLess') : t('readMore')}
                 </Button>
               )}
             </Box>
@@ -369,16 +369,16 @@ const FilmDetail: React.FC = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2.5, flexWrap: 'wrap', gap: 1 }}>
                 <Typography variant="h5" sx={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1 }}>
                   <FormatListBulleted sx={{ color: 'primary.main' }} />
-                  {'CHỌN TẬP'}
+                  {t('selectEpisodeHeading')}
                 </Typography>
                 {episodes.length > 0 && (
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Chip
                       size="small"
-                      label={sortOrder === 'ASC' ? 'Tập tăng dần' : 'Tập giảm dần'}
+                      label={sortOrder === 'ASC' ? t('episodeSortAscending') : t('episodeSortDescending')}
                       sx={{ bgcolor: alpha(theme.palette.text.primary, 0.05), fontWeight: 700, letterSpacing: 0.2 }}
                     />
-                    <Tooltip title={sortOrder === 'ASC' ? 'Chuyển sắp xếp giảm dần' : 'Chuyển sắp xếp tăng dần'}>
+                    <Tooltip title={sortOrder === 'ASC' ? t('switchToDescending') : t('switchToAscending')}>
                       <IconButton
                         size="small"
                         onClick={() => setSortOrder((prev) => (prev === 'ASC' ? 'DESC' : 'ASC'))}
@@ -398,7 +398,7 @@ const FilmDetail: React.FC = () => {
 
               {episodes.length === 0 ? (
                 <Paper sx={{ p: 3, borderRadius: 3, bgcolor: alpha(theme.palette.text.primary, 0.03), color: 'text.secondary' }}>
-                  Chưa có tập phim nào được phát hành.
+                  {t('noEpisodesReleased')}
                 </Paper>
               ) : (
                 <>
@@ -409,7 +409,7 @@ const FilmDetail: React.FC = () => {
                         return (
                           <Chip
                             key={sn}
-                            label={`Phần ${sn}`}
+                            label={t('seasonLabel', { season: sn })}
                             clickable
                             onClick={() => setSelectedSeason(sn)}
                             color={isActive ? 'primary' : 'default'}
@@ -437,7 +437,7 @@ const FilmDetail: React.FC = () => {
                   <Paper sx={{ borderRadius: 3, overflow: 'hidden', bgcolor: alpha(theme.palette.text.primary, 0.03), border: '1px solid', borderColor: alpha(theme.palette.text.primary, 0.06), p: 2 }}>
                     {episodesInSelectedSeason.length === 0 ? (
                       <Box sx={{ p: 4, color: 'text.secondary', textAlign: 'center' }}>
-                        Phần này chưa có tập phim nào.
+                        {t('noEpisodesInSeason')}
                       </Box>
                     ) : (
                       <MuiGrid container spacing={1.25}>
@@ -520,7 +520,7 @@ const FilmDetail: React.FC = () => {
                       <Avatar src={director.avatarUrl} sx={{ width: 64, height: 64 }} />
                       <Box>
                         <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{director.name}</Typography>
-                        <Typography variant="caption" color="text.secondary">Đạo diễn</Typography>
+                        <Typography variant="caption" color="text.secondary">{t('director')}</Typography>
                       </Box>
                     </Box>
                   ))}
@@ -546,18 +546,18 @@ const FilmDetail: React.FC = () => {
               <Divider sx={{ my: 3 }} />
 
               <Box sx={{ mt: 2 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Chi tiết</Typography>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>{t('details')}</Typography>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="body2" color="text.secondary">Quốc gia</Typography>
-                  <Typography variant="body2">{film.country}</Typography>
+                  <Typography variant="body2" color="text.secondary">{t('countryLabel')}</Typography>
+                  <Typography variant="body2">{t(`country.${film.country}`, { defaultValue: film.country })}</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="body2" color="text.secondary">Loại phim</Typography>
-                  <Typography variant="body2">{film.series ? 'Phim bộ' : 'Phim lẻ'}</Typography>
+                  <Typography variant="body2" color="text.secondary">{t('filmType')}</Typography>
+                  <Typography variant="body2">{film.series ? t('seriesFilm') : t('standaloneFilm')}</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="body2" color="text.secondary">Cập nhật lần cuối</Typography>
-                  <Typography variant="body2">{new Date(film.lastUpdate).toLocaleDateString('vi-VN')}</Typography>
+                  <Typography variant="body2" color="text.secondary">{t('lastUpdated')}</Typography>
+                  <Typography variant="body2">{new Date(film.lastUpdate).toLocaleDateString(i18n.language)}</Typography>
                 </Box>
               </Box>
             </Paper>
@@ -565,7 +565,7 @@ const FilmDetail: React.FC = () => {
         </Grid>
 
         <Box sx={{ mt: 8 }}>
-          <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>Bình luận</Typography>
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 3 }}>{t('commentsLabel')}</Typography>
           <CommentSection sourceId={id || ''} />
         </Box>
       </Container>

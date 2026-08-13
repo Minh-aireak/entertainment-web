@@ -64,11 +64,11 @@ const FilmHome: React.FC = React.memo(() => {
       setHeroFilms(res.result);
     } catch (err) {
       console.error('Failed to fetch top rated films:', err);
-      setError('Không thể tải dữ liệu phim. Vui lòng thử lại.');
+      setError(t('filmLoadFailed'));
     } finally {
       setHeroLoading(false);
     }
-  }, [setHeroFilms]);
+  }, [setHeroFilms, t]);
 
   useEffect(() => {
     if (skipInitialHeroFetchRef.current) {
@@ -328,7 +328,7 @@ const FilmHome: React.FC = React.memo(() => {
     <Box sx={{ bgcolor: 'background.default', minHeight: '100vh', pb: 8 }}>
       {error && (
         <Container maxWidth="xl" sx={{ pt: 3 }}>
-          <Alert severity="error" action={<Button color="inherit" size="small" startIcon={<Refresh />} onClick={() => fetchHero()}>Thử lại</Button>}>
+          <Alert severity="error" action={<Button color="inherit" size="small" startIcon={<Refresh />} onClick={() => fetchHero()}>{t('retry')}</Button>}>
             {error}
           </Alert>
         </Container>
@@ -464,7 +464,7 @@ const FilmHome: React.FC = React.memo(() => {
                       <Typography sx={{ color: 'text.primary', fontWeight: 700 }}>{film.averageRating.toFixed(1)}</Typography>
                     </Box>
                     <Typography sx={{ color: 'text.secondary' }}>
-                      {film.episodeCount > 0 ? `${film.episodeCount} tập` : 'Phim lẻ'} •{' '}
+                      {film.episodeCount > 0 ? t('episodeCount', { count: film.episodeCount }) : t('standaloneFilm')} •{' '}
                       {new Date(film.lastUpdate).getFullYear()}
                     </Typography>
                   </Box>
@@ -515,8 +515,8 @@ const FilmHome: React.FC = React.memo(() => {
             <Paper sx={{ minHeight: 360, borderRadius: 4, display: 'grid', placeItems: 'center', textAlign: 'center', p: 4, bgcolor: alpha(theme.palette.text.primary, 0.03) }}>
               <Box>
                 <MovieFilter sx={{ fontSize: 72, color: 'text.disabled', mb: 2 }} />
-                <Typography variant="h5" sx={{ fontWeight: 800, mb: 1 }}>Kho phim đang được cập nhật</Typography>
-                <Typography color="text.secondary">Các bộ phim mới sẽ xuất hiện tại đây khi quản trị viên thêm dữ liệu.</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 800, mb: 1 }}>{t('filmCatalogUpdating')}</Typography>
+                <Typography color="text.secondary">{t('filmCatalogUpdatingDescription')}</Typography>
               </Box>
             </Paper>
           </Container>

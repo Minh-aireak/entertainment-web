@@ -18,7 +18,7 @@ import { SwapVert } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { filmService } from '../../api/filmService';
 import type { Country, FilmCategory, FilmSortField, FilmSummaryResponse, Genre, SortDirection } from '../../models';
-import { COUNTRY_LABELS_VI, COUNTRY_VALUES, GENRE_LABELS_VI, GENRE_VALUES } from '../../constants/film';
+import { COUNTRY_VALUES, GENRE_VALUES } from '../../constants/film';
 import { useInfiniteScroll } from '../../hooks/useInfiniteScroll';
 import FilmCard from '../../components/Film/FilmCard';
 
@@ -116,7 +116,7 @@ const FilmCategoryBrowse: React.FC<FilmCategoryBrowseProps> = React.memo(
               >
                 <MenuItem value="ALL">{t('allCountries')}</MenuItem>
                 {COUNTRY_VALUES.map((c) => (
-                  <MenuItem key={c} value={c}>{COUNTRY_LABELS_VI[c]}</MenuItem>
+                  <MenuItem key={c} value={c}>{t(`country.${c}`)}</MenuItem>
                 ))}
               </Select>
             </FormControl>
@@ -133,7 +133,7 @@ const FilmCategoryBrowse: React.FC<FilmCategoryBrowseProps> = React.memo(
               >
                 <MenuItem value="ALL">{t('allGenres')}</MenuItem>
                 {GENRE_VALUES.filter((g) => g !== 'ANIMATION').map((g) => (
-                  <MenuItem key={g} value={g}>{GENRE_LABELS_VI[g]}</MenuItem>
+                  <MenuItem key={g} value={g}>{t(`genre.${g}`)}</MenuItem>
                 ))}
               </Select>
             </FormControl>
@@ -156,7 +156,7 @@ const FilmCategoryBrowse: React.FC<FilmCategoryBrowseProps> = React.memo(
           <IconButton
             onClick={() => setSortDir((prev) => (prev === 'DESC' ? 'ASC' : 'DESC'))}
             sx={{ bgcolor: alpha(theme.palette.text.primary, 0.06) }}
-            title={sortDir === 'DESC' ? 'Giảm dần' : 'Tăng dần'}
+            title={sortDir === 'DESC' ? t('descending') : t('ascending')}
           >
             <SwapVert sx={{ transform: sortDir === 'ASC' ? 'scaleY(-1)' : undefined }} />
           </IconButton>

@@ -14,6 +14,8 @@ import {
   VolumeOff,
   VolumeUp,
 } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
+import type { SyncAction } from '../../models';
 
 export type PlaybackActionPayload =
   | { type: 'play'; positionSeconds: number }
@@ -28,10 +30,18 @@ export type PlaybackActionPayload =
   | { type: 'heartbeat'; positionSeconds: number };
 
 export interface VideoPlayerHandle {
-  /** Applied by a 'viewer' player to follow a host's broadcast state. Uses a soft-correction
-   *  threshold on position so periodic heartbeats don't cause visible jitter for a viewer whose
-   *  local playback is already close enough. */
-  syncTo: (state: { positionSeconds: number; playing: boolean; playbackRate: number }) => void;
+  /** Applied by a 'viewer' player to follow a host's broadcast state. `action` picks the
+   *  correction strategy: PAUSE/SEEK/CHANGE_EPISODE/JOIN always snap to the exact position
+   *  before applying play/pause (hard sync); PLAY only skips the seek if already very close;
+   *  HEARTBEAT never seeks - a moderate drift is closed with a brief, subtle playbackRate nudge
+   *  (see applyHeartbeatCatchup) instead of a visible jump, only falling back to a hard snap once
+   *  drift is too large to close invisibly. */
+  syncTo: (state: { positionSeconds: number; playing: boolean; playbackRate: number; action: SyncAction }) => void;
+  /** Applied by a 'host' player right after mount (before any user interaction) to restore the
+   *  position/playing/rate it had before an unmount (e.g. switching between the full room page
+   *  and the mini player) - unlike syncTo, this always hard-sets state and suppresses the native
+   *  play/pause event it causes from being reported as a real host action. */
+  restoreHostState: (state: { positionSeconds: number; playing: boolean; playbackRate: number }) => void;
 }
 
 interface VideoPlayerProps {
@@ -54,12 +64,44 @@ interface VideoPlayerProps {
    *  and pass it back down; the player preserves the current position/playing state across the
    *  `src` swap so playback resumes where it left off instead of restarting from 0. */
   onStalledError?: () => void;
+  /** Local-only echo of the current position/playing/rate on every timeupdate/play/pause -
+   *  never sent to the server. Lets a 'host' caller keep a live snapshot (e.g.
+   *  WatchRoomSessionContext's hostLocalSnapshotRef) so a later remount (full page <-> mini
+   *  player) can call restoreHostState with fresh values instead of restarting from 0. */
+  onLocalTimeUpdate?: (state: { positionSeconds: number; durationSeconds: number; playing: boolean; playbackRate: number }) => void;
+  /** Seconds to resume from on first mount (e.g. a saved "Continue Watching" position) - only
+   *  read once, on mount, exactly like the internal resume-after-src-swap it reuses. */
+  initialPositionSeconds?: number;
 }
 
 const SKIP_SECONDS = 5;
 const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const CONTROLS_HIDE_DELAY_MS = 2500;
-const SYNC_DRIFT_THRESHOLD_SECONDS = 1.5;
+// Per-action correction threshold for syncTo, in seconds. 0 means always snap to the exact
+// position before applying play/pause (hard sync) - PAUSE/SEEK/CHANGE_EPISODE/JOIN must always
+// land viewers on the host's exact position. PLAY only skips the seek if already very close.
+// HEARTBEAT uses a looser threshold so periodic resyncs don't cause visible jitter for a viewer
+// whose local playback already tracks closely enough.
+const SYNC_ACTION_THRESHOLDS_SECONDS: Record<SyncAction, number> = {
+  PAUSE: 0,
+  SEEK: 0,
+  CHANGE_EPISODE: 0,
+  JOIN: 0,
+  PLAY: 0.35,
+  HEARTBEAT: 1.2,
+};
+// HEARTBEAT drift below this is imperceptible - leave the rate alone entirely rather than
+// nudging for no visible benefit.
+const SOFT_CATCHUP_MIN_DRIFT_SECONDS = 0.35;
+// A subtle, roughly-imperceptible speed nudge (+/-4%) used to close HEARTBEAT drift gradually
+// instead of a hard seek. Deliberately small and slow rather than sized to close the gap within
+// one heartbeat cycle - each heartbeat re-measures actual drift and re-nudges, so a large initial
+// drift just converges over several cycles, invisibly, rather than jumping.
+const SOFT_CATCHUP_RATE_DELTA = 0.04;
+// Safety revert: if no further HEARTBEAT arrives (host paused, network issue) while a nudge is
+// active, don't leave playbackRate altered forever. Set just under the ~5s heartbeat cadence so
+// under normal conditions the next heartbeat always refreshes the nudge before this fires.
+const SOFT_CATCHUP_REVERT_MS = 4500;
 const SEEK_THROTTLE_MS = 150;
 const STALLED_ERROR_COOLDOWN_MS = 4000;
 
@@ -84,20 +126,31 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
   role,
   onPlaybackAction,
   onStalledError,
+  onLocalTimeUpdate,
+  initialPositionSeconds,
 }, ref) => {
+  const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const progressBarRef = useRef<HTMLDivElement>(null);
   const hideControlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Position/playing snapshot kept up to date on every tick so a src swap (fresh presigned URL
   // after an error/reconnect) can resume where playback left off instead of restarting at 0.
-  const lastTimeRef = useRef(0);
+  // Seeded from initialPositionSeconds so a fresh mount (e.g. opening from "Continue Watching")
+  // resumes there via the same loadedmetadata resume logic below, instead of restarting at 0.
+  const lastTimeRef = useRef(initialPositionSeconds && initialPositionSeconds > 0 ? initialPositionSeconds : 0);
   const wasPlayingRef = useRef(autoPlay);
   const lastSeekCommitRef = useRef(0);
   const scrubTimeRef = useRef(0);
   const lastStalledErrorRef = useRef(0);
+  // One-shot: set by restoreHostState right before it calls play()/pause() so the native
+  // play/pause event that call causes isn't reported to the server as a real host action.
+  const suppressNextNotifyRef = useRef(false);
+  // Pending "revert to normal speed" timer for an in-progress HEARTBEAT soft catch-up nudge.
+  const catchupRevertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [playing, setPlaying] = useState(autoPlay);
+  const [showStartOverlay, setShowStartOverlay] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [bufferedEnd, setBufferedEnd] = useState(0);
@@ -188,6 +241,7 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
     const onTimeUpdate = () => {
       setCurrentTime(video.currentTime);
       lastTimeRef.current = video.currentTime;
+      onLocalTimeUpdate?.({ positionSeconds: video.currentTime, durationSeconds: video.duration || 0, playing: !video.paused, playbackRate: video.playbackRate });
     };
     const onDurationChange = () => setDuration(video.duration || 0);
     const onProgress = () => {
@@ -199,14 +253,24 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
       setPlaying(true);
       wasPlayingRef.current = true;
       resetHideTimer();
-      notifyHostAction({ type: 'play', positionSeconds: video.currentTime });
+      if (suppressNextNotifyRef.current) {
+        suppressNextNotifyRef.current = false;
+      } else {
+        notifyHostAction({ type: 'play', positionSeconds: video.currentTime });
+      }
+      onLocalTimeUpdate?.({ positionSeconds: video.currentTime, durationSeconds: video.duration || 0, playing: true, playbackRate: video.playbackRate });
     };
     const onPause = () => {
       setPlaying(false);
       wasPlayingRef.current = false;
       if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
       setShowControls(true);
-      notifyHostAction({ type: 'pause', positionSeconds: video.currentTime });
+      if (suppressNextNotifyRef.current) {
+        suppressNextNotifyRef.current = false;
+      } else {
+        notifyHostAction({ type: 'pause', positionSeconds: video.currentTime });
+      }
+      onLocalTimeUpdate?.({ positionSeconds: video.currentTime, durationSeconds: video.duration || 0, playing: false, playbackRate: video.playbackRate });
     };
     const onVolumeChange = () => {
       setVolume(video.volume);
@@ -251,7 +315,7 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
       video.removeEventListener('canplay', onCanPlay);
       video.removeEventListener('playing', onPlaying);
     };
-  }, [hasNextEpisode, onNextEpisode, resetHideTimer, notifyHostAction]);
+  }, [hasNextEpisode, onNextEpisode, resetHideTimer, notifyHostAction, onLocalTimeUpdate]);
 
   // Error recovery: a native `error` (e.g. an expired 1h B2 presigned URL) or the browser coming
   // back `online` while still stuck buffering are both cases the player can't fix by itself - it
@@ -305,6 +369,15 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
     if (video.paused) video.play();
     else video.pause();
   }, [interactive]);
+
+  // Local-only resume for a viewer whose browser blocked autoplay - never reports a host action
+  // (viewers have no host-control path in the first place), and does not seek/change episode/rate
+  // on its own. The next syncTo (heartbeat or event) still applies normally afterward.
+  const startWatching = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.play().then(() => setShowStartOverlay(false)).catch(() => {});
+  }, []);
 
   const seekTo = useCallback(
     (time: number, notify = false) => {
@@ -374,37 +447,115 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
     notifyHostAction({ type: 'rate', playbackRate: rate, positionSeconds: video.currentTime });
   }, [interactive, notifyHostAction]);
 
+  const clearCatchup = useCallback(() => {
+    if (catchupRevertTimerRef.current !== null) {
+      clearTimeout(catchupRevertTimerRef.current);
+      catchupRevertTimerRef.current = null;
+    }
+  }, []);
+
+  // Handles a HEARTBEAT's position drift without seeking, so a viewer that's merely a little
+  // behind/ahead doesn't visibly jump every 5s. Returns true if it fully handled the drift
+  // (caller should skip its own seek/rate logic); false if the drift is too large to close
+  // smoothly, in which case the caller falls back to a normal hard snap.
+  const applyHeartbeatCatchup = useCallback((video: HTMLVideoElement, positionSeconds: number, targetRate: number) => {
+    const drift = positionSeconds - video.currentTime; // + = viewer behind, - = viewer ahead
+    const absDrift = Math.abs(drift);
+
+    if (absDrift > SYNC_ACTION_THRESHOLDS_SECONDS.HEARTBEAT) {
+      return false; // too far to catch up invisibly - let the caller snap directly
+    }
+
+    if (absDrift > SOFT_CATCHUP_MIN_DRIFT_SECONDS) {
+      const nudgedRate = Math.max(0.1, targetRate + Math.sign(drift) * SOFT_CATCHUP_RATE_DELTA);
+      video.playbackRate = nudgedRate;
+      catchupRevertTimerRef.current = setTimeout(() => {
+        catchupRevertTimerRef.current = null;
+        const current = videoRef.current;
+        if (current) current.playbackRate = targetRate;
+      }, SOFT_CATCHUP_REVERT_MS);
+    } else if (video.playbackRate !== targetRate) {
+      // Drift already negligible (or a previous nudge already closed it) - make sure a stale
+      // nudge isn't still sitting on the rate.
+      video.playbackRate = targetRate;
+      setPlaybackRate(targetRate);
+    }
+
+    return true;
+  }, []);
+
   useImperativeHandle(ref, () => ({
-    syncTo: ({ positionSeconds, playing: shouldPlay, playbackRate: rate }) => {
+    syncTo: ({ positionSeconds, playing: shouldPlay, playbackRate: rate, action }) => {
       const video = videoRef.current;
       if (!video) return;
 
-      if (Number.isFinite(positionSeconds) && Math.abs(video.currentTime - positionSeconds) > SYNC_DRIFT_THRESHOLD_SECONDS) {
-        video.currentTime = positionSeconds;
-        setCurrentTime(positionSeconds);
-      }
+      const targetRate = Number.isFinite(rate) && rate > 0 ? rate : video.playbackRate;
+      clearCatchup();
 
-      if (Number.isFinite(rate) && rate > 0 && video.playbackRate !== rate) {
-        video.playbackRate = rate;
-        setPlaybackRate(rate);
+      const handledByCatchup = action === 'HEARTBEAT' && shouldPlay && Number.isFinite(positionSeconds)
+        && applyHeartbeatCatchup(video, positionSeconds, targetRate);
+
+      if (!handledByCatchup) {
+        const threshold = SYNC_ACTION_THRESHOLDS_SECONDS[action] ?? SYNC_ACTION_THRESHOLDS_SECONDS.HEARTBEAT;
+        if (Number.isFinite(positionSeconds) && Math.abs(video.currentTime - positionSeconds) > threshold) {
+          video.currentTime = positionSeconds;
+          setCurrentTime(positionSeconds);
+        }
+        if (video.playbackRate !== targetRate) {
+          video.playbackRate = targetRate;
+          setPlaybackRate(targetRate);
+        }
       }
 
       if (shouldPlay && video.paused) {
-        video.play().catch(() => {
-          // Autoplay can be blocked before the viewer has interacted with the page - the play
-          // overlay/button stays visible so they can start it manually, next syncTo retries.
+        video.play().then(() => setShowStartOverlay(false)).catch(() => {
+          // Autoplay can be blocked before the viewer has interacted with the page - show the
+          // "start watching" overlay so they can start it manually; the next syncTo/event still
+          // applies normally once playback begins.
+          setShowStartOverlay(true);
         });
       } else if (!shouldPlay && !video.paused) {
         video.pause();
       }
+    },
+    restoreHostState: ({ positionSeconds, playing: shouldPlay, playbackRate: rate }) => {
+      const video = videoRef.current;
+      if (!video) return;
+
+      clearCatchup();
+      if (Number.isFinite(positionSeconds)) {
+        video.currentTime = positionSeconds;
+        setCurrentTime(positionSeconds);
+      }
+      if (Number.isFinite(rate) && rate > 0) {
+        video.playbackRate = rate;
+        setPlaybackRate(rate);
+      }
+
+      if (shouldPlay === video.paused) {
+        // A native play/pause event is about to fire from the call below - suppress the one
+        // notifyHostAction it would otherwise trigger, since this is a local restore, not a real
+        // host action.
+        suppressNextNotifyRef.current = true;
+        if (shouldPlay) {
+          video.play().catch(() => {
+            suppressNextNotifyRef.current = false;
+          });
+        } else {
+          video.pause();
+        }
+      }
+      // else: already in the target play/pause state, so no native event will fire - nothing to
+      // suppress.
     },
   }), []);
 
   useEffect(
     () => () => {
       if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
+      clearCatchup();
     },
-    [],
+    [clearCatchup],
   );
 
   // Keyboard shortcuts: Left/Right arrows seek, Space toggles play/pause.
@@ -516,6 +667,42 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
         onClick={interactive ? togglePlay : undefined}
         style={{ width: '100%', height: '100%', display: 'block', objectFit: 'contain', backgroundColor: '#000' }}
       />
+
+      {!interactive && showStartOverlay && (
+        <Box
+          sx={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            bgcolor: 'rgba(0,0,0,0.6)',
+            zIndex: 1,
+          }}
+        >
+          <Box
+            component="button"
+            onClick={startWatching}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              px: 3,
+              py: 1.25,
+              borderRadius: 999,
+              border: 'none',
+              bgcolor: '#e50914',
+              color: '#fff',
+              fontWeight: 700,
+              fontSize: '0.95rem',
+              cursor: 'pointer',
+            }}
+          >
+            <PlayArrow fontSize="small" />
+            {t('startWatching')}
+          </Box>
+        </Box>
+      )}
 
       <Box
         onClick={interactive ? togglePlay : undefined}
@@ -683,12 +870,12 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
 
             {!interactive && (
               <Typography sx={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', mr: 1, whiteSpace: 'nowrap' }}>
-                Chủ phòng đang điều khiển
+                {t('hostControlling')}
               </Typography>
             )}
 
             {onNextEpisode && (
-              <Tooltip title="Tập tiếp theo">
+              <Tooltip title={t('nextEpisode')}>
                 <span>
                   <IconButton size="small" onClick={onNextEpisode} disabled={!interactive || !hasNextEpisode} sx={{ color: '#fff' }}>
                     <SkipNext />
@@ -697,7 +884,7 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
               </Tooltip>
             )}
 
-            <Tooltip title="Tốc độ phát">
+            <Tooltip title={t('playbackSpeed')}>
               <span>
                 <IconButton size="small" onClick={(e) => setSettingsAnchor(e.currentTarget)} disabled={!interactive} sx={{ color: '#fff' }}>
                   <Settings fontSize="small" />
@@ -707,7 +894,7 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
             <Menu anchorEl={settingsAnchor} open={!!settingsAnchor} onClose={() => setSettingsAnchor(null)}>
               {PLAYBACK_RATES.map((rate) => (
                 <MenuItem key={rate} selected={rate === playbackRate} onClick={() => changePlaybackRate(rate)}>
-                  {rate === 1 ? 'Bình thường' : `${rate}x`}
+                  {rate === 1 ? t('normalSpeed') : `${rate}x`}
                 </MenuItem>
               ))}
             </Menu>

@@ -10,13 +10,14 @@ import {
   Alert,
   useTheme,
 } from '@mui/material';
-import { Refresh, Search } from '@mui/icons-material';
+import { History, Refresh, Search } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { filmService } from '../../api/filmService';
-import type { FilmSummaryResponse } from '../../models';
+import type { FilmSummaryResponse, WatchProgressResponse } from '../../models';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import FilmCard from '../../components/Film/FilmCard';
+import ContinueWatchingCard from '../../components/Film/ContinueWatchingCard';
 import { clearPersistedState, usePersistedState } from '../../hooks/usePersistedState';
 
 const LIBRARY_CACHE_KEY = 'filmLibrary:films';
@@ -39,6 +40,9 @@ const FilmLibrary: React.FC = React.memo(() => {
   const skipInitialFetchRef = useRef(films.length > 0);
   const navigate = useNavigate();
 
+  const [continueWatching, setContinueWatching] = useState<WatchProgressResponse[]>([]);
+  const [continueWatchingLoading, setContinueWatchingLoading] = useState(true);
+
   const fetchLibrary = async () => {
     setLoading(true);
     setError(null);
@@ -47,18 +51,32 @@ const FilmLibrary: React.FC = React.memo(() => {
       setFilms(response.result ?? []);
     } catch (error) {
       console.error('Failed to fetch library:', error);
-      setError('Không thể tải thư viện phim của bạn.');
+      setError(t('libraryLoadFailed'));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchContinueWatching = async () => {
+    setContinueWatchingLoading(true);
+    try {
+      const response = await filmService.getMyContinueWatching();
+      setContinueWatching(response.result ?? []);
+    } catch (error) {
+      console.error('Failed to fetch continue watching:', error);
+      toast.error(t('continueWatchingLoadFailed'));
+    } finally {
+      setContinueWatchingLoading(false);
     }
   };
 
   useEffect(() => {
     if (skipInitialFetchRef.current) {
       skipInitialFetchRef.current = false;
-      return;
+    } else {
+      fetchLibrary();
     }
-    fetchLibrary();
+    fetchContinueWatching();
   }, []);
 
   const handleRemove = async (film: FilmSummaryResponse) => {
@@ -66,9 +84,19 @@ const FilmLibrary: React.FC = React.memo(() => {
       await filmService.processFollowAction(film.id, true);
       setFilms((prev) => prev.filter((f) => f.id !== film.id));
       window.dispatchEvent(new Event('sidebar-counts:refresh'));
-      toast.success('Đã xóa khỏi thư viện');
+      toast.success(t('removedFromLibrary'));
     } catch {
-      toast.error('Không thể xóa khỏi thư viện');
+      toast.error(t('removeFromLibraryFailed'));
+    }
+  };
+
+  const handleRemoveContinueWatching = async (progress: WatchProgressResponse) => {
+    try {
+      await filmService.removeWatchProgress(progress.filmId);
+      setContinueWatching((prev) => prev.filter((p) => p.filmId !== progress.filmId));
+      toast.success(t('removedFromContinueWatching'));
+    } catch {
+      toast.error(t('removeFromContinueWatchingFailed'));
     }
   };
 
@@ -80,14 +108,49 @@ const FilmLibrary: React.FC = React.memo(() => {
           <Typography variant="body1" color="text.secondary">{t('savedMovies')}</Typography>
         </Box>
         <Typography variant="h6" sx={{ color: 'primary.main', fontWeight: 700 }}>
-          {films.length} phim
+          {t('showingFilms', { count: films.length })}
         </Typography>
       </Box>
+
+      {(continueWatchingLoading || continueWatching.length > 0) && (
+        <Box sx={{ mb: 6 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>
+            <History sx={{ color: 'primary.main' }} />
+            <Typography variant="h5" sx={{ fontWeight: 800 }}>{t('continueWatching')}</Typography>
+          </Box>
+          {continueWatchingLoading ? (
+            <Grid container spacing={3}>
+              {Array.from(new Array(4)).map((_, index) => (
+                <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={index}>
+                  <Skeleton variant="rectangular" sx={{ aspectRatio: '2 / 3', borderRadius: 3 }} />
+                  <Skeleton variant="text" sx={{ mt: 2 }} />
+                  <Skeleton variant="text" width="60%" />
+                </Grid>
+              ))}
+            </Grid>
+          ) : (
+            <Grid container spacing={3}>
+              {continueWatching.map((progress) => (
+                <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={progress.filmId}>
+                  <ContinueWatchingCard progress={progress} onRemove={handleRemoveContinueWatching} />
+                </Grid>
+              ))}
+            </Grid>
+          )}
+        </Box>
+      )}
+
+      {!loading && films.length > 0 && (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>
+          <Search sx={{ color: 'primary.main' }} />
+          <Typography variant="h5" sx={{ fontWeight: 800 }}>{t('followedFilmsHeading')}</Typography>
+        </Box>
+      )}
 
       {error && (
         <Alert
           severity="error"
-          action={<Button color="inherit" size="small" startIcon={<Refresh />} onClick={fetchLibrary}>Thử lại</Button>}
+          action={<Button color="inherit" size="small" startIcon={<Refresh />} onClick={fetchLibrary}>{t('retry')}</Button>}
           sx={{ mb: 3 }}
         >
           {error}
@@ -116,9 +179,9 @@ const FilmLibrary: React.FC = React.memo(() => {
           }}
         >
           <Search sx={{ fontSize: 80, color: alpha(theme.palette.text.primary, 0.1), mb: 2 }} />
-          <Typography variant="h5" sx={{ mb: 1, fontWeight: 700 }}>Thư viện của bạn đang trống</Typography>
+          <Typography variant="h5" sx={{ mb: 1, fontWeight: 700 }}>{t('libraryEmptyTitle')}</Typography>
           <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-            Khám phá kho phim và thêm những bộ phim yêu thích vào đây.
+            {t('libraryEmptyDescription')}
           </Typography>
           <Button
             variant="contained"
@@ -126,7 +189,7 @@ const FilmLibrary: React.FC = React.memo(() => {
             onClick={() => navigate('/film')}
             sx={{ borderRadius: 2, px: 4 }}
           >
-            Khám phá phim
+            {t('exploreFilms')}
           </Button>
         </Box>
       ) : (

@@ -4,7 +4,6 @@ import { PlayArrow, Star } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import type { FilmSummaryResponse } from '../../models';
-import { GENRE_LABELS_VI } from '../../constants/film';
 
 interface FilmCardFeaturedProps {
   film: FilmSummaryResponse;
@@ -57,7 +56,7 @@ const FilmCardFeatured: React.FC<FilmCardFeaturedProps> = React.memo(({ film }) 
             {film.genres.slice(0, 3).map((genre) => (
               <Chip
                 key={genre}
-                label={GENRE_LABELS_VI[genre] ?? genre}
+                label={t(`genre.${genre}`, { defaultValue: genre })}
                 size="small"
                 sx={{ bgcolor: 'rgba(255,255,255,0.15)', color: 'white', fontWeight: 600, height: 22 }}
               />
@@ -87,7 +86,7 @@ const FilmCardFeatured: React.FC<FilmCardFeaturedProps> = React.memo(({ film }) 
             </Typography>
           </Box>
           <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>
-            {film.episodeCount > 0 ? `${film.episodeCount} tập` : 'Phim lẻ'}
+            {film.episodeCount > 0 ? t('episodeCount', { count: film.episodeCount }) : t('standaloneFilm')}
           </Typography>
         </Box>
         <Button

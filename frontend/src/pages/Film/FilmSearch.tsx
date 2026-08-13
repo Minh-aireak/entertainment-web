@@ -42,12 +42,7 @@ import type {
   Country,
   Genre,
 } from '../../models';
-import {
-  COUNTRY_LABELS_VI,
-  COUNTRY_VALUES,
-  GENRE_LABELS_VI,
-  GENRE_VALUES,
-} from '../../constants/film';
+import { COUNTRY_VALUES, GENRE_VALUES } from '../../constants/film';
 import FilmCard from '../../components/Film/FilmCard';
 import { usePersistedState } from '../../hooks/usePersistedState';
 import { useInfiniteScroll } from '../../hooks/useInfiniteScroll';
@@ -172,12 +167,12 @@ const FilmSearch: React.FC = React.memo(() => {
         }
       } catch (err) {
         console.error('Failed to search/browse films:', err);
-        setError('Không thể tải danh sách phim. Vui lòng thử lại.');
+        setError(t('filmLoadFailed'));
       } finally {
         setLoading(false);
       }
     },
-    [setItems, setSearchRaw, setNextPage, setHasMore, setVisibleCount],
+    [setItems, setSearchRaw, setNextPage, setHasMore, setVisibleCount, t],
   );
 
   useEffect(() => {
@@ -259,9 +254,9 @@ const FilmSearch: React.FC = React.memo(() => {
       const isGenre = GENRE_VALUES.includes(key as Genre);
       const isCountry = COUNTRY_VALUES.includes(key as Country);
       const label = isGenre
-        ? GENRE_LABELS_VI[key as Genre]
+        ? t(`genre.${key as Genre}`)
         : isCountry
-        ? COUNTRY_LABELS_VI[key as Country]
+        ? t(`country.${key as Country}`)
         : key;
       return (
         <Chip
@@ -286,7 +281,7 @@ const FilmSearch: React.FC = React.memo(() => {
         />
       );
     });
-  }, [handleHotSearch, theme]);
+  }, [handleHotSearch, t, theme]);
 
   const handleClearQuery = useCallback(() => {
     setQuery('');
@@ -386,7 +381,7 @@ const FilmSearch: React.FC = React.memo(() => {
                   ),
                   endAdornment: query ? (
                     <InputAdornment position="end">
-                      <Tooltip title="Xóa">
+                      <Tooltip title={t('delete')}>
                         <IconButton onClick={handleClearQuery} size="small" edge="end">
                           <Close fontSize="small" />
                         </IconButton>
@@ -446,13 +441,13 @@ const FilmSearch: React.FC = React.memo(() => {
                 <Tune sx={{ fontSize: 20, color: 'primary.main' }} />
               </Box>
               <Typography variant="subtitle1" sx={{ fontWeight: 800, fontSize: '1.05rem' }}>
-                Bộ lọc tìm kiếm
+                {t('searchFilters')}
               </Typography>
             </Box>
             {hasActiveFilters && (
               <Chip
                 icon={<RestartAlt sx={{ fontSize: '16px !important' }} />}
-                label="Đặt lại bộ lọc"
+                label={t('resetFilters')}
                 onClick={resetFilters}
                 size="medium"
                 sx={{
@@ -480,7 +475,7 @@ const FilmSearch: React.FC = React.memo(() => {
             >
               {filters.genre !== 'ALL' && (
                 <Chip
-                  label={GENRE_LABELS_VI[filters.genre]}
+                  label={t(`genre.${filters.genre}`)}
                   color="primary"
                   size="small"
                   onDelete={() => setFilters((f) => ({ ...f, genre: 'ALL' }))}
@@ -489,7 +484,7 @@ const FilmSearch: React.FC = React.memo(() => {
               )}
               {filters.country !== 'ALL' && (
                 <Chip
-                  label={COUNTRY_LABELS_VI[filters.country]}
+                  label={t(`country.${filters.country}`)}
                   color="primary"
                   size="small"
                   onDelete={() => setFilters((f) => ({ ...f, country: 'ALL' }))}
@@ -537,7 +532,7 @@ const FilmSearch: React.FC = React.memo(() => {
               {GENRE_VALUES.map((g) => (
                 <Chip
                   key={g}
-                  label={GENRE_LABELS_VI[g]}
+                  label={t(`genre.${g}`)}
                   onClick={() => setFilters((f) => ({ ...f, genre: f.genre === g ? 'ALL' : g }))}
                   color={filters.genre === g ? 'primary' : 'default'}
                   variant={filters.genre === g ? 'filled' : 'outlined'}
@@ -569,7 +564,7 @@ const FilmSearch: React.FC = React.memo(() => {
               {COUNTRY_VALUES.map((c) => (
                 <Chip
                   key={c}
-                  label={COUNTRY_LABELS_VI[c]}
+                  label={t(`country.${c}`)}
                   onClick={() => setFilters((f) => ({ ...f, country: f.country === c ? 'ALL' : c }))}
                   color={filters.country === c ? 'primary' : 'default'}
                   variant={filters.country === c ? 'filled' : 'outlined'}
@@ -687,8 +682,8 @@ const FilmSearch: React.FC = React.memo(() => {
         ) : items.length ? (
           <>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Hiển thị <strong>{items.length}</strong> phim
-              {committedQuery.trim() ? ` cho "${committedQuery.trim()}"` : ''}
+              {t('showingFilms', { count: items.length })}
+              {committedQuery.trim() ? t('searchForQuery', { query: committedQuery.trim() }) : ''}
             </Typography>
 
             <Grid container spacing={3}>
@@ -706,12 +701,12 @@ const FilmSearch: React.FC = React.memo(() => {
               {loadingMore && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, color: 'text.secondary' }}>
                   <CircularProgress size={22} thickness={4} />
-                  <Typography variant="body2">Đang tải thêm phim...</Typography>
+                  <Typography variant="body2">{t('loadingMoreFilms')}</Typography>
                 </Box>
               )}
               {!hasMore && !loadingMore && (
                 <Typography variant="body2" color="text.disabled">
-                  Đã hiển thị tất cả phim phù hợp
+                  {t('allFilmsShown')}
                 </Typography>
               )}
             </Box>
@@ -738,7 +733,7 @@ const FilmSearch: React.FC = React.memo(() => {
             {hasActiveFilters && (
               <Box sx={{ mt: 4 }}>
                 <Chip
-                  label="Xóa bộ lọc"
+                  label={t('clearFilters')}
                   color="primary"
                   variant="filled"
                   onClick={resetFilters}

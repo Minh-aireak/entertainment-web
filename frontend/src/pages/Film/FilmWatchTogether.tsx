@@ -96,7 +96,7 @@ const FilmWatchTogether: React.FC = React.memo(() => {
     filmService
       .getPageFilms(1, 60)
       .then((res) => setFilms(res.result?.data ?? []))
-      .catch(() => toast.error('Không thể tải danh sách phim'));
+      .catch(() => toast.error(t('filmsLoadFailed')));
 
     friendService
       .getMyFriends(1, 50)
@@ -111,7 +111,7 @@ const FilmWatchTogether: React.FC = React.memo(() => {
     roomService
       .listPublicRooms(1, PUBLIC_ROOMS_PAGE_SIZE)
       .then((res) => setPublicRooms(res.result?.data ?? []))
-      .catch(() => toast.error('Không thể tải danh sách phòng công cộng')),
+      .catch(() => toast.error(t('publicRoomsLoadFailed'))),
   []);
 
   const fetchPublicRooms = useCallback(() => {
@@ -123,7 +123,7 @@ const FilmWatchTogether: React.FC = React.memo(() => {
     roomService
       .listMyRooms(1, 6)
       .then((res) => setMyRooms(res.result?.data ?? []))
-      .catch(() => toast.error('Không thể tải danh sách phòng của bạn')),
+      .catch(() => toast.error(t('myRoomsLoadFailed'))),
   []);
 
   const fetchMyRooms = useCallback(() => {
@@ -191,7 +191,7 @@ const FilmWatchTogether: React.FC = React.memo(() => {
 
   const handleCreateRoom = useCallback(async () => {
     if (!selectedFilmId) {
-      toast.error('Vui lòng chọn phim để tạo phòng xem chung');
+      toast.error(t('selectFilmRequired'));
       return;
     }
     setCreating(true);
@@ -205,7 +205,7 @@ const FilmWatchTogether: React.FC = React.memo(() => {
       });
       navigate(`/film/watch-together/room/${response.result.id}`);
     } catch {
-      toast.error('Không thể tạo phòng, vui lòng thử lại');
+      toast.error(t('createRoomFailed'));
     } finally {
       setCreating(false);
     }
@@ -271,34 +271,60 @@ const FilmWatchTogether: React.FC = React.memo(() => {
             background: 'linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.85) 100%)',
           }}
         />
-        <Chip
-          label={room.publicRoom ? 'Công cộng' : 'Riêng tư'}
-          size="small"
+        <Box
           sx={{
             position: 'absolute',
             top: 12,
             left: 12,
-            bgcolor: room.publicRoom ? 'rgba(0,168,78,0.88)' : 'rgba(120,80,255,0.88)',
-            color: '#fff',
-            fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.75,
+            bgcolor: 'rgba(0,0,0,0.55)',
             backdropFilter: 'blur(6px)',
+            borderRadius: '999px',
+            pl: 1,
+            pr: 1.25,
+            py: 0.5,
           }}
-        />
-        <Box sx={{ position: 'absolute', top: 12, right: 12, display: 'flex', gap: 1 }}>
-          {variant === 'my' && !room.alreadyJoined && (
-            <Chip
-              label="Được mời"
-              size="small"
-              sx={{ bgcolor: 'rgba(255,193,7,0.9)', color: '#000', fontWeight: 700, backdropFilter: 'blur(6px)' }}
-            />
-          )}
-          <Chip
-            icon={<People sx={{ fontSize: 14, color: '#fff !important' }} />}
-            label={`${room.participantCount} ${t('viewers')}`}
-            size="small"
-            sx={{ bgcolor: 'rgba(0,0,0,0.6)', color: '#fff', backdropFilter: 'blur(6px)' }}
+        >
+          <Box
+            sx={{
+              width: 7,
+              height: 7,
+              borderRadius: '50%',
+              bgcolor: '#FF3B30',
+              animation: 'watch-together-pulse 1.6s ease-in-out infinite',
+              '@keyframes watch-together-pulse': {
+                '0%': { boxShadow: '0 0 0 0 rgba(255,59,48,0.55)' },
+                '70%': { boxShadow: '0 0 0 6px rgba(255,59,48,0)' },
+                '100%': { boxShadow: '0 0 0 0 rgba(255,59,48,0)' },
+              },
+            }}
           />
+          <Typography sx={{ fontSize: '0.68rem', fontWeight: 800, letterSpacing: '0.06em', color: '#fff' }}>
+            {t('liveNow')}
+          </Typography>
+          <Box sx={{ width: '1px', height: 10, bgcolor: 'rgba(255,255,255,0.3)' }} />
+          <People sx={{ fontSize: 13, color: '#fff' }} />
+          <Typography sx={{ fontSize: '0.72rem', fontWeight: 700, color: '#fff' }}>
+            {room.participantCount}
+          </Typography>
         </Box>
+        {variant === 'my' && !room.alreadyJoined && (
+          <Chip
+            label={t('invited')}
+            size="small"
+            sx={{
+              position: 'absolute',
+              top: 12,
+              right: 12,
+              bgcolor: 'rgba(255,193,7,0.9)',
+              color: '#000',
+              fontWeight: 700,
+              backdropFilter: 'blur(6px)',
+            }}
+          />
+        )}
         <Box sx={{ position: 'absolute', left: 16, right: 16, bottom: 14 }}>
           <Typography variant="h6" sx={{ fontWeight: 800, color: '#fff', mb: 0.5 }} noWrap>
             {room.name}
@@ -307,17 +333,65 @@ const FilmWatchTogether: React.FC = React.memo(() => {
             <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, color: 'rgba(255,255,255,0.85)' }}>
               <LocalMovies sx={{ color: '#00A84E', fontSize: 16 }} />
               <Typography variant="body2" sx={{ color: 'inherit' }} noWrap>
-                {room.filmTitle}
-                {currentEpisode ? ` · Tập ${currentEpisode.episodeNumber}` : ' · Chưa chọn tập'}
+                {t('nowWatching')} · {room.filmTitle}
+                {' · '}{currentEpisode ? t('episodeLabel', { episode: currentEpisode.episodeNumber }) : t('noEpisodeSelected')}
               </Typography>
             </Box>
           )}
         </Box>
       </Box>
       <Box sx={{ p: 3, flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <Typography variant="body2" color="text.secondary">
-          Chủ phòng: <strong>{room.hostDisplayName || '—'}</strong>
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Avatar
+              src={room.hostAvatar}
+              sx={{
+                width: 30,
+                height: 30,
+                fontSize: '0.7rem',
+                fontWeight: 800,
+                border: '2px solid',
+                borderColor: 'background.paper',
+                bgcolor: 'primary.main',
+                color: '#fff',
+              }}
+            >
+              {!room.hostAvatar && INITIALS(room.hostDisplayName || '?')}
+            </Avatar>
+            {room.participantCount > 1 && (
+              <Avatar
+                sx={{
+                  width: 30,
+                  height: 30,
+                  ml: -1,
+                  fontSize: '0.65rem',
+                  fontWeight: 800,
+                  border: '2px solid',
+                  borderColor: 'background.paper',
+                  bgcolor: alpha(theme.palette.text.primary, 0.12),
+                  color: 'text.primary',
+                }}
+              >
+                +{room.participantCount - 1}
+              </Avatar>
+            )}
+            <Typography variant="body2" color="text.secondary" sx={{ ml: 1.25 }} noWrap>
+              {room.hostDisplayName || '—'}
+            </Typography>
+          </Box>
+          <Chip
+            label={room.publicRoom ? t('publicRoom') : t('privateRoom')}
+            size="small"
+            variant="outlined"
+            sx={{
+              fontSize: '0.68rem',
+              fontWeight: 700,
+              height: 22,
+              borderColor: room.publicRoom ? 'rgba(0,168,78,0.4)' : 'rgba(120,80,255,0.4)',
+              color: room.publicRoom ? 'primary.main' : '#7850FF',
+            }}
+          />
+        </Box>
         <Box sx={{ mt: 'auto', display: 'flex', gap: 1.5 }}>
           <Button
             fullWidth
@@ -415,7 +489,7 @@ const FilmWatchTogether: React.FC = React.memo(() => {
                     isOptionEqualToValue={(option, value) => option.id === value.id}
                     value={films.find((f) => f.id === selectedFilmId) ?? null}
                     onChange={(_, newValue) => setSelectedFilmId(newValue?.id ?? '')}
-                    noOptionsText="Không tìm thấy phim phù hợp"
+                    noOptionsText={t('noMatchingFilms')}
                     slotProps={{
                       listbox: { sx: { maxHeight: 320 } },
                     }}
@@ -450,7 +524,7 @@ const FilmWatchTogether: React.FC = React.memo(() => {
                       }}
                     >
                       <MovieIcon sx={{ fontSize: 16 }} />
-                      Khám phá kho phim <ChevronRight sx={{ fontSize: 16 }} />
+                      {t('exploreFilms')} <ChevronRight sx={{ fontSize: 16 }} />
                     </MuiLink>
                   </Box>
                 </Box>
@@ -463,12 +537,12 @@ const FilmWatchTogether: React.FC = React.memo(() => {
                     label={
                       <Box>
                         <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                          {isPublicRoom ? 'Phòng công cộng' : 'Phòng riêng tư'}
+                          {isPublicRoom ? t('publicRoom') : t('privateRoom')}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
                           {isPublicRoom
-                            ? 'Ai cũng có thể tìm thấy và tham gia'
-                            : 'Chỉ vào được qua lời mời hoặc link mời'}
+                            ? t('publicRoomDescription')
+                            : t('privateRoomDescription')}
                         </Typography>
                       </Box>
                     }
@@ -484,7 +558,7 @@ const FilmWatchTogether: React.FC = React.memo(() => {
                     </Typography>
                     <Chip
                       size="small"
-                      label={`${invitees.length} người`}
+                      label={t('peopleCount', { count: invitees.length })}
                       sx={{
                         bgcolor: 'rgba(0,168,78,0.15)',
                         color: 'primary.main',
@@ -552,11 +626,11 @@ const FilmWatchTogether: React.FC = React.memo(() => {
                   {suggestionFriends.length > 0 && (
                     <Box sx={{ mt: 2 }}>
                       <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-                        Gợi ý nhanh:
+                        {t('quickSuggestions')}
                       </Typography>
                       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                         {suggestionFriends.map((f) => (
-                          <Tooltip key={f.id} title="Mời vào phòng">
+                          <Tooltip key={f.id} title={t('inviteToRoom')}>
                             <Chip
                               avatar={
                                 <Avatar
@@ -654,7 +728,7 @@ const FilmWatchTogether: React.FC = React.memo(() => {
                     sx={{ bgcolor: alpha(theme.palette.text.primary, 0.08), color: 'text.secondary', fontWeight: 700 }}
                   />
                 </Box>
-                <Tooltip title="Làm mới danh sách phòng">
+                <Tooltip title={t('refreshRoomList')}>
                   <IconButton
                     size="small"
                     onClick={fetchPublicRooms}
@@ -680,7 +754,7 @@ const FilmWatchTogether: React.FC = React.memo(() => {
               </Box>
               {publicRooms.length === 0 ? (
                 <Paper sx={{ p: 4, textAlign: 'center', borderRadius: 3, bgcolor: alpha(theme.palette.text.primary, 0.03) }}>
-                  <Typography color="text.secondary">Chưa có phòng công cộng nào đang mở.</Typography>
+                  <Typography color="text.secondary">{t('noPublicRooms')}</Typography>
                 </Paper>
               ) : (
                 <Grid container spacing={3}>
@@ -709,7 +783,7 @@ const FilmWatchTogether: React.FC = React.memo(() => {
                   <Typography variant="h5" sx={{ fontWeight: 800 }}>
                     {t('myRooms')}
                   </Typography>
-                  <Tooltip title="Làm mới danh sách phòng">
+                  <Tooltip title={t('refreshRoomList')}>
                     <IconButton
                       size="small"
                       onClick={fetchMyRooms}
@@ -736,7 +810,7 @@ const FilmWatchTogether: React.FC = React.memo(() => {
               </Box>
               {myRooms.length === 0 ? (
                 <Paper sx={{ p: 4, textAlign: 'center', borderRadius: 3, bgcolor: alpha(theme.palette.text.primary, 0.03) }}>
-                  <Typography color="text.secondary">Bạn chưa tạo hoặc tham gia phòng nào.</Typography>
+                  <Typography color="text.secondary">{t('noMyRooms')}</Typography>
                 </Paper>
               ) : (
                 <Grid container spacing={3}>

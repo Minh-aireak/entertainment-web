@@ -1,32 +1,31 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { Box, CircularProgress, IconButton, Paper, Tooltip, Typography } from '@mui/material';
 import { DragIndicator, OpenInFull } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import VideoPlayer, { type PlaybackActionPayload, type VideoPlayerHandle } from './VideoPlayer';
 import { useWatchRoomSession } from '../../contexts/watchRoomSessionContextValue';
 import { useDraggableFloating } from '../../hooks/useDraggableFloating';
+import { useTranslation } from 'react-i18next';
 
 const MINI_WIDTH = 390;
 const MINI_HEIGHT = 282;
 
-const computeLivePosition = (at: string, position: number, playing: boolean, rate: number) => {
-  if (!playing) return position;
-  return Math.max(0, position + (Date.now() - new Date(at).getTime()) / 1000 * rate);
-};
-
 const WatchRoomMiniPlayer: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const {
     room,
     episodes,
     videoSrc,
     videoError,
-    playbackEvent,
+    syncTarget,
+    hostLocalSnapshotRef,
     sendPlayback,
     refreshVideo,
   } = useWatchRoomSession();
   const viewerRef = useRef<VideoPlayerHandle>(null);
+  const hostPlayerRef = useRef<VideoPlayerHandle>(null);
   const { position, dragging, dragHandleProps } = useDraggableFloating(
     'watch-room-mini-position',
     MINI_WIDTH,
@@ -42,22 +41,28 @@ const WatchRoomMiniPlayer: React.FC = () => {
       positionSeconds: room.positionSeconds,
       playing: room.playing,
       playbackRate: room.playbackRate,
+      action: 'JOIN',
     });
   }, [room, videoSrc]);
 
   useEffect(() => {
-    if (!playbackEvent || room?.host) return;
-    viewerRef.current?.syncTo({
-      positionSeconds: computeLivePosition(
-        playbackEvent.at,
-        playbackEvent.positionSeconds,
-        playbackEvent.playing,
-        playbackEvent.playbackRate,
-      ),
-      playing: playbackEvent.playing,
-      playbackRate: playbackEvent.playbackRate,
-    });
-  }, [playbackEvent, room?.host]);
+    if (!syncTarget) return;
+    if (room?.host) {
+      if (syncTarget.applyToHost) hostPlayerRef.current?.syncTo(syncTarget);
+      return;
+    }
+    viewerRef.current?.syncTo(syncTarget);
+  }, [syncTarget, room?.host]);
+
+  // See WatchRoom.tsx's attachHostPlayerRef for why this is a callback ref rather than a
+  // useEffect - it must fire exactly when this mini player's VideoPlayer instance actually
+  // mounts (e.g. right after navigating away from the full room page), not on every unrelated
+  // re-render, and this component in particular toggles visibility (via the isFullRoomPage early
+  // return below) without unmounting the whole component tree.
+  const attachHostPlayerRef = useCallback((handle: VideoPlayerHandle | null) => {
+    hostPlayerRef.current = handle;
+    if (handle) handle.restoreHostState(hostLocalSnapshotRef.current);
+  }, [hostLocalSnapshotRef]);
 
   if (!room || room.status !== 'ACTIVE' || isFullRoomPage) return null;
 
@@ -118,10 +123,10 @@ const WatchRoomMiniPlayer: React.FC = () => {
             {room.filmTitle || room.name}
           </Typography>
           <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', lineHeight: 1 }}>
-            {currentEpisode ? `Tập ${currentEpisode.episodeNumber} · ${currentEpisode.title}` : 'Đang chờ chủ phòng chọn tập'}
+            {currentEpisode ? `${t('episodeLabel', { episode: currentEpisode.episodeNumber })} · ${currentEpisode.title}` : t('waitingForHostEpisode')}
           </Typography>
         </Box>
-        <Tooltip title="Quay lại phòng xem chung">
+        <Tooltip title={t('backToWatchRoom')}>
           <IconButton
             size="small"
             onPointerDown={(event) => event.stopPropagation()}
@@ -140,13 +145,14 @@ const WatchRoomMiniPlayer: React.FC = () => {
         ) : videoSrc && room.episodeId ? (
           <VideoPlayer
             key={room.episodeId}
-            ref={room.host ? undefined : viewerRef}
+            ref={room.host ? attachHostPlayerRef : viewerRef}
             src={videoSrc}
             title={currentEpisode?.title || room.filmTitle}
             role={room.host ? 'host' : 'viewer'}
-            autoPlay={room.playing}
+            autoPlay={room.host ? false : room.playing}
             onPlaybackAction={room.host ? handleHostAction : undefined}
             onStalledError={refreshVideo}
+            onLocalTimeUpdate={room.host ? (state) => { hostLocalSnapshotRef.current = state; } : undefined}
             style={{ width: '100%', height: '100%', maxWidth: '100%', aspectRatio: 'auto' }}
           />
         ) : room.episodeId ? (
@@ -156,7 +162,7 @@ const WatchRoomMiniPlayer: React.FC = () => {
         ) : (
           <Box sx={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', p: 2 }}>
             <Typography variant="body2" color="text.secondary" align="center">
-              Hãy quay lại phòng để chọn tập bắt đầu xem.
+              {t('returnToChooseEpisode')}
             </Typography>
           </Box>
         )}

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
   Box,
@@ -25,12 +25,17 @@ import { ArrowBack, Star, ArrowUpward, ArrowDownward, FormatListBulleted } from 
 import { useTranslation } from 'react-i18next';
 import { filmService } from '../../api/filmService';
 import { fileService } from '../../api/fileService';
-import type { EpisodeResponse, FilmDetailResponse } from '../../models';
+import type { EpisodeResponse, FilmDetailResponse, WatchProgressResponse } from '../../models';
 import toast from 'react-hot-toast';
 import CommentSection from '../../components/Comment/CommentSection';
 import VideoPlayer from '../../components/Film/VideoPlayer';
 
 const VIETSUB_STRIP_REGEX = /\s*(\||\-|\(|\[)?\s*(Việt\s*Sub|VIETSUB|Vietsub|Viet\s*Sub)\s*(\]|\))?\s*$/i;
+
+// How often watch position is persisted for "Continue Watching" while playing - frequent enough
+// to survive a crash/tab-close without losing much progress, infrequent enough not to hammer the
+// backend (native `timeupdate` fires several times a second).
+const WATCH_PROGRESS_REPORT_INTERVAL_MS = 20000;
 
 const stripVietSub = (title: string) => title?.replace?.(VIETSUB_STRIP_REGEX, '')?.trim() ?? title;
 
@@ -52,6 +57,24 @@ const FilmWatch: React.FC = () => {
   const [selectedSeason, setSelectedSeason] = useState<number>(1);
   const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('ASC');
 
+  const lastProgressReportRef = useRef(0);
+  const latestProgressRef = useRef<{ positionSeconds: number; durationSeconds: number } | null>(null);
+  const [savedProgress, setSavedProgress] = useState<WatchProgressResponse | null>(null);
+
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    filmService
+      .getWatchProgress(id)
+      .then((response) => {
+        if (!cancelled) setSavedProgress(response.result ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
   useEffect(() => {
     const fetchDetail = async () => {
       if (!id) return;
@@ -66,13 +89,13 @@ const FilmWatch: React.FC = () => {
         setEpisodes(episodesResponse.result ?? []);
       } catch (error) {
         console.error('Failed to fetch film details:', error);
-        toast.error('Failed to load film details');
+        toast.error(t('filmLoadFailed'));
       } finally {
         setLoading(false);
       }
     };
     fetchDetail();
-  }, [id]);
+  }, [id, t]);
 
   const seasons = useMemo(() => {
     if (!episodes.length) return [];
@@ -125,7 +148,7 @@ const FilmWatch: React.FC = () => {
     setVideoError(null);
 
     if (!episode.videoFileId) {
-      setVideoError('Tập phim này chưa có video, vui lòng upload lại.');
+      setVideoError(t('episodeVideoMissing'));
       return;
     }
 
@@ -136,13 +159,13 @@ const FilmWatch: React.FC = () => {
         if (!cancelled) setVideoSrc(response.result.url);
       })
       .catch(() => {
-        if (!cancelled) setVideoError('Không thể tải video, vui lòng thử lại sau.');
+        if (!cancelled) setVideoError(t('videoLoadFailed'));
       });
 
     return () => {
       cancelled = true;
     };
-  }, [loading, episodes, episodeId]);
+  }, [loading, episodes, episodeId, t]);
 
   // Presigned URL hết hạn sau 1h hoặc B2 trả lỗi khi mất mạng giữa chừng - VideoPlayer tự phát
   // hiện qua sự kiện `error`/khi mạng có lại nhưng vẫn đứng, rồi gọi lại đây để lấy URL mới thay
@@ -155,18 +178,54 @@ const FilmWatch: React.FC = () => {
       .getFileInfo(episode.videoFileId)
       .then((response) => setVideoSrc(response.result.url))
       .catch(() => {
-        toast.error('Mất kết nối, đang thử tải lại video...');
+        toast.error(t('reconnectingVideo'));
       });
-  }, [episodes, episodeId]);
+  }, [episodes, episodeId, t]);
+
+  // Persists to film_service's watch-progress endpoint so "Continue Watching" (Xem & Yêu thích)
+  // can resume here later. Throttled to WATCH_PROGRESS_REPORT_INTERVAL_MS unless `force` (used to
+  // flush the last known position on unmount/episode change below).
+  const reportProgress = useCallback((positionSeconds: number, durationSeconds: number, force = false) => {
+    if (!id || !episodes.length || !Number.isFinite(durationSeconds) || durationSeconds <= 0) return;
+    const now = Date.now();
+    if (!force && now - lastProgressReportRef.current < WATCH_PROGRESS_REPORT_INTERVAL_MS) return;
+    lastProgressReportRef.current = now;
+    const episode = episodes.find((e) => e.id === episodeId) ?? episodes[0];
+    filmService
+      .upsertWatchProgress({
+        filmId: id,
+        episodeId: episode.id,
+        positionSeconds: Math.floor(positionSeconds),
+        durationSeconds: Math.floor(durationSeconds),
+      })
+      .catch(() => {});
+  }, [id, episodes, episodeId]);
+
+  const handleLocalTimeUpdate = useCallback(
+    (state: { positionSeconds: number; durationSeconds: number }) => {
+      latestProgressRef.current = { positionSeconds: state.positionSeconds, durationSeconds: state.durationSeconds };
+      reportProgress(state.positionSeconds, state.durationSeconds);
+    },
+    [reportProgress],
+  );
+
+  // Flush the last known position once when leaving this episode (switching episodes remounts
+  // VideoPlayer via its `key`, so this covers both a real page unmount and an episode change).
+  useEffect(() => {
+    return () => {
+      const latest = latestProgressRef.current;
+      if (latest) reportProgress(latest.positionSeconds, latest.durationSeconds, true);
+    };
+  }, [episodeId, reportProgress]);
 
   const handleRating = async (newValue: number | null) => {
     if (!id || newValue === null) return;
     try {
       await filmService.rateFilm(id, newValue);
       setUserRating(newValue);
-      toast.success('Rating updated');
+      toast.success(t('ratingUpdated'));
     } catch {
-      toast.error('Failed to update rating');
+      toast.error(t('ratingUpdateFailed'));
     }
   };
 
@@ -181,8 +240,8 @@ const FilmWatch: React.FC = () => {
   if (!data || episodes.length === 0) {
     return (
       <Container sx={{ mt: 4 }}>
-        <Typography variant="h5">{'Chưa có tập phim nào để xem'}</Typography>
-        <Link component={RouterLink} to={`/film/${id}`}>{'Quay lại trang phim'}</Link>
+        <Typography variant="h5">{t('noEpisodeToWatch')}</Typography>
+        <Link component={RouterLink} to={`/film/${id}`}>{t('backToFilm')}</Link>
       </Container>
     );
   }
@@ -201,7 +260,7 @@ const FilmWatch: React.FC = () => {
               <ArrowBack fontSize="small" /> {film.title}
             </Link>
             <Typography color="text.primary">
-              {`Phần ${currentEpisode.seasonNumber} · Tập ${currentEpisode.episodeNumber}`}
+              {t('seasonEpisodeLabel', { season: currentEpisode.seasonNumber, episode: currentEpisode.episodeNumber })}
             </Typography>
           </Breadcrumbs>
         </Container>
@@ -215,10 +274,16 @@ const FilmWatch: React.FC = () => {
             <VideoPlayer
               key={currentEpisode.id}
               src={videoSrc}
-              title={`Tập ${currentEpisode.episodeNumber} - ${stripVietSub(currentEpisode.title)}`}
+              title={`${t('episodeLabel', { episode: currentEpisode.episodeNumber })} - ${stripVietSub(currentEpisode.title)}`}
               onNextEpisode={nextEpisode ? () => navigate(`/film/${id}/watch/${nextEpisode.id}`) : undefined}
               hasNextEpisode={!!nextEpisode}
               onStalledError={handleStalledError}
+              onLocalTimeUpdate={handleLocalTimeUpdate}
+              initialPositionSeconds={
+                savedProgress?.episodeId === currentEpisode.id && savedProgress.positionSeconds > 5
+                  ? savedProgress.positionSeconds
+                  : undefined
+              }
             />
           ) : (
             <Box sx={{ maxWidth: 1120, mx: 'auto', aspectRatio: '16 / 9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -232,7 +297,7 @@ const FilmWatch: React.FC = () => {
         <Box sx={{ mb: 4 }}>
           <Typography variant="h5" sx={{ fontWeight: 800 }}>{stripVietSub(currentEpisode.title)}</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            {`Phần ${currentEpisode.seasonNumber} · Tập ${currentEpisode.episodeNumber} · ${currentEpisode.durationMinutes || '--'} phút`}
+            {t('episodeMetadata', { season: currentEpisode.seasonNumber, episode: currentEpisode.episodeNumber, minutes: currentEpisode.durationMinutes || '--' })}
           </Typography>
         </Box>
 
@@ -240,15 +305,15 @@ const FilmWatch: React.FC = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2.5, flexWrap: 'wrap', gap: 1 }}>
             <Typography variant="h5" sx={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1 }}>
               <FormatListBulleted sx={{ color: 'primary.main' }} />
-              {'CHỌN TẬP'}
+              {t('selectEpisodeHeading')}
             </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Chip
                 size="small"
-                label={sortOrder === 'ASC' ? 'Tập tăng dần' : 'Tập giảm dần'}
+                label={sortOrder === 'ASC' ? t('episodeSortAscending') : t('episodeSortDescending')}
                 sx={{ bgcolor: alpha(theme.palette.text.primary, 0.05), fontWeight: 700, letterSpacing: 0.2 }}
               />
-              <Tooltip title={sortOrder === 'ASC' ? 'Chuyển sắp xếp giảm dần' : 'Chuyển sắp xếp tăng dần'}>
+              <Tooltip title={sortOrder === 'ASC' ? t('switchToDescending') : t('switchToAscending')}>
                 <IconButton
                   size="small"
                   onClick={() => setSortOrder((prev) => (prev === 'ASC' ? 'DESC' : 'ASC'))}
@@ -272,7 +337,7 @@ const FilmWatch: React.FC = () => {
                 return (
                   <Chip
                     key={sn}
-                    label={`Phần ${sn}`}
+                    label={t('seasonLabel', { season: sn })}
                     clickable
                     onClick={() => setSelectedSeason(sn)}
                     color={isActive ? 'primary' : 'default'}
@@ -300,7 +365,7 @@ const FilmWatch: React.FC = () => {
           <Paper sx={{ borderRadius: 3, bgcolor: alpha(theme.palette.text.primary, 0.03), border: '1px solid', borderColor: alpha(theme.palette.text.primary, 0.06), p: 2 }}>
             {episodesInSelectedSeason.length === 0 ? (
               <Box sx={{ p: 4, color: 'text.secondary', textAlign: 'center' }}>
-                Phần này chưa có tập phim nào.
+                {t('noEpisodesInSeason')}
               </Box>
             ) : (
               <Grid container spacing={0.75}>
@@ -377,7 +442,7 @@ const FilmWatch: React.FC = () => {
             sx={{ px: 2, borderBottom: '1px solid', borderColor: 'divider' }}
           >
             <Tab label={t('commentsLabel')} />
-            <Tab label={'Đánh giá'} />
+            <Tab label={t('reviews')} />
           </Tabs>
 
           <Box sx={{ p: 3 }}>
@@ -388,7 +453,7 @@ const FilmWatch: React.FC = () => {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
                   <Star sx={{ color: '#FFD700' }} />
                   <Typography sx={{ fontWeight: 700, fontSize: '1.4rem' }}>{film.averageRating.toFixed(1)}</Typography>
-                  <Typography variant="body2" color="text.secondary">({film.ratingCount} {'lượt đánh giá'})</Typography>
+                  <Typography variant="body2" color="text.secondary">({t('ratingCount', { count: film.ratingCount })})</Typography>
                 </Box>
                 <Divider sx={{ mb: 3 }} />
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>{t('yourRating')}</Typography>

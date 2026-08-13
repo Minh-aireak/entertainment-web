@@ -81,8 +81,9 @@ const WatchRoom: React.FC = () => {
     loading,
     errorMessage,
     changingEpisode,
-    playbackEvent,
+    syncTarget,
     closedEvent,
+    hostLocalSnapshotRef,
     openRoom,
     changeEpisode,
     sendPlayback,
@@ -101,6 +102,7 @@ const WatchRoom: React.FC = () => {
   const [sharingPost, setSharingPost] = useState(false);
 
   const viewerPlayerRef = useRef<VideoPlayerHandle>(null);
+  const hostPlayerRef = useRef<VideoPlayerHandle>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const isHost = !!room?.host;
@@ -121,18 +123,32 @@ const WatchRoom: React.FC = () => {
       positionSeconds: room.positionSeconds,
       playing: room.playing,
       playbackRate: room.playbackRate,
+      action: 'JOIN',
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoSrc]);
 
   useEffect(() => {
-    if (!playbackEvent || isHost) return;
-    viewerPlayerRef.current?.syncTo({
-      positionSeconds: room?.positionSeconds ?? playbackEvent.positionSeconds,
-      playing: playbackEvent.playing,
-      playbackRate: playbackEvent.playbackRate,
-    });
-  }, [isHost, playbackEvent, room?.positionSeconds]);
+    if (!syncTarget) return;
+    if (isHost) {
+      if (syncTarget.applyToHost) hostPlayerRef.current?.syncTo(syncTarget);
+      return;
+    }
+    viewerPlayerRef.current?.syncTo(syncTarget);
+  }, [isHost, syncTarget]);
+
+  // Restore the host's own player state (position/playing/rate) the moment its VideoPlayer
+  // instance actually mounts, before any user interaction - this is what keeps switching between
+  // this full room page and the floating mini player from losing currentTime, restarting at 0,
+  // or auto-unpausing. A callback ref (rather than a useEffect keyed on videoSrc) fires exactly
+  // once per real mount/unmount, so it isn't fooled by a same-episode presigned-URL refresh
+  // (which also changes videoSrc but doesn't remount the component - already handled correctly
+  // by VideoPlayer's own internal resume logic) or by this component's visibility toggling
+  // without actually unmounting.
+  const attachHostPlayerRef = useCallback((handle: VideoPlayerHandle | null) => {
+    hostPlayerRef.current = handle;
+    if (handle) handle.restoreHostState(hostLocalSnapshotRef.current);
+  }, [hostLocalSnapshotRef]);
 
   useEffect(() => {
     if (!roomId || activeRoomId !== roomId) return;
@@ -166,7 +182,7 @@ const WatchRoom: React.FC = () => {
     const unsubscribeParticipants = subscribe('room:participants', (event: RoomParticipantChangedEvent) => {
       if (event?.roomId !== roomId) return;
       setParticipantCount(event.participantCount);
-      const name = event.participant?.displayName || 'Một người xem';
+      const name = event.participant?.displayName || t('roomViewer');
       if (event.eventType === 'JOINED' && event.participant) {
         const joined = event.participant;
         setParticipants((prev) => (prev.some((participant) => participant.userId === joined.userId)
@@ -174,14 +190,14 @@ const WatchRoom: React.FC = () => {
           : [...prev, joined]));
         setMessages((prev) => [
           ...prev,
-          { kind: 'system', id: `sys-${joined.userId}-${Date.now()}`, text: `${name} đã tham gia phòng` },
+          { kind: 'system', id: `sys-${joined.userId}-${Date.now()}`, text: t('participantJoined', { name }) },
         ]);
       } else if (event.eventType === 'LEFT' && event.participant) {
         const left = event.participant;
         setParticipants((prev) => prev.filter((participant) => participant.userId !== left.userId));
         setMessages((prev) => [
           ...prev,
-          { kind: 'system', id: `sys-${left.userId}-${Date.now()}`, text: `${name} đã rời phòng` },
+          { kind: 'system', id: `sys-${left.userId}-${Date.now()}`, text: t('participantLeft', { name }) },
         ]);
       }
     });
@@ -199,7 +215,7 @@ const WatchRoom: React.FC = () => {
 
   useEffect(() => {
     if (!closedEvent || closedEvent.roomId !== roomId) return;
-    toast(isHost ? 'Bạn đã đóng phòng.' : 'Chủ phòng đã đóng phòng xem chung.', { icon: '👋' });
+    toast(isHost ? t('youClosedRoom') : t('hostClosedRoom'), { icon: '👋' });
     navigate('/film/watch-together');
   }, [closedEvent, isHost, navigate, roomId]);
 
@@ -239,7 +255,7 @@ const WatchRoom: React.FC = () => {
       await leaveSession();
       navigate('/film/watch-together');
     } catch {
-      toast.error('Không thể rời phòng.');
+      toast.error(t('leaveRoomFailed'));
     }
   };
 
@@ -247,20 +263,18 @@ const WatchRoom: React.FC = () => {
     if (!roomId) return;
     try {
       await closeSession();
-      toast.success('Đã đóng phòng.');
+      toast.success(t('roomClosed'));
       navigate('/film/watch-together');
     } catch {
-      toast.error('Không thể đóng phòng.');
+      toast.error(t('closeRoomFailed'));
     }
   };
 
   const handleEpisodeChange = async (episodeId: string) => {
     if (!episodeId) return;
-    try {
-      await changeEpisode(episodeId);
-    } catch {
-      toast.error('Không thể đổi tập phim.');
-    }
+    // sendPlayback (which changeEpisode routes through) already surfaces a failure via toast and
+    // rolls the player back to server state - nothing left to do here.
+    await changeEpisode(episodeId);
   };
 
   const handleCopyInviteLink = async () => {
@@ -272,7 +286,7 @@ const WatchRoom: React.FC = () => {
       }
       toast.success(t('linkCopied'));
     } catch {
-      toast.error('Không thể sao chép link');
+      toast.error(t('copyFailed'));
     }
   };
 
@@ -289,11 +303,11 @@ const WatchRoom: React.FC = () => {
         // thumbnail is optional, ignore resolve failure
       }
       const ep = episodes.find((e) => e.id === room.episodeId);
-      const defaultTitle = `Xem cùng: ${room.filmTitle || room.name}` + (ep ? ` - Tập ${ep.episodeNumber}` : '');
+      const defaultTitle = t('watchWithTitle', { title: room.filmTitle || room.name }) + (ep ? ` - ${t('episodeLabel', { episode: ep.episodeNumber })}` : '');
       await postService.createPost({
         postType: 'WATCH_TOGETHER',
         title: defaultTitle,
-        content: 'Ai cùng xem?',
+        content: t('watchTogetherPostContent'),
         watchRoomId: room.id,
         watchFilmId: room.filmId,
         watchEpisodeId: room.episodeId,
@@ -316,7 +330,7 @@ const WatchRoom: React.FC = () => {
     try {
       await roomService.sendMessage(roomId, { content: trimmed });
     } catch {
-      toast.error('Không thể gửi tin nhắn');
+      toast.error(t('sendMessageFailed'));
     }
   };
 
@@ -332,7 +346,7 @@ const WatchRoom: React.FC = () => {
     return (
       <Container sx={{ mt: 6, textAlign: 'center' }}>
         <Typography variant="h5" sx={{ mb: 2 }}>
-          {errorMessage || 'Không tìm thấy phòng xem chung này.'}
+          {errorMessage || t('roomNotFound')}
         </Typography>
         <Link component={RouterLink} to="/film/watch-together" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
           <ArrowBack fontSize="small" /> {t('watchTogetherTitle')}
@@ -367,7 +381,7 @@ const WatchRoom: React.FC = () => {
             </Typography>
             <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
               {room.filmTitle || room.filmId}
-              {currentEpisode ? ` · Tập ${currentEpisode.episodeNumber}` : ''}
+              {currentEpisode ? ` · ${t('episodeLabel', { episode: currentEpisode.episodeNumber })}` : ''}
             </Typography>
           </Box>
 
@@ -375,7 +389,7 @@ const WatchRoom: React.FC = () => {
 
           <AvatarGroup max={5} sx={{ '& .MuiAvatar-root': { width: 30, height: 30, fontSize: '0.75rem' } }}>
             {participants.map((p) => (
-              <Tooltip key={p.userId} title={p.displayName || 'Người xem'}>
+              <Tooltip key={p.userId} title={p.displayName || t('roomViewer')}>
                 <Avatar src={p.avatar} sx={{ bgcolor: 'primary.main' }}>
                   {INITIALS(p.displayName)}
                 </Avatar>
@@ -417,13 +431,13 @@ const WatchRoom: React.FC = () => {
             </>
           )}
           {isHost ? (
-            <Tooltip title="Đóng phòng">
+            <Tooltip title={t('closeRoom')}>
               <IconButton onClick={handleCloseRoom} color="error" sx={{ border: '1px solid', borderColor: alpha(theme.palette.text.primary, 0.1) }}>
                 <CloseIcon fontSize="small" />
               </IconButton>
             </Tooltip>
           ) : (
-            <Tooltip title="Rời phòng">
+            <Tooltip title={t('leaveRoom')}>
               <IconButton onClick={handleLeave} sx={{ border: '1px solid', borderColor: alpha(theme.palette.text.primary, 0.1) }}>
                 <ExitToApp fontSize="small" />
               </IconButton>
@@ -446,9 +460,9 @@ const WatchRoom: React.FC = () => {
           }}
         >
           <Box sx={{ minWidth: { sm: 220 } }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>Tập đang xem</Typography>
+            <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>{t('currentEpisode')}</Typography>
             <Typography variant="caption" color="text.secondary">
-              {isHost ? 'Chủ phòng có thể đổi tập cho tất cả người xem.' : 'Tập phim được điều khiển bởi chủ phòng.'}
+              {isHost ? t('hostCanChangeEpisode') : t('episodeControlledByHost')}
             </Typography>
           </Box>
           <Autocomplete
@@ -458,18 +472,18 @@ const WatchRoom: React.FC = () => {
             disabled={!isHost || changingEpisode || episodes.length === 0}
             value={currentEpisode ?? null}
             isOptionEqualToValue={(option, value) => option.id === value.id}
-            getOptionLabel={(episode) => `Mùa ${episode.seasonNumber} · Tập ${episode.episodeNumber} — ${episode.title}`}
-            groupBy={(episode) => `Mùa ${episode.seasonNumber}`}
+            getOptionLabel={(episode) => t('seasonEpisodeTitle', { season: episode.seasonNumber, episode: episode.episodeNumber, title: episode.title })}
+            groupBy={(episode) => t('seasonLabel', { season: episode.seasonNumber })}
             onChange={(_event, episode) => {
               if (episode) void handleEpisodeChange(episode.id);
             }}
-            noOptionsText="Phim này chưa có tập"
+            noOptionsText={t('noRoomEpisodes')}
             loading={changingEpisode}
             renderInput={(params) => (
               <TextField
                 {...params}
-                label={room.episodeId ? 'Đổi tập phim' : 'Chọn tập bắt đầu xem'}
-                placeholder="Chọn tập phim"
+                label={room.episodeId ? t('changeEpisode') : t('selectStartingEpisode')}
+                placeholder={t('chooseEpisode')}
               />
             )}
           />
@@ -481,7 +495,7 @@ const WatchRoom: React.FC = () => {
               {!room.episodeId ? (
                 <Box sx={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', p: 3 }}>
                   <Typography color="text.secondary" align="center">
-                    {isHost ? 'Hãy chọn một tập phim để bắt đầu xem chung.' : 'Đang chờ chủ phòng chọn tập phim.'}
+                    {isHost ? t('hostSelectEpisodePrompt') : t('waitingForHostEpisode')}
                   </Typography>
                 </Box>
               ) : videoError ? (
@@ -492,11 +506,14 @@ const WatchRoom: React.FC = () => {
                 isHost ? (
                   <VideoPlayer
                     key={room.episodeId}
+                    ref={attachHostPlayerRef}
                     src={videoSrc}
-                    title={currentEpisode ? `Tập ${currentEpisode.episodeNumber} - ${currentEpisode.title}` : room.filmTitle}
+                    title={currentEpisode ? `${t('episodeLabel', { episode: currentEpisode.episodeNumber })} - ${currentEpisode.title}` : room.filmTitle}
                     role="host"
+                    autoPlay={false}
                     onPlaybackAction={handleHostAction}
                     onStalledError={refreshVideo}
+                    onLocalTimeUpdate={(state) => { hostLocalSnapshotRef.current = state; }}
                     style={{ maxWidth: '100%', aspectRatio: 'auto', height: '100%' }}
                   />
                 ) : (
@@ -504,7 +521,7 @@ const WatchRoom: React.FC = () => {
                     key={room.episodeId}
                     ref={viewerPlayerRef}
                     src={videoSrc}
-                    title={currentEpisode ? `Tập ${currentEpisode.episodeNumber} - ${currentEpisode.title}` : room.filmTitle}
+                    title={currentEpisode ? `${t('episodeLabel', { episode: currentEpisode.episodeNumber })} - ${currentEpisode.title}` : room.filmTitle}
                     role="viewer"
                     autoPlay={room.playing}
                     onStalledError={refreshVideo}
@@ -540,7 +557,7 @@ const WatchRoom: React.FC = () => {
               <Box sx={{ flex: 1, overflowY: 'auto', p: 1.5, display: 'flex', flexDirection: 'column', gap: 1 }}>
                 {messages.length === 0 && (
                   <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: 2 }}>
-                    Chưa có tin nhắn nào. Hãy là người đầu tiên bắt chuyện!
+                    {t('noRoomMessages')}
                   </Typography>
                 )}
                 {messages.map((item) => {
@@ -575,7 +592,7 @@ const WatchRoom: React.FC = () => {
                       <Box sx={{ maxWidth: '75%' }}>
                         {!isMine && (
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 0.5 }}>
-                            {message.senderName || 'Người xem'}
+                            {message.senderName || t('roomViewer')}
                           </Typography>
                         )}
                         <Box
@@ -601,7 +618,7 @@ const WatchRoom: React.FC = () => {
                 <TextField
                   fullWidth
                   size="small"
-                  placeholder="Nhắn gì đó..."
+                  placeholder={t('chatPlaceholder')}
                   value={messageInput}
                   onChange={(e) => setMessageInput(e.target.value)}
                   onKeyDown={(e) => {

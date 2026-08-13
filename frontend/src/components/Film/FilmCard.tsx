@@ -4,7 +4,6 @@ import { PlayArrow, Star, DeleteOutlined } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import type { FilmStatus, FilmSummaryResponse } from '../../models';
-import { GENRE_LABELS_VI } from '../../constants/film';
 
 interface FilmCardProps {
   film: FilmSummaryResponse;
@@ -13,9 +12,9 @@ interface FilmCardProps {
   size?: 'md' | 'lg';
 }
 
-const STATUS_LABEL: Record<FilmStatus, string> = {
-  ONGOING: 'Đang cập nhật',
-  COMPLETED: 'Hoàn thành',
+const STATUS_KEY: Record<FilmStatus, string> = {
+  ONGOING: 'filmStatus.ongoing',
+  COMPLETED: 'filmStatus.completed',
 };
 
 const getStatusColor = (status?: FilmStatus) => {
@@ -74,7 +73,7 @@ const FilmCard: React.FC<FilmCardProps> = React.memo(({ film, onRemove, variant 
         {film.status && (
           <Box sx={{ position: 'absolute', top: 10, left: 10, zIndex: 1 }}>
             <Chip
-              label={STATUS_LABEL[film.status]}
+              label={t(STATUS_KEY[film.status])}
               color={getStatusColor(film.status)}
               size="small"
               sx={{ fontWeight: 700, height: 22 }}
@@ -124,7 +123,7 @@ const FilmCard: React.FC<FilmCardProps> = React.memo(({ film, onRemove, variant 
                   {film.genres.slice(0, 2).map((genre) => (
                     <Chip
                       key={genre}
-                      label={GENRE_LABELS_VI[genre] ?? genre}
+                      label={t(`genre.${genre}`, { defaultValue: genre })}
                       size="small"
                       sx={{
                         bgcolor: 'rgba(255,255,255,0.15)',
@@ -219,7 +218,7 @@ const FilmCard: React.FC<FilmCardProps> = React.memo(({ film, onRemove, variant 
             color="text.secondary"
             sx={{ fontSize: isLg ? '0.85rem' : undefined }}
           >
-            {film.episodeCount > 0 ? `${film.episodeCount} tập` : 'Phim lẻ'} • {new Date(film.lastUpdate).getFullYear()}
+            {film.episodeCount > 0 ? t('episodeCount', { count: film.episodeCount }) : t('standaloneFilm')} • {new Date(film.lastUpdate).getFullYear()}
           </Typography>
         </CardContent>
       )}

@@ -19,6 +19,7 @@ import { filmService } from '../../api/filmService';
 import { useEpisodeUpload } from '../../contexts/episodeUploadContextValue';
 import type { EpisodeResponse } from '../../models';
 import { readVideoMetadata, type VideoMetadata } from '../../utils/videoMetadata';
+import { useTranslation } from 'react-i18next';
 
 interface EpisodeUploadLocationState {
   episode?: EpisodeResponse;
@@ -29,6 +30,7 @@ const EpisodeUpload: React.FC = () => {
   const { filmId } = useParams<{ filmId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useTranslation();
   const { job, isBusy, startUpload, clearJob } = useEpisodeUpload();
   const locationState = location.state as EpisodeUploadLocationState | null;
   const routeEpisode = locationState?.episode ?? null;
@@ -84,10 +86,10 @@ const EpisodeUpload: React.FC = () => {
     try {
       const detectedMetadata = await readVideoMetadata(selectedFile);
       if (metadataRequestRef.current === requestId) setMetadata(detectedMetadata);
-    } catch (error: unknown) {
+    } catch {
       if (metadataRequestRef.current !== requestId) return;
       setFile(null);
-      toast.error(error instanceof Error ? error.message : 'Không đọc được metadata video');
+      toast.error(t('videoMetadataReadFailed'));
     } finally {
       if (metadataRequestRef.current === requestId) setReadingMetadata(false);
     }
@@ -99,17 +101,17 @@ const EpisodeUpload: React.FC = () => {
     event.preventDefault();
 
     if (!filmId) {
-      toast.error('ID phim không hợp lệ');
+      toast.error(t('invalidFilmId'));
       return;
     }
     if (anotherJobIsBusy || jobIsBusy) {
-      toast.error('Vui lòng chờ tác vụ upload hiện tại hoàn tất');
+      toast.error(t('uploadInProgress'));
       return;
     }
 
     if (isEdit && !file) {
       if (!editingEpisode || !episodeId) {
-        toast.error('Không tìm thấy thông tin tập phim cần chỉnh sửa');
+        toast.error(t('editingEpisodeMissing'));
         return;
       }
 
@@ -121,11 +123,11 @@ const EpisodeUpload: React.FC = () => {
           durationMinutes: editingEpisode.durationMinutes,
           filmId,
         });
-        if (response.code !== 1000) throw new Error(response.message || 'Cập nhật tập phim thất bại');
-        toast.success('Cập nhật tập phim thành công');
+        if (response.code !== 1000) throw new Error(response.message || t('episodeSaveFailed'));
+        toast.success(t('episodeUpdated'));
         returnToEpisodeManagement();
       } catch (error: unknown) {
-        toast.error(error instanceof Error ? error.message : 'Cập nhật tập phim thất bại');
+        toast.error(error instanceof Error ? error.message : t('episodeSaveFailed'));
       } finally {
         setSavingDetails(false);
       }
@@ -133,7 +135,7 @@ const EpisodeUpload: React.FC = () => {
     }
 
     if (!file || !metadata) {
-      toast.error('Vui lòng chọn file video hợp lệ');
+      toast.error(t('validVideoRequired'));
       return;
     }
 
@@ -164,41 +166,41 @@ const EpisodeUpload: React.FC = () => {
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
       <Button startIcon={<ArrowBack />} onClick={returnToEpisodeManagement} sx={{ mb: 2 }}>
-        Quay lại quản lý tập phim
+        {t('backToEpisodeManagement')}
       </Button>
 
       <Paper elevation={3} sx={{ p: { xs: 2.5, sm: 4 }, borderRadius: 3 }}>
         <Box sx={{ mb: 4, textAlign: 'center' }}>
           <Movie color="primary" sx={{ fontSize: 44, mb: 1 }} />
           <Typography variant="h4" sx={{ fontWeight: 700 }}>
-            {isEdit ? 'Chỉnh sửa tập phim' : 'Upload tập phim mới'}
+            {isEdit ? t('editEpisode') : t('uploadNewEpisode')}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            Thời lượng được đọc tự động từ file. Video 20:45 sẽ được lưu là 20 phút.
+            {t('durationAutoDescription')}
           </Typography>
         </Box>
 
         {anotherJobIsBusy && (
           <Alert severity="warning" sx={{ mb: 3 }}>
-            Một tập phim khác đang được upload. Bạn có thể mở lại từ biểu tượng upload ở góc phải màn hình.
+            {t('uploadContinuesDescription')}
           </Alert>
         )}
         {activeJob?.status === 'success' && (
           <Alert
             severity="success"
             sx={{ mb: 3 }}
-            action={<Button color="inherit" onClick={handleFinish}>Hoàn tất</Button>}
+            action={<Button color="inherit" onClick={handleFinish}>{t('finish')}</Button>}
           >
-            {isEdit ? 'Video mới và thông tin tập phim đã được cập nhật.' : 'Tập phim đã được tạo thành công.'}
+            {isEdit ? t('episodeEditComplete') : t('episodeCreateComplete')}
           </Alert>
         )}
         {activeJob?.status === 'error' && (
           <Alert
             severity="error"
             sx={{ mb: 3 }}
-            action={<Button color="inherit" onClick={handleCancelFailedUpload}>Hủy thao tác</Button>}
+            action={<Button color="inherit" onClick={handleCancelFailedUpload}>{t('cancelAction')}</Button>}
           >
-            {activeJob.error || 'Upload thất bại. File và thông tin vẫn được giữ để bạn thử lại.'}
+            {activeJob.error || t('failedUploadRetained')}
           </Alert>
         )}
 
@@ -207,7 +209,7 @@ const EpisodeUpload: React.FC = () => {
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 fullWidth
-                label="Mùa (Season)"
+                label={t('seasonNumber')}
                 name="seasonNumber"
                 type="number"
                 slotProps={{ htmlInput: { min: 1 } }}
@@ -220,7 +222,7 @@ const EpisodeUpload: React.FC = () => {
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 fullWidth
-                label="Tập số (Episode)"
+                label={t('episodeNumberField')}
                 name="episodeNumber"
                 type="number"
                 slotProps={{ htmlInput: { min: 1 } }}
@@ -233,7 +235,7 @@ const EpisodeUpload: React.FC = () => {
             <Grid size={{ xs: 12 }}>
               <TextField
                 fullWidth
-                label="Tiêu đề tập phim"
+                label={t('episodeTitle')}
                 name="title"
                 value={formData.title}
                 onChange={handleInputChange}
@@ -265,7 +267,7 @@ const EpisodeUpload: React.FC = () => {
                 />
                 {readingMetadata ? <CircularProgress size={46} /> : <CloudUpload sx={{ fontSize: 52, color: 'primary.main' }} />}
                 <Typography variant="h6" sx={{ mt: 1 }}>
-                  {file ? file.name : isEdit ? 'Chọn video mới để thay thế (không bắt buộc)' : 'Chọn file video'}
+                  {file ? file.name : isEdit ? t('chooseReplacementVideo') : t('chooseVideoFile')}
                 </Typography>
                 {file && (
                   <Typography variant="caption" color="text.secondary">
@@ -274,13 +276,13 @@ const EpisodeUpload: React.FC = () => {
                 )}
                 {metadata && (
                   <Box sx={{ mt: 2, display: 'flex', gap: 1, justifyContent: 'center', flexWrap: 'wrap' }}>
-                    <Chip color="success" label={`Thời lượng file: ${metadata.formattedDuration}`} />
-                    <Chip variant="outlined" label={`Sẽ lưu: ${metadata.durationMinutes} phút`} />
+                    <Chip color="success" label={t('fileDuration', { duration: metadata.formattedDuration })} />
+                    <Chip variant="outlined" label={t('savedDuration', { minutes: metadata.durationMinutes })} />
                   </Box>
                 )}
                 {!file && isEdit && editingEpisode && (
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                    Giữ video hiện tại · {editingEpisode.durationMinutes} phút
+                    {t('keepCurrentVideo', { minutes: editingEpisode.durationMinutes })}
                   </Typography>
                 )}
               </Box>
@@ -291,7 +293,7 @@ const EpisodeUpload: React.FC = () => {
                 <Box sx={{ mt: 1 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <Typography variant="body2" color="text.secondary">
-                      {activeJob.status === 'uploading' ? 'Đang tải video lên...' : 'Đang lưu thông tin tập phim...'}
+                      {activeJob.status === 'uploading' ? t('uploadingVideo') : t('savingEpisodeDetails')}
                     </Typography>
                     <Typography variant="body2" color="primary" sx={{ fontWeight: 700 }}>
                       {activeJob.progress}%
@@ -303,7 +305,7 @@ const EpisodeUpload: React.FC = () => {
                     sx={{ height: 10, borderRadius: 5 }}
                   />
                   <Button onClick={returnToEpisodeManagement} sx={{ mt: 1.5 }}>
-                    Tiếp tục dùng chức năng khác (upload vẫn chạy nền)
+                    {t('continueInBackground')}
                   </Button>
                 </Box>
               </Grid>
@@ -325,12 +327,12 @@ const EpisodeUpload: React.FC = () => {
                 sx={{ py: 1.5, borderRadius: 2, fontWeight: 700 }}
               >
                 {savingDetails
-                  ? 'Đang lưu...'
+                  ? t('saving')
                   : activeJob?.status === 'error'
-                    ? 'Thử upload lại'
+                    ? t('retryUpload')
                     : isEdit
-                      ? file ? 'Upload và cập nhật tập phim' : 'Lưu thay đổi'
-                      : 'Bắt đầu upload'}
+                      ? file ? t('uploadAndUpdateEpisode') : t('saveChanges')
+                      : t('startUpload')}
               </Button>
             </Grid>
           </Grid>
