@@ -6,7 +6,6 @@ import com.MyProject.post.post_service.dto.request.PostRequest;
 import com.MyProject.post.post_service.dto.request.PostUpdateRequest;
 import com.MyProject.post.post_service.dto.response.LikeResponse;
 import com.MyProject.post.post_service.dto.response.PostResponse;
-import com.MyProject.post.post_service.dto.response.StatusResponse;
 import com.MyProject.post.post_service.service.PostApiRateLimitService;
 import com.MyProject.post.post_service.service.PostService;
 import com.MyProject.common.security.SecurityUtils;
@@ -109,13 +108,6 @@ public class PostController {
 
         return ApiResponse.<List<PostResponse>>builder()
                 .result(postService.getRandomPosts(limit, excludeIdList))
-                .build();
-    }
-
-    @GetMapping("/status")
-    ApiResponse<StatusResponse> getStatus() {
-        return ApiResponse.<StatusResponse>builder()
-                .result(postService.getStatus())
                 .build();
     }
 

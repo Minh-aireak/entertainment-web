@@ -32,7 +32,6 @@ public class Post {
     LocalDateTime endTime;
     LocalDateTime createdDate;
     LocalDateTime modifiedDate;
-    String status;
     List<String> listUsersJoin;
     long likeCount;
 

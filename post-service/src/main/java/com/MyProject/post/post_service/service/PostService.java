@@ -6,7 +6,6 @@ import com.MyProject.post.post_service.dto.request.PostRequest;
 import com.MyProject.post.post_service.dto.request.PostUpdateRequest;
 import com.MyProject.post.post_service.dto.response.LikeResponse;
 import com.MyProject.post.post_service.dto.response.PostResponse;
-import com.MyProject.post.post_service.dto.response.StatusResponse;
 import com.MyProject.post.post_service.entity.Post;
 import com.MyProject.post.post_service.entity.PostLike;
 import com.MyProject.post.post_service.entity.PostType;
@@ -51,8 +50,6 @@ public class PostService {
     PostFileExternalService postFileExternalService;
     PostLikeNotificationService postLikeNotificationService;
 
-    private static final String STATUS_ONGOING = "On going";
-    private static final String STATUS_UPCOMING = "Up coming";
     private static final String POST_COLLECTION = "post";
     private static final int MAX_RANDOM_LIMIT = 20;
 
@@ -107,7 +104,6 @@ public class PostService {
                 .endTime(request.getEndTime())
                 .createdDate(LocalDateTime.now())
                 .modifiedDate(null)
-                .status(null)
                 .listUsersJoin(listJoins)
                 .imageFileIds(request.getImageFileIds())
                 .watchRoomId(request.getWatchRoomId())
@@ -244,13 +240,6 @@ public class PostService {
                 .orElseThrow(() -> new AppException(ErrorCode.POST_NOT_FOUND));
         postRepository.delete(post);
         postCacheService.invalidateAllUserPosts(userId);
-    }
-
-    public StatusResponse getStatus() {
-        return StatusResponse.builder()
-                .quantityOnGoing(postRepository.countByStatus(STATUS_ONGOING))
-                .quantityUpComing(postRepository.countByStatus(STATUS_UPCOMING))
-                .build();
     }
 
     public PageResponse<PostResponse> searchPosts(String query, int page, int size) {

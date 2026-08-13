@@ -27,7 +27,6 @@ public class PostResponse {
     LocalDateTime endTime;
     String createdDate;
     String modifiedDate;
-    String status;
     long likeCount;
     boolean liked;
     List<String> imageFileIds;

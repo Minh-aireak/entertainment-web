@@ -4,8 +4,6 @@ import com.MyProject.common.dto.response.ApiResponse;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import jakarta.validation.ConstraintViolation;
-import org.quartz.JobExecutionException;
-import org.quartz.SchedulerException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -62,15 +60,5 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(value = AccessDeniedException.class)
     public ResponseEntity<ApiResponse<java.lang.Object>> handlingAccessDeniedException() {
         return ErrorCode.toResponseEntity(ErrorCode.UNAUTHORIZED);
-    }
-
-    @ExceptionHandler(value = JobExecutionException.class)
-    public ResponseEntity<ApiResponse<java.lang.Object>> handlingJobExecutionException() {
-        return ErrorCode.toResponseEntity(ErrorCode.JOB_EXECUTION_FAILED);
-    }
-
-    @ExceptionHandler(value = SchedulerException.class)
-    public ResponseEntity<ApiResponse<java.lang.Object>> handlingSchedulerException() {
-        return ErrorCode.toResponseEntity(ErrorCode.SCHEDULER_FAILED);
     }
 }

@@ -6,9 +6,6 @@ server:
     context-path: /posts
 
 spring:
-  autoconfigure:
-    exclude:
-      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
   application:
     name: post-service
   data:
@@ -43,34 +40,6 @@ spring:
 
   elasticsearch:
     uris: http://${ELASTICSEARCH_HOST}:${ELASTICSEARCH_PORT}
-
-  datasource:
-    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/quartz_db?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=Asia/Ho_Chi_Minh
-    username: ${MYSQL_ROOT_USERNAME}
-    password: ${MYSQL_ROOT_PASSWORD}
-    driver-class-name: com.mysql.cj.jdbc.Driver
-
-  quartz:
-    job-store-type: jdbc
-    jdbc:
-      initialize-schema: always # always for dev never for production
-    properties:
-      org:
-        quartz:
-          scheduler:
-            instanceName: MyScheduler
-            instanceId: AUTO
-          jobStore:
-            class: org.quartz.impl.jdbcjobstore.JobStoreTX
-            driverDelegateClass: org.quartz.impl.jdbcjobstore.StdJDBCDelegate
-            tablePrefix: QRTZ_
-            isClustered: false
-            clusterCheckinInterval: 20000
-            useProperties: false
-          threadPool:
-            class: org.quartz.simpl.SimpleThreadPool
-            threadCount: 10
-            threadPriority: 5
 
 jwt:
   signerKey: ${JWT_SIGNER_KEY}
