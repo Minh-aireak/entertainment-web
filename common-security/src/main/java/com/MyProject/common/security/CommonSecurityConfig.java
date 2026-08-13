@@ -1,5 +1,6 @@
 package com.MyProject.common.security;
 
+import com.MyProject.common.redis.RedisService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -15,6 +16,12 @@ import java.util.List;
 
 @Configuration
 public class CommonSecurityConfig {
+
+    @Bean
+    @ConditionalOnMissingBean
+    public TokenBlacklistService tokenBlacklistService(RedisService redisService) {
+        return new TokenBlacklistService(redisService);
+    }
 
     @Bean
     @ConditionalOnMissingBean

@@ -22,7 +22,6 @@
 		<dependency>
 			<groupId>com.project</groupId>
 			<artifactId>common-redis</artifactId>
-			<optional>true</optional>
 		</dependency>
 
 		<dependency>
