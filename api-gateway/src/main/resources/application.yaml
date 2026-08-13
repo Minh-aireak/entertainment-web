@@ -122,7 +122,7 @@ app:
           limit: 10
           window-seconds: 60
         - name: user-registration
-          path-pattern: /api/v1/identities/users/registration
+          path-pattern: /api/v1/identities/users/registration/**
           method: POST
           limit: 3
           window-seconds: 300
@@ -165,23 +165,3 @@ app:
           method: GET
           limit: 30
           window-seconds: 60
-        - name: profile-write
-          path-pattern: /api/v1/profiles/my-profile/**
-          method: PUT
-          limit: 15
-          window-seconds: 3
-        - name: profile-read
-          path-pattern: /api/v1/profiles/**
-          method: GET
-          limit: 50
-          window-seconds: 5
-        - name: profile-search
-          path-pattern: /api/v1/profiles/search/**
-          method: POST
-          limit: 8
-          window-seconds: 10
-        - name: profile-summary
-          path-pattern: /api/v1/profiles/my-summary
-          method: GET
-          limit: 30
-          window-seconds: 10

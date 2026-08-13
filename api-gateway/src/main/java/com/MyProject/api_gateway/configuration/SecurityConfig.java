@@ -21,6 +21,7 @@ import org.springframework.security.oauth2.server.resource.authentication.Reacti
 import org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtGrantedAuthoritiesConverterAdapter;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.ServerAuthenticationEntryPoint;
+import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsConfigurationSource;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
@@ -36,29 +37,21 @@ public class SecurityConfig {
     CustomJwtDecoder customJwtDecoder;
     ObjectMapper objectMapper;
 
-    String[] publicEndpoints = {
-            "/api/v1/identities/auth/login",
-            "/api/v1/identities/auth/introspect",
-            "/api/v1/identities/auth/outbound/google",
-            "/api/v1/identities/auth/refresh-token",
-            "/api/v1/identities/auth/logout",
-            "/api/v1/identities/users/forgot-password",
-            "/api/v1/identities/users/reset-password",
-            "/api/v1/identities/users/registration",
-            "/api/v1/files/media/info/**",
-            "/api/v1/files/media/hls/**",
-            "/api/v1/sockets/**",
+    // Single source of truth for "is this request public" - GatewayRequestClassifier is also
+    // reused by CookieServerAuthenticationConverter and CookieToAuthorizationHeaderFilter, so all
+    // three now always agree instead of risking silent drift between independently-maintained lists.
+    private static final ServerWebExchangeMatcher PUBLIC_MATCHER = exchange -> {
+        String path = exchange.getRequest().getPath().value();
+        HttpMethod method = exchange.getRequest().getMethod();
+        return GatewayRequestClassifier.isPublicRequest(path, method)
+                ? ServerWebExchangeMatcher.MatchResult.match()
+                : ServerWebExchangeMatcher.MatchResult.notMatch();
     };
 
     @Bean
     public SecurityWebFilterChain springSecurityFilterChain(ServerHttpSecurity http) {
         http.authorizeExchange(exchanges -> exchanges
-                .pathMatchers(publicEndpoints).permitAll()
-                .pathMatchers(HttpMethod.GET,
-                        "/api/v1/films/follows/my",
-                        "/api/v1/comments/**"
-                ).authenticated()
-                .pathMatchers(HttpMethod.GET, "/api/v1/films/**").permitAll()
+                .matchers(PUBLIC_MATCHER).permitAll()
                 .anyExchange().authenticated()
         );
 
