@@ -162,7 +162,7 @@ Role: USER
 - Spring Cloud Gateway, Spring Security, OAuth2 Resource Server và JWT.
 - OpenFeign, Resilience4j, JPA/Hibernate và Spring Data MongoDB.
 - MySQL, MongoDB, Redis, Elasticsearch, Kafka KRaft và Debezium.
-- JUnit 5, Mockito, Spring Boot Test, Testcontainers và H2.
+- JUnit 5, Mockito, Spring Boot Test và H2.
 
 **Frontend**
 
@@ -343,6 +343,33 @@ npm run lint
 npm audit --omit=dev
 npm run build
 ```
+
+## Giới hạn
+
+Dự án chạy local bằng Docker Compose, chưa từng được triển khai thật và chưa qua load test. Các giới hạn dưới đây là đã biết và có chủ đích ghi lại, không phải lỗi chưa phát hiện.
+
+**Chức năng**
+
+- Email đặt lại mật khẩu tự động hiện không gửi được. Endpoint `POST /users/forgot-password` vẫn tạo token và ghi outbox đúng (`PasswordResetService.forgotPassword`), nhưng consumer `email.sent` bên `notification-service` đang bị regression nên email không tới hộp thư. Luồng đặt lại mật khẩu vẫn dùng được nếu lấy token trực tiếp từ database.
+- Streaming HLS chỉ có **một** chất lượng. `HlsTranscodeJob` chạy ffmpeg với `-c copy` (remux, không encode lại) và sinh đúng một `playlist.m3u8`, không có master playlist hay variant bitrate — nên player không tự hạ chất lượng khi mạng yếu. Đây là đánh đổi có chủ đích để job chạy được trên máy yếu.
+- Tìm kiếm phim dùng truy vấn dẫn xuất `findByTitleContaining` trên Elasticsearch, chưa phân trang và chưa có analyzer riêng cho gợi ý theo tiền tố.
+
+**Khả năng mở rộng**
+
+- `socket-service` giữ trạng thái phòng và session trong bộ nhớ tiến trình, đồng thời các instance dùng chung `socket-service-group`. Vì vậy hiện chỉ chạy được **một** instance: nếu chạy hai, mỗi instance chỉ biết kết nối của chính nó và người xem nằm ở instance không nhận message Kafka sẽ không nhận được sự kiện. Muốn scale ngang cần thêm một lớp pub/sub dùng chung hoặc chuyển sang message broker với STOMP.
+- `file-service` giữ phiên presigned upload trong bộ nhớ, nên `init` và `complete` của cùng một upload phải vào cùng một instance (sticky session).
+- Job chuyển đổi HLS chạy tuần tự trên một luồng, xử lý mỗi lần một video. Đây chính là cơ chế giới hạn CPU, đổi lại thông lượng thấp.
+
+**Bảo mật**
+
+- Kênh WebSocket của phòng xem chung được bảo vệ bằng token ký riêng (`RoomSubscriptionTokenService` phát, `RoomSubscriptionTokenVerifier` kiểm). Nhưng kênh generic mà chat và bình luận dùng chung thì mới chỉ yêu cầu đã đăng nhập, **chưa kiểm tra người dùng có thuộc cuộc trò chuyện đó không**. Cần áp dụng cùng cơ chế token theo kênh cho chat trước khi triển khai ra ngoài môi trường local.
+- Refresh token có xoay vòng (dùng một lần rồi thu hồi) nhưng **chưa có reuse detection**: token đã thu hồi mà bị dùng lại chỉ trả lỗi, chưa thu hồi cả family.
+- Rate limit tầng service fail open — khi Redis không sẵn sàng thì bỏ qua kiểm tra và cho request đi tiếp, ưu tiên tính sẵn sàng hơn tính chặt chẽ. Chưa có khoá tài khoản sau nhiều lần đăng nhập sai, chỉ có giới hạn tần suất.
+
+**Vận hành và kiểm thử**
+
+- Chưa có distributed tracing hay logging tập trung. Truy vết một request đi qua nhiều service phải đọc log của từng service.
+- Kiểm thử là unit test (JUnit 5, Mockito, H2). Chưa có integration test cho Kafka/outbox, và pipeline chuyển đổi HLS chưa có test nào vì cần ffmpeg và file video thật.
 
 ## Troubleshooting
 
