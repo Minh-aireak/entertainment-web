@@ -25,7 +25,6 @@
 		<spring-cloud.version>2024.0.1</spring-cloud.version>
 		<maven-compiler-plugin.version>3.12.1</maven-compiler-plugin.version>
 		<nimbus.jose.jwt.version>9.48</nimbus.jose.jwt.version>
-		<testcontainers.bom.version>1.20.4</testcontainers.bom.version>
 		<common.version>1.0.0</common.version>
 		<logback.version>1.5.18</logback.version>
 		<jackson-bom.version>2.18.3</jackson-bom.version>
@@ -77,14 +76,6 @@
 				<groupId>org.springframework.cloud</groupId>
 				<artifactId>spring-cloud-dependencies</artifactId>
 				<version>${spring-cloud.version}</version>
-				<type>pom</type>
-				<scope>import</scope>
-			</dependency>
-
-			<dependency>
-				<groupId>org.testcontainers</groupId>
-				<artifactId>testcontainers-bom</artifactId>
-				<version>${testcontainers.bom.version}</version>
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
