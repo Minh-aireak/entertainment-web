@@ -27,6 +27,7 @@ import {
 import { notificationService } from '../../api/notificationService';
 import type { NotificationResponse } from '../../models';
 import { REALTIME_NOTIFICATION_EVENT } from '../../contexts/WebSocketContext';
+import { getNotificationLink } from '../../utils/notificationLink';
 import { useTranslation } from 'react-i18next';
 import { formatRelativeTime } from '../../utils/time';
 
@@ -285,57 +286,65 @@ const NotificationMenu: React.FC<NotificationMenuProps> = ({
                 {t('noNotificationsYet')}
               </Typography>
             </Box>
-          ) : !loading && notifications.map((notification) => (
-            <Box
-              key={notification.id}
-              sx={{
-                px: 2,
-                py: 1.25,
-                display: 'flex',
-                alignItems: 'center',
-                backgroundColor: notification.read ? 'transparent' : 'action.hover',
-                borderBottom: '1px solid',
-                borderBottomColor: 'divider',
-              }}
-            >
-              <ListItemAvatar sx={{ minWidth: 60 }}>
-                <Badge
-                  color="primary"
-                  variant="dot"
-                  overlap="circular"
-                  invisible={notification.read}
-                  anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                >
-                  <Avatar src={notification.avatarSender}>
-                    {(notification.displayNameSender || notification.message || 'N').charAt(0).toUpperCase()}
-                  </Avatar>
-                </Badge>
-              </ListItemAvatar>
-              <ListItemText
-                primary={notification.message}
-                secondary={formatRelativeTime(notification.createdAt, i18n.language)}
-                slotProps={{
-                  primary: {
-                    variant: 'body2',
-                    sx: {
-                      fontWeight: notification.read ? 400 : 700,
-                      display: '-webkit-box',
-                      WebkitBoxOrient: 'vertical',
-                      WebkitLineClamp: 2,
-                      overflow: 'hidden',
-                    },
-                  },
-                  secondary: {
-                    variant: 'caption',
-                    sx: {
-                      color: notification.read ? 'text.secondary' : 'primary.main',
-                      mt: 0.25,
-                    },
-                  },
+          ) : !loading && notifications.map((notification) => {
+            const link = getNotificationLink(notification);
+            return (
+              <Box
+                key={notification.id}
+                onClick={link ? () => {
+                  handleClose();
+                  navigate(link);
+                } : undefined}
+                sx={{
+                  px: 2,
+                  py: 1.25,
+                  display: 'flex',
+                  alignItems: 'center',
+                  backgroundColor: notification.read ? 'transparent' : 'action.hover',
+                  borderBottom: '1px solid',
+                  borderBottomColor: 'divider',
+                  ...(link && { cursor: 'pointer', '&:hover': { backgroundColor: 'action.selected' } }),
                 }}
-              />
-            </Box>
-          ))}
+              >
+                <ListItemAvatar sx={{ minWidth: 60 }}>
+                  <Badge
+                    color="primary"
+                    variant="dot"
+                    overlap="circular"
+                    invisible={notification.read}
+                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                  >
+                    <Avatar src={notification.avatarSender}>
+                      {(notification.displayNameSender || notification.message || 'N').charAt(0).toUpperCase()}
+                    </Avatar>
+                  </Badge>
+                </ListItemAvatar>
+                <ListItemText
+                  primary={notification.message}
+                  secondary={formatRelativeTime(notification.createdAt, i18n.language)}
+                  slotProps={{
+                    primary: {
+                      variant: 'body2',
+                      sx: {
+                        fontWeight: notification.read ? 400 : 700,
+                        display: '-webkit-box',
+                        WebkitBoxOrient: 'vertical',
+                        WebkitLineClamp: 2,
+                        overflow: 'hidden',
+                      },
+                    },
+                    secondary: {
+                      variant: 'caption',
+                      sx: {
+                        color: notification.read ? 'text.secondary' : 'primary.main',
+                        mt: 0.25,
+                      },
+                    },
+                  }}
+                />
+              </Box>
+            );
+          })}
         </Box>
 
         <Divider />

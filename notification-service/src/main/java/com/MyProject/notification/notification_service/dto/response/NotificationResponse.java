@@ -19,6 +19,7 @@ public class NotificationResponse {
     Boolean read;
     String message;
     String createdAt;
+    String roomId;
 }
 
 

@@ -744,6 +744,8 @@ export interface NotificationResponse {
   read: boolean;
   message: string;
   createdAt: string;
+  // Only on WATCH_ROOM_INVITE: the room the invite opens.
+  roomId?: string;
 }
 
 export interface MessageCreatedEvent {
@@ -824,6 +826,7 @@ export type TypeNotification =
   | 'FILM_SHARE'
   | 'LIKE_POST'
   | 'COMMENT_POST'
+  | 'WATCH_ROOM_INVITE'
   | 'SYSTEM';
 
 export interface FileResponse {

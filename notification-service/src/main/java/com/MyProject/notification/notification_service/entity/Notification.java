@@ -37,6 +37,11 @@ public class Notification {
 
     String filmTitle;
 
+    // WATCH_ROOM_INVITE only: where the invite leads, and the room name its message shows.
+    String roomId;
+
+    String roomName;
+
     @Builder.Default
     Integer count = 1;
 

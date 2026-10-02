@@ -5,20 +5,20 @@ import lombok.experimental.FieldDefaults;
 
 import java.util.List;
 
-/** Emitted straight onto the shared "notification" Kafka topic - field names must match
- *  socket-service's NotificationSocket record exactly, since that's what deserializes this
- *  payload on the consuming side. Intentionally realtime-only: unlike friend/comment
- *  notifications this is not persisted into notification-service's history collection. */
+/** Emitted onto the "notification.events" Kafka topic - field names must match notification-service's
+ *  NotificationEvent exactly, since that's what deserializes this payload. notification-service keeps
+ *  the invite in each invitee's notification history, then pushes the realtime popup itself (it owns
+ *  the wording and resolves the host's profile). eventId doubles as its idempotency key. */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class RoomInviteNotificationEvent {
-    String displayNameSender;
-    String avatarSender;
-    String type;
-    String title;
-    String content;
+    String eventId;
+    String typeNotification;
+    String userIdSender;
     List<String> toUserIds;
+    String roomId;
+    String roomName;
 }

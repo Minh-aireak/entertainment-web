@@ -57,6 +57,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -536,22 +537,17 @@ public class RoomService {
                 .build());
     }
 
+    // Goes through notification-service rather than straight to socket-service's "notification" topic,
+    // so the invite is also kept in each invitee's notification history, not just shown once as a popup.
     private void publishInviteNotifications(Room room, String hostUserId, Set<String> inviteeIds) {
-        UserProfileResponse hostProfile = resolveProfiles(Set.of(hostUserId)).get(hostUserId);
-        String hostName = hostProfile != null && StringUtils.hasText(hostProfile.getDisplayName())
-                ? hostProfile.getDisplayName()
-                : "Một người bạn";
-
-        RoomInviteNotificationEvent event = RoomInviteNotificationEvent.builder()
-                .displayNameSender(hostProfile != null ? hostProfile.getDisplayName() : null)
-                .avatarSender(hostProfile != null ? hostProfile.getAvatar() : null)
-                .type("WATCH_ROOM_INVITE")
-                .title("Lời mời xem chung")
-                .content(hostName + " đã mời bạn xem \"" + room.getName() + "\"")
+        saveToOutbox(room.getId(), "notification.events", RoomInviteNotificationEvent.builder()
+                .eventId(UUID.randomUUID().toString())
+                .typeNotification("WATCH_ROOM_INVITE")
+                .userIdSender(hostUserId)
                 .toUserIds(new ArrayList<>(inviteeIds))
-                .build();
-
-        saveToOutbox(room.getId(), "notification", event);
+                .roomId(room.getId())
+                .roomName(room.getName())
+                .build());
     }
 
     private void publishParticipantEvent(Room room, String eventType, RoomParticipantResponse participant) {

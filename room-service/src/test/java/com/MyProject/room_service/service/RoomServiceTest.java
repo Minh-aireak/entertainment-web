@@ -186,8 +186,14 @@ class RoomServiceTest {
 
         roomService.createRoom(request);
 
-        verify(outboxRepository).save(argThat(o -> o.getTopic().equals("notification")
-                && o.getPayload().contains("friend-1") && !o.getPayload().contains("\"toUserIds\":[\"" + HOST_ID)));
+        // notification.events (not socket-service's "notification" topic directly), so
+        // notification-service keeps the invite in the invitee's history before pushing it live.
+        verify(outboxRepository).save(argThat(o -> o.getTopic().equals("notification.events")
+                && o.getPayload().contains("\"typeNotification\":\"WATCH_ROOM_INVITE\"")
+                && o.getPayload().contains("\"userIdSender\":\"" + HOST_ID + "\"")
+                && o.getPayload().contains("\"toUserIds\":[\"friend-1\"]")
+                && o.getPayload().contains("\"roomId\":\"room-1\"")
+                && o.getPayload().contains("\"roomName\":\"Xem chung: Film title\"")));
     }
 
     @Test

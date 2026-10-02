@@ -138,4 +138,50 @@ class NotificationServiceTest {
 
         assertEquals("Sender sent you a friend request", publishedContent());
     }
+
+    private NotificationEvent watchRoomInviteEvent(String roomName) {
+        return NotificationEvent.builder()
+                .eventId(UUID.randomUUID().toString())
+                .typeNotification(TypeNotification.WATCH_ROOM_INVITE.name())
+                .userIdSender("sender-1")
+                .toUserIds(List.of("friend-1"))
+                .roomId("room-1")
+                .roomName(roomName)
+                .build();
+    }
+
+    @Test
+    void createNotification_watchRoomInvite_isKeptInHistoryWithItsRoom() {
+        notificationService.createNotification(watchRoomInviteEvent("Xem chung: Attack on Titan"));
+
+        ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
+        verify(notificationRepository).save(captor.capture());
+        Notification saved = captor.getValue();
+        assertEquals(TypeNotification.WATCH_ROOM_INVITE, saved.getType());
+        assertEquals(List.of("friend-1"), saved.getToUserIds());
+        assertEquals("room-1", saved.getRoomId());
+        assertEquals("Xem chung: Attack on Titan", saved.getRoomName());
+    }
+
+    @Test
+    void createNotification_watchRoomInvite_pushesTheSamePopupTextAsBefore() {
+        notificationService.createNotification(watchRoomInviteEvent("Xem chung: Attack on Titan"));
+
+        ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
+        verify(outboxEventPublisher).publish(any(), anyString(), captor.capture());
+        NotificationSocket socket = (NotificationSocket) captor.getValue();
+        assertEquals("Lời mời xem chung", socket.title());
+        assertEquals("Sender đã mời bạn xem \"Xem chung: Attack on Titan\"", socket.content());
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"   "})
+    void createNotification_watchRoomInvite_blankRoomName_fallsBackWithoutPlaceholderLeak(String blankName) {
+        notificationService.createNotification(watchRoomInviteEvent(blankName));
+
+        String content = publishedContent();
+        assertFalse(content.contains("{room}"), "Placeholder must never leak into the message");
+        assertEquals("Sender đã mời bạn xem \"phòng xem chung\"", content);
+    }
 }
