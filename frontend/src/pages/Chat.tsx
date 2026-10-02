@@ -31,11 +31,11 @@ import {
   ContentCopy as CopyIcon, KeyboardArrowDown as ArrowDownIcon,
 } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
-import { useDispatch, useSelector } from 'react-redux';
+import { useDispatch, useSelector, useStore } from 'react-redux';
 import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { type RootState } from '../store/index';
-import { setConversations, setActiveConversation, addMessage, setMessages, prependMessages, updateUserStatus, updateMessageSeen } from '../store';
+import { setConversations, setActiveConversation, addMessage, setMessages, prependMessages, mergeLatestMessages, updateUserStatus, updateMessageSeen } from '../store';
 import type { Conversation, ConversationType, ConversationParticipant, ConversationResponse, ChatMessage, ChatMessageCreateRequest, MessageType, UserRelationshipResponse } from '../models';
 import { chatService } from '../api/chatService';
 import { friendService } from '../api/friendService';
@@ -186,6 +186,7 @@ const renderMessageBody = (msg: ChatMessage, t: TFunction) => {
 
 const ChatPage: React.FC = React.memo(() => {
   const dispatch = useDispatch();
+  const store = useStore<RootState>();
   const location = useLocation();
   const navigate = useNavigate();
   const confirmDialog = useConfirmDialog();
@@ -212,10 +213,11 @@ const ChatPage: React.FC = React.memo(() => {
   const scrollAdjustRef = useRef<{ prevScrollHeight: number; prevScrollTop: number } | null>(null);
   const skipAutoScrollRef = useRef(false);
   const isNearBottomRef = useRef(true);
-  // Set only by the WebSocket 'new-message' handler when it's for the conversation currently
-  // open — the one true source of "a message just arrived live." The scroll effect reads and
-  // clears it instead of inferring "new message" from activeMessages.length, which was also
-  // (wrongly) tripped by the unrelated REST refetch-and-replace on every conversation switch.
+  // Set only by the WebSocket 'new-message' handler (and by syncLatestMessages when it pulls in
+  // messages missed while out of the room) when it's for the conversation currently open — the
+  // one true source of "a message just arrived live." The scroll effect reads and clears it
+  // instead of inferring "new message" from activeMessages.length, which was also (wrongly)
+  // tripped by the unrelated REST refetch-and-replace on every conversation switch.
   const liveMessageArrivedRef = useRef<{ conversationId: string; senderId: string } | null>(null);
   const [hasNewMessagesBelow, setHasNewMessagesBelow] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -301,6 +303,49 @@ const ChatPage: React.FC = React.memo(() => {
       setLoadingMessages(false);
     }
   }, [dispatch]);
+
+  // socket-service only broadcasts 'new-message' to sockets currently joined to the conversation's
+  // room, so anything sent while this client was out of it (tab hidden, another conversation open,
+  // Chat page unmounted, socket reconnecting) never reached the cache. Catch up from REST, merging
+  // rather than replacing so load-more history and pagination survive. Resolves to whether any
+  // message the cache didn't have came in.
+  const syncLatestMessages = useCallback(async (conversationId: string): Promise<boolean> => {
+    try {
+      const response = await chatService.getMyChatMessages(conversationId, 1, MESSAGES_PAGE_SIZE);
+      if (response.code !== 1000) return false;
+
+      const latest: ChatMessage[] = response.result.data.slice().reverse();
+      // Read the store, not the render-time `messages`: a socket message may have landed while
+      // this request was in flight.
+      const cached = store.getState().chat.messages[conversationId] || [];
+      const cachedIds = new Set(cached.map((item) => item.id));
+      const isActive = conversationId === activeConversationIdRef.current;
+
+      if (!latest.some((item) => cachedIds.has(item.id))) {
+        if (latest.length === 0) return false;
+        // More than a page arrived meanwhile, so the newest page can't be stitched onto the cached
+        // tail without leaving a hole — start over from it, exactly like a first open.
+        if (isActive) scrolledConversationRef.current = null;
+        dispatch(setMessages({ conversationId, messages: latest }));
+        setPagination((prev) => ({
+          ...prev,
+          [conversationId]: { page: 1, hasMore: response.result.totalPages > 1, loadingMore: false },
+        }));
+        return true;
+      }
+
+      const missed = latest.filter((item) => !cachedIds.has(item.id));
+      if (isActive && missed.length > 0) {
+        // Same scroll treatment as a live arrival: follow it at the bottom, otherwise show the pill.
+        liveMessageArrivedRef.current = { conversationId, senderId: missed[missed.length - 1].senderId };
+      }
+      dispatch(mergeLatestMessages({ conversationId, messages: latest }));
+      return missed.length > 0;
+    } catch (error) {
+      console.error('Failed to sync messages:', error);
+      return false;
+    }
+  }, [dispatch, store]);
 
   const loadMoreMessages = useCallback(async (conversationId: string) => {
     const current = pagination[conversationId];
@@ -417,14 +462,15 @@ const ChatPage: React.FC = React.memo(() => {
 
   useEffect(() => {
     if (activeConversationId) {
-      // Only hit the REST endpoint the first time this conversation is opened. The cache is
-      // already kept live by the WebSocket 'new-message' subscriber below regardless of which
-      // conversation is active, so refetching page 1 on every revisit only ever replaced a
-      // possibly-larger cached array (grown via "load more" or background socket updates) with
-      // just the newest 10 — silently discarding load-more progress and resetting pagination,
-      // and tripping the scroll effect into thinking a new message had arrived.
+      // Full load (with skeleton) only the first time this conversation is opened. On a revisit,
+      // replacing the possibly-larger cached array (grown via "load more") with just the newest 10
+      // would silently discard load-more progress and reset pagination — but the cache can't be
+      // trusted as-is either, since 'new-message' never reached it while this room wasn't joined.
+      // So merge in only what was missed. Also re-runs on socket reconnect, covering that gap too.
       if (!messages[activeConversationId]) {
         fetchMessages(activeConversationId);
+      } else {
+        syncLatestMessages(activeConversationId);
       }
       markAsSeen(activeConversationId);
     }
@@ -449,7 +495,7 @@ const ChatPage: React.FC = React.memo(() => {
     // only needs the current value at the moment this effect fires, which the closure already
     // provides — same intentionally-stale-safe pattern as the effect above (openWithUserId).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeConversationId, fetchMessages, isConnected, markAsSeen, send]);
+  }, [activeConversationId, fetchMessages, syncLatestMessages, isConnected, markAsSeen, send]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -461,14 +507,20 @@ const ChatPage: React.FC = React.memo(() => {
           joinedRoomRef.current = null;
         }
       } else if (activeConversationIdRef.current && joinedRoomRef.current !== activeConversationIdRef.current) {
-        send({ type: 'join-room', roomId: activeConversationIdRef.current });
-        joinedRoomRef.current = activeConversationIdRef.current;
+        const conversationId = activeConversationIdRef.current;
+        send({ type: 'join-room', roomId: conversationId });
+        joinedRoomRef.current = conversationId;
+        // Whatever was sent while hidden went to a room this tab had left — pull it in, and mark it
+        // seen now that it's actually on screen.
+        syncLatestMessages(conversationId).then((caughtUp) => {
+          if (caughtUp) markAsSeen(conversationId);
+        });
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [isConnected, send]);
+  }, [isConnected, markAsSeen, send, syncLatestMessages]);
 
   useEffect(() => {
     const unsubscribe = [
@@ -661,7 +713,8 @@ const ChatPage: React.FC = React.memo(() => {
         };
         const response = await chatService.createChatMessage(request);
         if (response.code === 1000) {
-          toast.success(t('sent'), { id: toastId });
+          // The attachment showing up in the thread is confirmation enough — no "Sent" toast.
+          toast.dismiss(toastId);
           setReplyTarget(null);
         } else {
           toast.error(response.message || t('sendFailed'), { id: toastId });

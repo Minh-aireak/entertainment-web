@@ -130,6 +130,34 @@ const chatSlice = createSlice({
       const deduped = messages.filter((item) => !existingIds.has(item.id));
       state.messages[conversationId] = [...deduped, ...existing];
     },
+    // Folds a freshly fetched newest page into the cache without dropping older load-more history.
+    // A cached copy is only replaced when it was edited or recalled meanwhile - otherwise keeping it
+    // keeps its attachment URL too, so already-loaded images don't re-download on every catch-up.
+    // Missed messages are slotted in beside their neighbours from the page instead of sorting by
+    // seq: seq isn't unique, since re-running the Mongo chat seed resets a conversation's totalSeq.
+    mergeLatestMessages: (state, action: PayloadAction<{ conversationId: string; messages: ChatMessage[] }>) => {
+      const { conversationId, messages } = action.payload;
+      const latestById = new Map(messages.map((item) => [item.id, item]));
+      const merged = (state.messages[conversationId] || []).map((item) => {
+        const latest = latestById.get(item.id);
+        return latest && (latest.messageType !== item.messageType || latest.content !== item.content) ? latest : item;
+      });
+      const indexOf = (id: string) => merged.findIndex((item) => item.id === id);
+
+      messages.forEach((item, position) => {
+        if (indexOf(item.id) >= 0) return;
+        // The page is oldest-first, so its previous message is always placed by now (cached, or
+        // inserted on the previous iteration) and is exactly what this one follows on the server.
+        const previous = position > 0 ? indexOf(messages[position - 1].id) : -1;
+        if (previous >= 0) {
+          merged.splice(previous + 1, 0, item);
+          return;
+        }
+        const next = messages.slice(position + 1).map((later) => indexOf(later.id)).find((index) => index >= 0);
+        merged.splice(next ?? merged.length, 0, item);
+      });
+      state.messages[conversationId] = merged;
+    },
     updateUserStatus: (state, action: PayloadAction<{ userId: string; status: 'ONLINE' | 'OFFLINE' }>) => {
       const { userId, status } = action.payload;
       if (status === 'ONLINE') {
@@ -305,7 +333,7 @@ const uiSlice = createSlice({
 // --- Exports ---
 export const { loginStart, loginSuccess, loginFailure, logout, setUser } = authSlice.actions;
 export const { setProfileData, setProfileLoading, clearProfileData } = profileSlice.actions;
-export const { setConversations, setActiveConversation, addMessage, setMessages, prependMessages, updateUserStatus, updateMessageSeen } = chatSlice.actions;
+export const { setConversations, setActiveConversation, addMessage, setMessages, prependMessages, mergeLatestMessages, updateUserStatus, updateMessageSeen } = chatSlice.actions;
 export const { setComments, appendComments, addComment, replaceComment, removeComment, incrementReplyCount, decrementReplyCount, patchComment } = commentSlice.actions;
 // export const { fetchStart, fetchSuccess, fetchFailure, addItinerary, updateItinerary, deleteItinerary } = itinerarySlice.actions;
 export const { toggleThemeMode } = uiSlice.actions;
