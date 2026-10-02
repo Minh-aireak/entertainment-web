@@ -12,16 +12,10 @@ import {
   Link,
   alpha,
   useTheme,
-  IconButton,
-  Tooltip,
-  Chip as MuiChip,
-  Stack,
-  Grid,
-  ButtonBase,
   Tabs,
   Tab,
 } from '@mui/material';
-import { ArrowBack, Star, ArrowUpward, ArrowDownward, FormatListBulleted } from '@mui/icons-material';
+import { ArrowBack, Star } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { filmService } from '../../api/filmService';
 import { fileService } from '../../api/fileService';
@@ -29,6 +23,7 @@ import type { EpisodeResponse, FilmDetailResponse, WatchProgressResponse } from 
 import toast from 'react-hot-toast';
 import CommentSection from '../../components/Comment/CommentSection';
 import VideoPlayer from '../../components/Film/VideoPlayer';
+import EpisodePicker from '../../components/Film/EpisodePicker';
 
 const VIETSUB_STRIP_REGEX = /\s*(\||\-|\(|\[)?\s*(Việt\s*Sub|VIETSUB|Vietsub|Viet\s*Sub)\s*(\]|\))?\s*$/i;
 
@@ -38,8 +33,6 @@ const VIETSUB_STRIP_REGEX = /\s*(\||\-|\(|\[)?\s*(Việt\s*Sub|VIETSUB|Vietsub|V
 const WATCH_PROGRESS_REPORT_INTERVAL_MS = 20000;
 
 const stripVietSub = (title: string) => title?.replace?.(VIETSUB_STRIP_REGEX, '')?.trim() ?? title;
-
-const Chip = MuiChip;
 
 const FilmWatch: React.FC = () => {
   const { t } = useTranslation();
@@ -54,8 +47,6 @@ const FilmWatch: React.FC = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
   const [videoError, setVideoError] = useState<string | null>(null);
-  const [selectedSeason, setSelectedSeason] = useState<number>(1);
-  const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('ASC');
 
   const lastProgressReportRef = useRef(0);
   const latestProgressRef = useRef<{ positionSeconds: number; durationSeconds: number } | null>(null);
@@ -97,13 +88,6 @@ const FilmWatch: React.FC = () => {
     fetchDetail();
   }, [id, t]);
 
-  const seasons = useMemo(() => {
-    if (!episodes.length) return [];
-    const set = new Set<number>();
-    episodes.forEach((e) => set.add(e.seasonNumber));
-    return Array.from(set).sort((a, b) => a - b);
-  }, [episodes]);
-
   const sortedEpisodesNatural = useMemo(() => {
     return [...episodes].sort((a, b) =>
       a.seasonNumber === b.seasonNumber
@@ -112,30 +96,13 @@ const FilmWatch: React.FC = () => {
     );
   }, [episodes]);
 
-  const episodesInSelectedSeason = useMemo(() => {
-    const list = episodes.filter((e) => e.seasonNumber === selectedSeason);
-    return [...list].sort((a, b) =>
-      sortOrder === 'ASC' ? a.episodeNumber - b.episodeNumber : b.episodeNumber - a.episodeNumber,
-    );
-  }, [episodes, selectedSeason, sortOrder]);
-
-  useEffect(() => {
-    if (!seasons.length) return;
-    if (!seasons.includes(selectedSeason)) {
-      setSelectedSeason(seasons[0]);
-    }
-  }, [seasons, selectedSeason]);
-
   useEffect(() => {
     if (loading || !episodes.length || !id) return;
     const exists = episodes.some((episode) => episode.id === episodeId);
     if (!exists) {
       const fallback = sortedEpisodesNatural[0];
       navigate(`/film/${id}/watch/${fallback.id}`, { replace: true });
-      return;
     }
-    const ep = episodes.find((e) => e.id === episodeId);
-    if (ep) setSelectedSeason(ep.seasonNumber);
   }, [loading, episodes, episodeId, id, navigate, sortedEpisodesNatural]);
 
   // Bucket B2 private nên FileInfo.url là presigned GET có hạn dùng - phải resolve lại mỗi khi
@@ -302,137 +269,14 @@ const FilmWatch: React.FC = () => {
         </Box>
 
         <Box sx={{ mb: 5 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2.5, flexWrap: 'wrap', gap: 1 }}>
-            <Typography variant="h5" sx={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1 }}>
-              <FormatListBulleted sx={{ color: 'primary.main' }} />
-              {t('selectEpisodeHeading')}
-            </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Chip
-                size="small"
-                label={sortOrder === 'ASC' ? t('episodeSortAscending') : t('episodeSortDescending')}
-                sx={{ bgcolor: alpha(theme.palette.text.primary, 0.05), fontWeight: 700, letterSpacing: 0.2 }}
-              />
-              <Tooltip title={sortOrder === 'ASC' ? t('switchToDescending') : t('switchToAscending')}>
-                <IconButton
-                  size="small"
-                  onClick={() => setSortOrder((prev) => (prev === 'ASC' ? 'DESC' : 'ASC'))}
-                  sx={{
-                    bgcolor: alpha(theme.palette.text.primary, 0.05),
-                    border: '1px solid',
-                    borderColor: alpha(theme.palette.text.primary, 0.08),
-                    '&:hover': { bgcolor: 'rgba(0,168,78,0.15)' },
-                  }}
-                >
-                  {sortOrder === 'ASC' ? <ArrowUpward fontSize="small" /> : <ArrowDownward fontSize="small" />}
-                </IconButton>
-              </Tooltip>
-            </Box>
-          </Box>
-
-          {seasons.length > 1 && (
-            <Stack direction="row" spacing={1.5} sx={{ mb: 3, flexWrap: 'wrap', rowGap: 1 }}>
-              {seasons.map((sn) => {
-                const isActive = selectedSeason === sn;
-                return (
-                  <Chip
-                    key={sn}
-                    label={t('seasonLabel', { season: sn })}
-                    clickable
-                    onClick={() => setSelectedSeason(sn)}
-                    color={isActive ? 'primary' : 'default'}
-                    variant={isActive ? 'filled' : 'outlined'}
-                    sx={{
-                      fontWeight: 800,
-                      fontSize: '0.95rem',
-                      px: 0.5,
-                      py: 2.25,
-                      borderRadius: 1.25,
-                      letterSpacing: 0.15,
-                      border: isActive ? 'none' : '1px solid',
-                      borderColor: alpha(theme.palette.text.primary, 0.12),
-                      bgcolor: isActive ? alpha(theme.palette.primary.main, 0.92) : alpha(theme.palette.text.primary, 0.025),
-                      '&:hover': {
-                        bgcolor: isActive ? alpha(theme.palette.primary.main, 1) : alpha(theme.palette.text.primary, 0.06),
-                      },
-                    }}
-                  />
-                );
-              })}
-            </Stack>
-          )}
-
-          <Paper sx={{ borderRadius: 3, bgcolor: alpha(theme.palette.text.primary, 0.03), border: '1px solid', borderColor: alpha(theme.palette.text.primary, 0.06), p: 2 }}>
-            {episodesInSelectedSeason.length === 0 ? (
-              <Box sx={{ p: 4, color: 'text.secondary', textAlign: 'center' }}>
-                {t('noEpisodesInSeason')}
-              </Box>
-            ) : (
-              <Grid container spacing={0.75}>
-                {episodesInSelectedSeason.map((episode) => {
-                  const isActive = episode.id === currentEpisode.id;
-                  return (
-                      <Grid size={{ xs: 3, sm: 2, md: 2, lg: 1, xl: 1 }} key={episode.id}>
-                      <ButtonBase
-                        onClick={() => navigate(`/film/${id}/watch/${episode.id}`)}
-                        sx={{
-                          width: '100%',
-                          aspectRatio: '2 / 1',
-                          borderRadius: 1,
-                          bgcolor: isActive ? theme.palette.primary.main : alpha(theme.palette.text.primary, 0.04),
-                          color: isActive ? '#fff' : 'text.primary',
-                          borderLeft: isActive ? 3 : 0,
-                          borderColor: isActive ? theme.palette.warning.main : 'transparent',
-                          boxShadow: isActive ? `0 4px 12px ${alpha(theme.palette.primary.main, 0.38)}` : 'none',
-                          position: 'relative',
-                          fontWeight: 900,
-                          fontSize: { xs: '0.75rem', sm: '0.8rem', md: '0.85rem' },
-                          letterSpacing: 0.2,
-                          transition: 'all 0.18s cubic-bezier(.2,.8,.2,1)',
-                          border: isActive
-                            ? `1.5px solid ${theme.palette.primary.dark}`
-                            : `1px solid ${alpha(theme.palette.text.primary, 0.08)}`,
-                          '&:hover': {
-                            bgcolor: isActive ? theme.palette.primary.dark : 'rgba(0,168,78,0.12)',
-                            transform: 'translateY(-1px)',
-                            boxShadow: isActive
-                              ? `0 6px 16px ${alpha(theme.palette.primary.main, 0.48)}`
-                              : theme.palette.mode === 'dark' ? '0 3px 10px rgba(0,0,0,0.35)' : '0 3px 10px rgba(0,0,0,0.15)',
-                            borderColor: isActive ? theme.palette.primary.dark : alpha(theme.palette.primary.main, 0.5),
-                          },
-                        }}
-                      >
-                        <Typography
-                          component="span"
-                          sx={{
-                            fontWeight: 900,
-                            fontSize: { xs: '0.75rem', sm: '0.8rem', md: '0.85rem' },
-                            letterSpacing: 0.2,
-                          }}
-                        >
-                          {episode.episodeNumber}
-                        </Typography>
-                        {isActive && (
-                          <Box
-                            sx={{
-                              position: 'absolute',
-                              bottom: 5,
-                              right: 6,
-                              width: 6,
-                              height: 6,
-                              borderRadius: '50%',
-                              bgcolor: 'warning.main',
-                              boxShadow: `0 0 8px ${alpha(theme.palette.warning.main, 0.9)}`,
-                            }}
-                          />
-                        )}
-                      </ButtonBase>
-                    </Grid>
-                  );
-                })}
-              </Grid>
-            )}
-          </Paper>
+          <EpisodePicker
+            episodes={episodes}
+            currentEpisodeId={currentEpisode.id}
+            onSelect={(episode) => navigate(`/film/${id}/watch/${episode.id}`)}
+            title={t('chooseEpisode')}
+            formatTitle={stripVietSub}
+            maxGridHeight={360}
+          />
         </Box>
 
         <Paper sx={{ borderRadius: 3, bgcolor: alpha(theme.palette.text.primary, 0.03), border: '1px solid', borderColor: alpha(theme.palette.text.primary, 0.05) }}>

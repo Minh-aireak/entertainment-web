@@ -74,6 +74,13 @@ public enum TypeNotification {
     NEW_EPISODE(
             "New Episode",
             "The film \"{film}\" has a new episode"
+    ),
+
+    // Vietnamese, unlike the rest: room-service used to push this text straight to the socket as a
+    // realtime-only popup, and routing it through here (so it's kept in history) shouldn't change it.
+    WATCH_ROOM_INVITE(
+            "Lời mời xem chung",
+            "{sender} đã mời bạn xem \"{room}\""
     );
 
     private final String title;

@@ -13,10 +13,11 @@ import {
   Toolbar,
   Typography,
   Button,
-  Divider,
   Tooltip,
   Badge,
+  useMediaQuery,
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import {
   Menu as MenuIcon,
   Movie,
@@ -296,43 +297,8 @@ const SidebarPanel = React.memo(function SidebarPanel({
           outer container so the toggle button below (which pokes out past the right edge) isn't
           clipped along with it — it used to be, leaving only a sliver of the button clickable. */}
       <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-        {/* Sidebar Header */}
-        <Box sx={{ px: isCollapsed ? 1.5 : 3, py: 3, display: 'flex', alignItems: 'center', gap: 2, transition: sidebarTransition('padding') }}>
-          <Box
-            sx={{
-              width: 48,
-              height: 48,
-              borderRadius: '16px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: 'linear-gradient(135deg, #00A84E 0%, #00c75c 100%)',
-              boxShadow: '0 4px 14px rgba(0, 168, 78, 0.3)',
-              flexShrink: 0
-            }}
-          >
-            <Movie sx={{ color: '#fff', fontSize: 24 }} />
-          </Box>
-          <Box sx={{
-            opacity: isCollapsed ? 0 : 1,
-            width: '100%',
-            maxWidth: isCollapsed ? 0 : 200,
-            overflow: 'hidden',
-            whiteSpace: 'nowrap',
-            transition: sidebarTransition('opacity', 'max-width', 'margin-left'),
-            ml: isCollapsed ? 0 : 0.5
-          }}>
-            <Typography sx={{ fontWeight: 800, fontSize: '1.15rem', color: 'text.primary', letterSpacing: '-0.02em' }}>
-              AIREAK
-            </Typography>
-            <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', mt: 0.2 }}>
-              Entertainment Hub
-            </Typography>
-          </Box>
-        </Box>
-
-        <Divider sx={{ mx: isCollapsed ? 2 : 3, transition: sidebarTransition('margin') }} />
-
+        {/* The brand lives in the top bar (same row as the header icons), so the sidebar is
+            navigation only. */}
         {renderMenuSection(t('socialSection'), socialMenuItems, 'error', 2)}
         {renderMenuSection(t('entertainmentSection'), entertainmentMenuItems, 'primary', 1)}
         {isAdmin && renderMenuSection(t('adminSection'), adminMenuItems, 'primary', 1)}
@@ -390,6 +356,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
   const { profileData } = useSelector((state: RootState) => state.profile);
   const themeMode = useSelector((state: RootState) => state.ui.themeMode);
+  // Phone widths can't fit the full brand + full language button + the three icon buttons on one
+  // row, so below `sm` the brand shrinks to its tile and the language button to its icon.
+  const isPhone = useMediaQuery(useTheme().breakpoints.down('sm'));
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -480,44 +449,78 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           zIndex: (theme) => theme.zIndex.drawer + 1,
         }}
       >
-        <Toolbar sx={{ minHeight: NAVBAR_HEIGHT, px: { xs: 2, md: 3 }, gap: 2 }}>
+        <Toolbar sx={{ minHeight: NAVBAR_HEIGHT, px: { xs: 1.5, md: 3 }, gap: { xs: 1, sm: 2 } }}>
           <IconButton
             color="inherit"
             onClick={handleDrawerToggle}
-            sx={{ display: { md: 'none' }, mr: 0.5 }}
+            sx={{ display: { md: 'none' } }}
           >
             <MenuIcon />
           </IconButton>
 
+          {/* Brand / home link, on every screen size. The tile matches the 44px rounded icon
+              buttons on the right so the whole top row reads as one bar. */}
           <Box
             component={Link}
             to="/social"
+            aria-label="AIREAK"
             sx={{
-              display: { xs: 'flex', md: 'none' },
+              display: 'flex',
               alignItems: 'center',
               gap: 1.5,
               textDecoration: 'none',
               flexShrink: 0,
+              borderRadius: '12px',
+              '&:hover .brand-tile': { transform: 'scale(1.05)' },
             }}
           >
-            <Movie sx={{ color: ACCENT_GREEN, fontSize: 26 }} />
-            <Typography
-              noWrap
+            <Box
+              className="brand-tile"
               sx={{
-                color: 'text.primary',
-                fontWeight: 800,
-                letterSpacing: '-0.02em',
-                fontSize: '1.05rem',
+                width: 44,
+                height: 44,
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: `linear-gradient(135deg, ${ACCENT_GREEN} 0%, #00c75c 100%)`,
+                boxShadow: '0 4px 14px rgba(0, 168, 78, 0.3)',
+                transition: 'transform 0.2s ease',
+                flexShrink: 0,
               }}
             >
-              AIREAK
-            </Typography>
+              <Movie sx={{ color: '#fff', fontSize: 24 }} />
+            </Box>
+            <Box sx={{ minWidth: 0, display: { xs: 'none', sm: 'block' } }}>
+              <Typography
+                noWrap
+                sx={{
+                  color: 'text.primary',
+                  fontWeight: 800,
+                  letterSpacing: '-0.02em',
+                  fontSize: '1.1rem',
+                  lineHeight: 1.2,
+                }}
+              >
+                AIREAK
+              </Typography>
+              <Typography
+                noWrap
+                sx={{
+                  color: 'text.secondary',
+                  fontSize: '0.72rem',
+                  lineHeight: 1.3,
+                }}
+              >
+                Entertainment Hub
+              </Typography>
+            </Box>
           </Box>
 
           <Box sx={{ flexGrow: 1 }} />
 
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <LanguageSwitcher />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 1.5 } }}>
+            <LanguageSwitcher compact={isPhone} />
             {!isAuthenticated ? (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Button

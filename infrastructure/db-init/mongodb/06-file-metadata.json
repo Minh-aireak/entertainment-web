@@ -1546,5 +1546,47 @@
 		"$date": "2026-08-10T12:41:16.686Z"
 	},
 	"_class": "IMAGE"
+},
+{
+	"_id": "movie-platform/33f7753f-ec79-45d1-871f-7cdcc030eb5d.mp4",
+	"hlsStatus": "READY",
+	"duration": 1497,
+	"ownerId": "10000000-0000-0000-0000-000000000001",
+	"contentType": "video/mp4",
+	"size": 1007493571,
+	"path": "movie-platform/33f7753f-ec79-45d1-871f-7cdcc030eb5d.mp4",
+	"originalName": "33f7753f-ec79-45d1-871f-7cdcc030eb5d.mp4",
+	"updatedAt": {
+		"$date": "2026-08-11T12:28:35.000Z"
+	},
+	"_class": "VIDEO"
+},
+{
+	"_id": "movie-platform/562cc569-6f5e-4af4-8e27-a77f7296c041.mp4",
+	"hlsStatus": "READY",
+	"duration": 488,
+	"ownerId": "10000000-0000-0000-0000-000000000001",
+	"contentType": "video/mp4",
+	"size": 409844812,
+	"path": "movie-platform/562cc569-6f5e-4af4-8e27-a77f7296c041.mp4",
+	"originalName": "562cc569-6f5e-4af4-8e27-a77f7296c041.mp4",
+	"updatedAt": {
+		"$date": "2026-08-13T06:20:22.000Z"
+	},
+	"_class": "VIDEO"
+},
+{
+	"_id": "movie-platform/64443080-b181-475a-b50d-599ee52d61c0.mp4",
+	"hlsStatus": "READY",
+	"duration": 489,
+	"ownerId": "10000000-0000-0000-0000-000000000001",
+	"contentType": "video/mp4",
+	"size": 357686028,
+	"path": "movie-platform/64443080-b181-475a-b50d-599ee52d61c0.mp4",
+	"originalName": "64443080-b181-475a-b50d-599ee52d61c0.mp4",
+	"updatedAt": {
+		"$date": "2026-08-13T06:22:37.000Z"
+	},
+	"_class": "VIDEO"
 }]
 

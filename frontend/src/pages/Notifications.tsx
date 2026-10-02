@@ -13,17 +13,20 @@ import {
 } from '@mui/material';
 import { DoneAll, Notifications as NotificationsIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
 import { notificationService } from '../api/notificationService';
 import { REALTIME_NOTIFICATION_EVENT } from '../contexts/WebSocketContext';
 import type { NotificationResponse, PageResponse } from '../models';
+import { getNotificationLink } from '../utils/notificationLink';
 import { formatRelativeTime } from '../utils/time';
 
 const PAGE_SIZE = 12;
 
 const NotificationsPage: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [pageData, setPageData] = useState<PageResponse<NotificationResponse> | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -127,34 +130,39 @@ const NotificationsPage: React.FC = () => {
             <Typography variant="h6" sx={{ fontWeight: 700 }}>{t('noNotificationsYet')}</Typography>
           </Box>
         ) : (
-          pageData.data.map((notification, index) => (
-            <Box
-              key={notification.id}
-              sx={{
-                display: 'flex',
-                gap: 2,
-                alignItems: 'center',
-                p: { xs: 2, md: 2.5 },
-                bgcolor: notification.read ? 'transparent' : 'rgba(0,168,78,0.07)',
-                borderBottom: index < pageData.data.length - 1 ? '1px solid' : 'none',
-                borderBottomColor: 'divider',
-              }}
-            >
-              <Badge color="primary" variant="dot" invisible={notification.read} overlap="circular">
-                <Avatar src={notification.avatarSender} sx={{ width: 48, height: 48 }}>
-                  {notification.displayNameSender?.[0]?.toUpperCase() || 'A'}
-                </Avatar>
-              </Badge>
-              <Box sx={{ minWidth: 0, flex: 1 }}>
-                <Typography sx={{ fontWeight: notification.read ? 500 : 750, mb: 0.5 }}>
-                  {notification.message}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {formatRelativeTime(notification.createdAt, i18n.language)}
-                </Typography>
+          pageData.data.map((notification, index) => {
+            const link = getNotificationLink(notification);
+            return (
+              <Box
+                key={notification.id}
+                onClick={link ? () => navigate(link) : undefined}
+                sx={{
+                  display: 'flex',
+                  gap: 2,
+                  alignItems: 'center',
+                  p: { xs: 2, md: 2.5 },
+                  bgcolor: notification.read ? 'transparent' : 'rgba(0,168,78,0.07)',
+                  borderBottom: index < pageData.data.length - 1 ? '1px solid' : 'none',
+                  borderBottomColor: 'divider',
+                  ...(link && { cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }),
+                }}
+              >
+                <Badge color="primary" variant="dot" invisible={notification.read} overlap="circular">
+                  <Avatar src={notification.avatarSender} sx={{ width: 48, height: 48 }}>
+                    {notification.displayNameSender?.[0]?.toUpperCase() || 'A'}
+                  </Avatar>
+                </Badge>
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                  <Typography sx={{ fontWeight: notification.read ? 500 : 750, mb: 0.5 }}>
+                    {notification.message}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {formatRelativeTime(notification.createdAt, i18n.language)}
+                  </Typography>
+                </Box>
               </Box>
-            </Box>
-          ))
+            );
+          })
         )}
       </Paper>
 
