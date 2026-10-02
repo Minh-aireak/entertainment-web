@@ -13,22 +13,25 @@ import java.time.LocalDateTime;
 public class NotificationRepositoryCustomImpl implements NotificationRepositoryCustom {
     final MongoTemplate mongoTemplate;
 
+    // Unread = the recipient's recipientReadMap entry is null, which is how NotificationService writes
+    // every new notification ({userId: null}) - not a missing key. is(null) matches null *or* missing,
+    // the same rule NotificationService uses for the per-item "read" flag; exists(false) only matched
+    // missing keys, so it never counted (or marked read) anything actually stored.
+    private Query unreadFor(String userId) {
+        return new Query(
+                Criteria.where("toUserIds").in(userId)
+                        .and("recipientReadMap." + userId).is(null)
+        );
+    }
+
     @Override
     public long countUnreadByUserId(String userId) {
-        Query query = new Query(
-                Criteria.where("toUserIds").in(userId)
-                        .and("recipientReadMap." + userId).exists(false)
-        );
-        return mongoTemplate.count(query, Notification.class);
+        return mongoTemplate.count(unreadFor(userId), Notification.class);
     }
 
     @Override
     public void markAllAsRead(String userId, LocalDateTime now) {
-        Query query = new Query(
-                Criteria.where("toUserIds").in(userId)
-                        .and("recipientReadMap." + userId).exists(false)
-        );
         Update update = new Update().set("recipientReadMap." + userId, now);
-        mongoTemplate.updateMulti(query, update, Notification.class);
+        mongoTemplate.updateMulti(unreadFor(userId), update, Notification.class);
     }
 }
