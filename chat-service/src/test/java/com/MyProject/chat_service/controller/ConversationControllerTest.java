@@ -11,7 +11,11 @@ import com.MyProject.common.dto.response.PageResponse;
 import com.MyProject.common.security.CommonJwtAuthenticationEntryPoint;
 import com.MyProject.common.security.CommonJwtDecoder;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mongodb.MongoException;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.mongodb.UncategorizedMongoDbException;
+import org.springframework.transaction.TransactionSystemException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -27,6 +31,8 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
@@ -110,6 +116,42 @@ class ConversationControllerTest {
                         .content(objectMapper.writeValueAsString(List.of("user-1"))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("code").value(ErrorCode.INVALID_CONVERSATION_PARTICIPANTS.getCode()));
+
+        verify(conversationService, times(1)).createConversationForApi(any());
+    }
+
+    @Test
+    void createConversation_lostRaceToConcurrentCreate_retriesAndReturnsTheWinnersConversation() throws Exception {
+        // First attempt collides with a concurrent create of the same pair on the unique participantsHash
+        // index; the retry runs in a fresh transaction and finds the conversation that was just created.
+        when(conversationService.createConversationForApi(any()))
+                .thenThrow(new DuplicateKeyException("E11000 duplicate key error index: participantsHash"))
+                .thenReturn(ConversationResponse.builder().id("conv-1").type("DIRECT").build());
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/conversations")
+                        .with(asUser("user-1"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(List.of("user-1", "user-2"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("result.id").value("conv-1"));
+
+        verify(conversationService, times(2)).createConversationForApi(any());
+    }
+
+    @Test
+    void isConcurrentCreateConflict_recognisesInFlightWriteConflictsButNotOtherErrors() {
+        MongoException writeConflict = new MongoException(112, "WriteConflict");
+        MongoException transientError = new MongoException("Transaction aborted");
+        transientError.addLabel(MongoException.TRANSIENT_TRANSACTION_ERROR_LABEL);
+
+        assertTrue(ConversationController.isConcurrentCreateConflict(
+                new TransactionSystemException("Could not commit Mongo transaction", writeConflict)));
+        assertTrue(ConversationController.isConcurrentCreateConflict(
+                new UncategorizedMongoDbException("aborted", transientError)));
+        assertFalse(ConversationController.isConcurrentCreateConflict(
+                new AppException(ErrorCode.INVALID_CONVERSATION_PARTICIPANTS)));
+        assertFalse(ConversationController.isConcurrentCreateConflict(
+                new UncategorizedMongoDbException("timeout", new MongoException(50, "MaxTimeMSExpired"))));
     }
 
     @Test
