@@ -104,6 +104,24 @@ const SOFT_CATCHUP_RATE_DELTA = 0.04;
 const SOFT_CATCHUP_REVERT_MS = 4500;
 const SEEK_THROTTLE_MS = 150;
 const STALLED_ERROR_COOLDOWN_MS = 4000;
+// Host only: a stall shorter than this is a hiccup between segments, not worth pausing the room.
+const HOST_HOLD_DELAY_MS = 350;
+// HTMLMediaElement.HAVE_FUTURE_DATA - enough data at the current position to start playing.
+const HAVE_FUTURE_DATA = 3;
+// How far past a seek target has to be downloaded already for the host to play it without a stall.
+const SEEK_BUFFERED_LOOKAHEAD_SECONDS = 1;
+// Tolerates a seek target falling just before the first buffered frame (segment boundaries).
+const SEEK_BUFFERED_START_TOLERANCE_SECONDS = 0.25;
+
+function isBufferedAt(video: HTMLVideoElement, time: number): boolean {
+  for (let i = 0; i < video.buffered.length; i++) {
+    if (video.buffered.start(i) <= time + SEEK_BUFFERED_START_TOLERANCE_SECONDS
+      && video.buffered.end(i) >= time + SEEK_BUFFERED_LOOKAHEAD_SECONDS) {
+      return true;
+    }
+  }
+  return false;
+}
 
 function formatTime(totalSeconds: number): string {
   if (!Number.isFinite(totalSeconds) || totalSeconds < 0) return '0:00';
@@ -148,6 +166,16 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
   const suppressNextNotifyRef = useRef(false);
   // Pending "revert to normal speed" timer for an in-progress HEARTBEAT soft catch-up nudge.
   const catchupRevertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Host only. The room's playback clock starts the moment a PLAY/SEEK is reported, but this
+  // player may still need seconds to download the new spot - viewers that load faster used to run
+  // ahead by exactly that long. While the host is stalled mid-playback, viewers are told to hold
+  // (a PAUSE at the host's position); the matching PLAY goes out on the next 'playing' event, i.e.
+  // when this player is genuinely moving again.
+  const hostHoldRef = useRef(false);
+  const hostHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Mirrors isScrubbing for native event handlers - a drag fires a stream of seeks/stalls that
+  // must not each be reported; the release reports the final position once.
+  const isScrubbingRef = useRef(false);
 
   const [playing, setPlaying] = useState(autoPlay);
   const [showStartOverlay, setShowStartOverlay] = useState(false);
@@ -173,6 +201,21 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
     },
     [role, onPlaybackAction],
   );
+
+  const clearHostHoldTimer = useCallback(() => {
+    if (hostHoldTimerRef.current !== null) {
+      clearTimeout(hostHoldTimerRef.current);
+      hostHoldTimerRef.current = null;
+    }
+  }, []);
+
+  // Host only: tells viewers to wait at `positionSeconds` until this player can actually play
+  // there - see hostHoldRef.
+  const startHostHold = useCallback((positionSeconds: number) => {
+    clearHostHoldTimer();
+    hostHoldRef.current = true;
+    notifyHostAction({ type: 'pause', positionSeconds });
+  }, [clearHostHoldTimer, notifyHostAction]);
 
   // Load the source (HLS via hls.js, or let the browser/B2 handle it natively). Beyond the
   // initial mount, `src` only ever changes because a caller refreshed a stale/expired presigned
@@ -255,6 +298,10 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
       resetHideTimer();
       if (suppressNextNotifyRef.current) {
         suppressNextNotifyRef.current = false;
+      } else if (role === 'host' && video.readyState < HAVE_FUTURE_DATA) {
+        // Nothing playable at this spot yet - viewers stay paused, and 'playing' reports the
+        // real start instead of the room clock running while this player buffers.
+        hostHoldRef.current = true;
       } else {
         notifyHostAction({ type: 'play', positionSeconds: video.currentTime });
       }
@@ -265,6 +312,9 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
       wasPlayingRef.current = false;
       if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
       setShowControls(true);
+      // A real pause supersedes any buffering hold - the PAUSE below carries the position.
+      clearHostHoldTimer();
+      hostHoldRef.current = false;
       if (suppressNextNotifyRef.current) {
         suppressNextNotifyRef.current = false;
       } else {
@@ -283,10 +333,28 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
     // rebuffer (scrub landing ahead of what's downloaded, a dropped connection mid-playback,
     // etc.) surfaces here as `waiting`/`stalled` with nothing else in the DOM changing - without
     // this the player just freezes on the last decoded frame with no visual feedback at all.
-    const onWaiting = () => setBuffering(true);
+    const onWaiting = () => {
+      setBuffering(true);
+      if (role !== 'host' || video.paused || hostHoldRef.current || isScrubbingRef.current
+        || hostHoldTimerRef.current !== null) return;
+      hostHoldTimerRef.current = setTimeout(() => {
+        hostHoldTimerRef.current = null;
+        // Still stalled ('playing' would have cleared this timer) - hold the room here.
+        if (!video.paused && !hostHoldRef.current && !isScrubbingRef.current) {
+          startHostHold(video.currentTime);
+        }
+      }, HOST_HOLD_DELAY_MS);
+    };
     const onStalled = () => setBuffering(true);
     const onCanPlay = () => setBuffering(false);
-    const onPlaying = () => setBuffering(false);
+    const onPlaying = () => {
+      setBuffering(false);
+      clearHostHoldTimer();
+      if (role === 'host' && hostHoldRef.current) {
+        hostHoldRef.current = false;
+        notifyHostAction({ type: 'play', positionSeconds: video.currentTime });
+      }
+    };
 
     video.addEventListener('timeupdate', onTimeUpdate);
     video.addEventListener('durationchange', onDurationChange);
@@ -315,7 +383,7 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
       video.removeEventListener('canplay', onCanPlay);
       video.removeEventListener('playing', onPlaying);
     };
-  }, [hasNextEpisode, onNextEpisode, resetHideTimer, notifyHostAction, onLocalTimeUpdate]);
+  }, [hasNextEpisode, onNextEpisode, resetHideTimer, notifyHostAction, onLocalTimeUpdate, role, startHostHold, clearHostHoldTimer]);
 
   // Error recovery: a native `error` (e.g. an expired 1h B2 presigned URL) or the browser coming
   // back `online` while still stuck buffering are both cases the player can't fix by itself - it
@@ -356,7 +424,8 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
     if (role !== 'host') return;
     const interval = setInterval(() => {
       const video = videoRef.current;
-      if (!video || video.paused) return;
+      // Holding (buffering) - the room is paused at the hold position until 'playing' resumes it.
+      if (!video || video.paused || hostHoldRef.current) return;
       notifyHostAction({ type: 'heartbeat', positionSeconds: video.currentTime });
     }, 5000);
     return () => clearInterval(interval);
@@ -379,6 +448,17 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
     video.play().then(() => setShowStartOverlay(false)).catch(() => {});
   }, []);
 
+  // Host only. A seek into a part that still has to download would start the room clock now while
+  // this player sits buffering - hold viewers at the target instead; 'playing' resumes them.
+  const reportHostSeek = useCallback((positionSeconds: number) => {
+    const video = videoRef.current;
+    if (role === 'host' && video && !video.paused && !isBufferedAt(video, positionSeconds)) {
+      startHostHold(positionSeconds);
+    } else {
+      notifyHostAction({ type: 'seek', positionSeconds });
+    }
+  }, [role, startHostHold, notifyHostAction]);
+
   const seekTo = useCallback(
     (time: number, notify = false) => {
       const video = videoRef.current;
@@ -386,9 +466,9 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
       const clamped = Math.min(Math.max(time, 0), duration);
       video.currentTime = clamped;
       setCurrentTime(clamped);
-      if (notify) notifyHostAction({ type: 'seek', positionSeconds: clamped });
+      if (notify) reportHostSeek(clamped);
     },
-    [duration, notifyHostAction],
+    [duration, reportHostSeek],
   );
 
   // Commits an actual `video.currentTime` change (i.e. a real B2 range fetch) without touching
@@ -554,8 +634,9 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
     () => () => {
       if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
       clearCatchup();
+      clearHostHoldTimer();
     },
-    [clearCatchup],
+    [clearCatchup, clearHostHoldTimer],
   );
 
   // Keyboard shortcuts: Left/Right arrows seek, Space toggles play/pause.
@@ -613,6 +694,7 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
 
   const handleSeekMouseDown = (e: React.MouseEvent) => {
     if (!interactive) return;
+    isScrubbingRef.current = true;
     setIsScrubbing(true);
     handleSeekPointer(e.clientX);
   };
@@ -621,12 +703,13 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
     if (!isScrubbing) return;
     const onMove = (e: MouseEvent) => handleSeekPointer(e.clientX);
     const onUp = () => {
+      isScrubbingRef.current = false;
       setIsScrubbing(false);
       lastSeekCommitRef.current = 0;
       // Final commit lands the exact release position even if it fell inside the last throttle
       // window and got skipped.
       commitSeek(scrubTimeRef.current);
-      notifyHostAction({ type: 'seek', positionSeconds: scrubTimeRef.current });
+      reportHostSeek(scrubTimeRef.current);
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
@@ -634,7 +717,7 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
-  }, [isScrubbing, handleSeekPointer, commitSeek, notifyHostAction]);
+  }, [isScrubbing, handleSeekPointer, commitSeek, reportHostSeek]);
 
   const playedRatio = duration > 0 ? currentTime / duration : 0;
   const bufferedRatio = duration > 0 ? bufferedEnd / duration : 0;

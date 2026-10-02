@@ -228,7 +228,10 @@ describe('VideoPlayer restoreHostState suppression', () => {
     expect(video.pause).not.toHaveBeenCalled();
 
     // A real user-driven play right after must still report normally, proving the suppression
-    // flag didn't leak into this unrelated action.
+    // flag didn't leak into this unrelated action. jsdom's readyState is always 0 (nothing
+    // loaded), which a host now treats as "report PLAY once playback really starts" - model the
+    // usual browser state of the current spot being playable.
+    Object.defineProperty(video, 'readyState', { configurable: true, get: () => 4 });
     act(() => {
       video.play();
     });
@@ -269,5 +272,125 @@ describe('VideoPlayer autoplay-blocked overlay', () => {
 
     expect(video.play).toHaveBeenCalledTimes(2);
     expect(screen.queryByText(/(Start watching|Bắt đầu xem)/)).not.toBeInTheDocument();
+  });
+});
+
+// A host that's still downloading the spot it just played/seeked to must not let the room clock
+// run - viewers that load faster would otherwise run ahead by exactly the host's buffering time.
+describe('VideoPlayer host buffering hold', () => {
+  let video: HTMLVideoElement;
+  let onPlaybackAction: ReturnType<typeof vi.fn<(action: PlaybackActionPayload) => void>>;
+  let readyState: number;
+  let bufferedRanges: Array<[number, number]>;
+
+  beforeEach(() => {
+    onPlaybackAction = vi.fn();
+    const { container } = render(
+      <VideoPlayer role="host" src={SRC} autoPlay={false} onPlaybackAction={onPlaybackAction} />,
+    );
+    video = container.querySelector('video') as HTMLVideoElement;
+    makeVideoControllable(video);
+    readyState = 4;
+    bufferedRanges = [[0, 12]];
+    Object.defineProperty(video, 'readyState', { configurable: true, get: () => readyState });
+    Object.defineProperty(video, 'duration', { configurable: true, get: () => 100 });
+    Object.defineProperty(video, 'buffered', {
+      configurable: true,
+      get: () => ({
+        length: bufferedRanges.length,
+        start: (i: number) => bufferedRanges[i][0],
+        end: (i: number) => bufferedRanges[i][1],
+      }),
+    });
+    act(() => {
+      video.dispatchEvent(new Event('durationchange'));
+    });
+    video.currentTime = 10;
+  });
+
+  const startPlaying = () => {
+    act(() => {
+      void video.play();
+    });
+    expect(onPlaybackAction).toHaveBeenLastCalledWith({ type: 'play', positionSeconds: 10 });
+    onPlaybackAction.mockClear();
+  };
+
+  it('holds the room with a PAUSE while it stalls mid-playback, then resumes it with PLAY', () => {
+    startPlaying();
+    vi.useFakeTimers();
+    try {
+      act(() => {
+        video.dispatchEvent(new Event('waiting'));
+        vi.advanceTimersByTime(349);
+      });
+      expect(onPlaybackAction).not.toHaveBeenCalled();
+
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(onPlaybackAction).toHaveBeenCalledWith({ type: 'pause', positionSeconds: 10 });
+
+      act(() => {
+        video.dispatchEvent(new Event('playing'));
+      });
+      expect(onPlaybackAction).toHaveBeenLastCalledWith({ type: 'play', positionSeconds: 10 });
+      expect(onPlaybackAction).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('ignores a stall that recovers before the hold delay', () => {
+    startPlaying();
+    vi.useFakeTimers();
+    try {
+      act(() => {
+        video.dispatchEvent(new Event('waiting'));
+        vi.advanceTimersByTime(200);
+        video.dispatchEvent(new Event('playing'));
+        vi.advanceTimersByTime(1000);
+      });
+      expect(onPlaybackAction).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('holds the room at the target when seeking into a part that is not downloaded yet', () => {
+    startPlaying();
+    act(() => {
+      fireEvent.keyDown(window, { code: 'ArrowRight' });
+    });
+    expect(onPlaybackAction).toHaveBeenCalledWith({ type: 'pause', positionSeconds: 15 });
+    expect(onPlaybackAction).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'seek' }));
+
+    act(() => {
+      video.dispatchEvent(new Event('playing'));
+    });
+    expect(onPlaybackAction).toHaveBeenLastCalledWith({ type: 'play', positionSeconds: 15 });
+  });
+
+  it('still reports a plain SEEK when the target is already downloaded', () => {
+    bufferedRanges = [[0, 30]];
+    startPlaying();
+    act(() => {
+      fireEvent.keyDown(window, { code: 'ArrowRight' });
+    });
+    expect(onPlaybackAction).toHaveBeenCalledWith({ type: 'seek', positionSeconds: 15 });
+    expect(onPlaybackAction).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports PLAY only once playback really starts when nothing is playable yet', () => {
+    readyState = 1;
+    act(() => {
+      void video.play();
+    });
+    expect(onPlaybackAction).not.toHaveBeenCalled();
+
+    act(() => {
+      video.dispatchEvent(new Event('playing'));
+    });
+    expect(onPlaybackAction).toHaveBeenCalledWith({ type: 'play', positionSeconds: 10 });
   });
 });
