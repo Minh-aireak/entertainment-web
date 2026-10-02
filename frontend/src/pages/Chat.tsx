@@ -13,7 +13,7 @@ import {
   IconButton,
   Badge,
   styled,
-  Paper,
+  InputBase,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -26,11 +26,11 @@ import {
   Skeleton,
 } from '@mui/material';
 import {
-  Search, Send, MoreVert, Chat as ChatIcon, Create as NewChatIcon, Edit as EditIcon, PhotoCamera,
+  Search, MoreVert, Chat as ChatIcon, Create as NewChatIcon, Edit as EditIcon, PhotoCamera,
   AttachFile, Reply as ReplyIcon, Delete as DeleteIcon, InsertDriveFile, Close as CloseIcon,
   ContentCopy as CopyIcon, KeyboardArrowDown as ArrowDownIcon,
 } from '@mui/icons-material';
-import { useTheme } from '@mui/material/styles';
+import { alpha, useTheme } from '@mui/material/styles';
 import { useDispatch, useSelector, useStore } from 'react-redux';
 import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -42,6 +42,18 @@ import { friendService } from '../api/friendService';
 import { fileService } from '../api/fileService';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { useConfirmDialog } from '../contexts/ConfirmDialogContext';
+import GradientSendButton from '../components/common/GradientSendButton';
+import {
+  VIBE_GLOW,
+  VIBE_GRADIENT,
+  VIBE_TEAL,
+  bubbleSx,
+  chatCanvasSx,
+  composerBarSx,
+  softIconButtonSx,
+  vibeBorder,
+  vibeSurface,
+} from '../styles/vibe';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
@@ -1128,8 +1140,8 @@ const ChatPage: React.FC = React.memo(() => {
                   py: 1,
                   px: 1,
                   '&.Mui-selected': {
-                    bgcolor: 'rgba(45, 136, 255, 0.1)',
-                    '&:hover': { bgcolor: 'rgba(45, 136, 255, 0.15)' },
+                    bgcolor: alpha(VIBE_TEAL, 0.12),
+                    '&:hover': { bgcolor: alpha(VIBE_TEAL, 0.18) },
                   },
                   '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.05)' },
                 }}
@@ -1147,7 +1159,7 @@ const ChatPage: React.FC = React.memo(() => {
                         width: 50,
                         height: 50,
                         bgcolor: surfaceElevated,
-                        border: isSelected ? '2px solid #2D88FF' : 'none'
+                        border: isSelected ? `2px solid ${VIBE_TEAL}` : 'none'
                       }}
                     >
                       {!(conv as any).conversationAvatar && name[0]}
@@ -1194,7 +1206,7 @@ const ChatPage: React.FC = React.memo(() => {
                       minWidth: 20,
                       height: 20,
                       px: convUnreadCount > 9 ? 0.6 : 0,
-                      bgcolor: '#2D88FF',
+                      background: VIBE_GRADIENT,
                       borderRadius: '10px',
                       ml: 1,
                       flexShrink: 0,
@@ -1221,32 +1233,51 @@ const ChatPage: React.FC = React.memo(() => {
             {/* Header */}
             <Box
               sx={{
-                p: 2,
+                px: 2.5,
+                py: 1.5,
                 borderBottom: '1px solid',
-                borderColor: 'divider',
+                borderColor: vibeBorder(theme),
                 bgcolor: 'background.paper',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
               }}
             >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                {isUserOnline(getOtherParticipantId(activeConversation!)) ? (
-                  <StyledBadge
-                    overlap="circular"
-                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                    variant="dot"
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                {/* Gradient ring = online; a flat ring otherwise. */}
+                <Box
+                  sx={{
+                    p: '2.5px',
+                    borderRadius: '50%',
+                    background: isUserOnline(getOtherParticipantId(activeConversation!)) ? VIBE_GRADIENT : vibeBorder(theme),
+                    boxShadow: isUserOnline(getOtherParticipantId(activeConversation!)) ? VIBE_GLOW : 'none',
+                  }}
+                >
+                  <Avatar
+                    src={(activeConversation as any)?.conversationAvatar}
+                    sx={{ width: 42, height: 42, bgcolor: 'primary.main', border: '2px solid', borderColor: 'background.paper', fontWeight: 800 }}
                   >
-                    <Avatar src={(activeConversation as any)?.conversationAvatar} sx={{ bgcolor: 'primary.main' }}>{getConversationName(activeConversation!)[0]}</Avatar>
-                  </StyledBadge>
-                ) : (
-                  <Avatar src={(activeConversation as any)?.conversationAvatar} sx={{ bgcolor: 'primary.main' }}>{getConversationName(activeConversation!)[0]}</Avatar>
-                )}
+                    {getConversationName(activeConversation!)[0]}
+                  </Avatar>
+                </Box>
                 <Box>
-                  <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.primary' }}>{getConversationName(activeConversation!)}</Typography>
-                  <Typography variant="caption" sx={{ display: 'block', mt: -0.25, color: isUserOnline(getOtherParticipantId(activeConversation!)) ? '#44b700' : 'text.secondary' }}>
-                    {isUserOnline(getOtherParticipantId(activeConversation!)) ? t('online') : t('offline')}
+                  <Typography sx={{ fontWeight: 900, fontSize: '1.08rem', letterSpacing: '-0.01em', color: 'text.primary', lineHeight: 1.25 }}>
+                    {getConversationName(activeConversation!)}
                   </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, mt: 0.25 }}>
+                    <Box
+                      sx={{
+                        width: 7,
+                        height: 7,
+                        borderRadius: '50%',
+                        bgcolor: isUserOnline(getOtherParticipantId(activeConversation!)) ? '#2BD576' : 'text.disabled',
+                        boxShadow: isUserOnline(getOtherParticipantId(activeConversation!)) ? '0 0 8px #2BD576' : 'none',
+                      }}
+                    />
+                    <Typography variant="caption" sx={{ fontWeight: 600, color: isUserOnline(getOtherParticipantId(activeConversation!)) ? VIBE_TEAL : 'text.secondary' }}>
+                      {isUserOnline(getOtherParticipantId(activeConversation!)) ? t('online') : t('offline')}
+                    </Typography>
+                  </Box>
                 </Box>
               </Box>
               {activeConversation?.type === 'GROUP' && (
@@ -1271,8 +1302,7 @@ const ChatPage: React.FC = React.memo(() => {
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 0.5,
-                bgcolor: 'background.default',
-                backgroundImage: 'radial-gradient(circle at 100% 0%, rgba(0,168,78,0.07), transparent 55%)',
+                ...chatCanvasSx(theme),
                 '&::-webkit-scrollbar': { width: 6 },
                 '&::-webkit-scrollbar-thumb': {
                   bgcolor: isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)',
@@ -1383,14 +1413,14 @@ const ChatPage: React.FC = React.memo(() => {
                               <Box
                                 sx={{
                                   borderLeft: '3px solid',
-                                  borderColor: 'divider',
+                                  borderColor: VIBE_TEAL,
                                   pl: 1,
                                   py: 0.5,
                                   pr: 1,
-                                  borderRadius: '8px',
-                                  bgcolor: 'action.hover',
+                                  borderRadius: '10px',
+                                  bgcolor: vibeSurface(theme),
                                   color: 'text.primary',
-                                  opacity: 0.85,
+                                  opacity: 0.9,
                                 }}
                               >
                                 {replyQuote}
@@ -1399,25 +1429,25 @@ const ChatPage: React.FC = React.memo(() => {
                             {renderMessageBody(msg, t)}
                           </Box>
                         ) : (
-                          <Paper
-                            elevation={0}
-                            sx={{
-                              py: 1,
-                              px: 1.75,
-                              borderRadius: '18px',
-                              borderBottomRightRadius: isMe && isLastInGroup ? '4px' : '18px',
-                              borderBottomLeftRadius: !isMe && isLastInGroup ? '4px' : '18px',
-                              bgcolor: isMe ? 'primary.main' : surfaceElevated,
-                              color: isMe ? '#fff' : 'text.primary',
-                            }}
-                          >
+                          <Box sx={bubbleSx(theme, isMe, isLastInGroup)}>
                             {replyQuote && (
-                              <Box sx={{ borderLeft: '3px solid', borderColor: isMe ? 'rgba(255,255,255,0.4)' : 'divider', pl: 1, mb: 0.5, opacity: 0.85 }}>
+                              <Box
+                                sx={{
+                                  borderLeft: '3px solid',
+                                  borderColor: isMe ? 'rgba(255,255,255,0.7)' : VIBE_TEAL,
+                                  bgcolor: isMe ? 'rgba(255,255,255,0.16)' : vibeSurface(theme),
+                                  borderRadius: '10px',
+                                  pl: 1,
+                                  pr: 1,
+                                  py: 0.5,
+                                  mb: 0.75,
+                                }}
+                              >
                                 {replyQuote}
                               </Box>
                             )}
                             {renderMessageBody(msg, t)}
-                          </Paper>
+                          </Box>
                         )}
                       </Box>
                       {/* Timestamp only shows once per consecutive-sender group, but the seen
@@ -1490,15 +1520,16 @@ const ChatPage: React.FC = React.memo(() => {
                   gap: 0.5,
                   px: 1.75,
                   py: 0.75,
-                  borderRadius: '20px',
-                  bgcolor: '#2D88FF',
+                  borderRadius: '999px',
+                  background: VIBE_GRADIENT,
                   color: '#fff',
                   fontSize: '0.8rem',
-                  fontWeight: 600,
+                  fontWeight: 800,
                   cursor: 'pointer',
-                  boxShadow: isDarkMode ? '0 4px 12px rgba(0,0,0,0.35)' : '0 4px 12px rgba(0,0,0,0.15)',
+                  boxShadow: VIBE_GLOW,
                   userSelect: 'none',
-                  '&:hover': { bgcolor: '#1877F2' },
+                  transition: 'transform 0.15s ease',
+                  '&:hover': { transform: 'translateX(-50%) translateY(-2px)' },
                 }}
               >
                 <ArrowDownIcon fontSize="small" />
@@ -1508,72 +1539,68 @@ const ChatPage: React.FC = React.memo(() => {
             </Box>
 
             {/* Input */}
-            <Box sx={{ borderTop: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
+            <Box sx={{ borderTop: '1px solid', borderColor: vibeBorder(theme), bgcolor: 'background.paper' }}>
               {(replyTarget || editingMessageId) && (
-                <Box sx={{ px: 2, pt: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', borderLeft: '3px solid', borderColor: 'primary.main', pl: 1 }}>
-                    <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 700 }}>
-                      {editingMessageId ? t('editingMessage') : t('replyingTo', { name: replyTarget?.senderName || t('messageFallback') })}
-                    </Typography>
-                    {replyTarget && (
-                      <Typography variant="caption" sx={{ color: 'text.secondary', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {getMessagePreviewText(replyTarget, t)}
+                <Box sx={{ px: 2, pt: 1.5 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 1,
+                      pl: 1.5,
+                      pr: 0.5,
+                      py: 0.75,
+                      borderRadius: '14px',
+                      bgcolor: vibeSurface(theme),
+                      border: '1px solid',
+                      borderColor: vibeBorder(theme),
+                      borderLeft: '4px solid',
+                      borderLeftColor: VIBE_TEAL,
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                      <Typography variant="caption" sx={{ color: VIBE_TEAL, fontWeight: 800 }}>
+                        {editingMessageId ? `✏️ ${t('editingMessage')}` : `↩️ ${t('replyingTo', { name: replyTarget?.senderName || t('messageFallback') })}`}
                       </Typography>
-                    )}
+                      {replyTarget && (
+                        <Typography variant="caption" sx={{ color: 'text.secondary', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {getMessagePreviewText(replyTarget, t)}
+                        </Typography>
+                      )}
+                    </Box>
+                    <IconButton size="small" onClick={editingMessageId ? handleCancelEdit : handleCancelReply}>
+                      <CloseIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                    </IconButton>
                   </Box>
-                  <IconButton size="small" onClick={editingMessageId ? handleCancelEdit : handleCancelReply}>
-                    <CloseIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                  </IconButton>
                 </Box>
               )}
-              <Box sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <Box sx={{ px: 2, py: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
                 <IconButton
                   onClick={handleAttachmentButtonClick}
                   disabled={uploadingAttachment || !!editingMessageId}
-                  sx={{ flexShrink: 0, color: 'text.secondary', '&:hover': { color: 'text.primary', bgcolor: 'action.hover' } }}
+                  aria-label={t('attachment')}
+                  sx={softIconButtonSx(theme)}
                 >
-                  {uploadingAttachment ? <CircularProgress size={18} sx={{ color: 'text.secondary' }} /> : <AttachFile />}
+                  {uploadingAttachment ? <CircularProgress size={18} sx={{ color: VIBE_TEAL }} /> : <AttachFile fontSize="small" />}
                 </IconButton>
-                <TextField
-                  fullWidth
-                  size="small"
-                  placeholder={t('messagePlaceholder')}
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }
-                  }}
-                  slotProps={{
-                    input: {
-                      sx: {
-                        borderRadius: '22px',
-                        bgcolor: surfaceElevated,
-                        color: 'text.primary',
-                        px: 1,
-                        '& fieldset': { border: 'none' },
-                      },
-                    },
-                  }}
-                />
-                <IconButton
-                  onClick={handleSendMessage}
-                  disabled={!inputText.trim()}
-                  sx={{
-                    width: 40,
-                    height: 40,
-                    flexShrink: 0,
-                    bgcolor: inputText.trim() ? 'primary.main' : 'action.disabledBackground',
-                    color: inputText.trim() ? '#fff' : 'text.secondary',
-                    transition: 'all 0.2s ease',
-                    '&:hover': { bgcolor: 'primary.dark' },
-                    '&.Mui-disabled': { color: 'text.disabled' },
-                  }}
-                >
-                  <Send fontSize="small" />
-                </IconButton>
+                <Box sx={{ ...composerBarSx(theme), flex: 1 }}>
+                  <InputBase
+                    fullWidth
+                    placeholder={t('messagePlaceholder')}
+                    value={inputText}
+                    onChange={(e) => setInputText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
+                    inputProps={{ 'aria-label': t('messagePlaceholder') }}
+                    sx={{ fontSize: '0.95rem', color: 'text.primary' }}
+                  />
+                </Box>
+                <GradientSendButton onClick={handleSendMessage} disabled={!inputText.trim()} />
               </Box>
             </Box>
           </>
@@ -1585,11 +1612,24 @@ const ChatPage: React.FC = React.memo(() => {
               flexDirection: 'column',
               justifyContent: 'center',
               alignItems: 'center',
-              bgcolor: 'background.default',
-              backgroundImage: 'radial-gradient(circle at 50% 40%, rgba(0,168,78,0.08), transparent 60%)',
+              ...chatCanvasSx(theme),
             }}
           >
-            <ChatIcon sx={{ fontSize: 72, mb: 2, opacity: 0.3, color: 'primary.main' }} />
+            <Box
+              sx={{
+                width: 88,
+                height: 88,
+                mb: 2.5,
+                borderRadius: '28px',
+                display: 'grid',
+                placeItems: 'center',
+                background: VIBE_GRADIENT,
+                boxShadow: VIBE_GLOW,
+                transform: 'rotate(-6deg)',
+              }}
+            >
+              <ChatIcon sx={{ fontSize: 44, color: '#fff' }} />
+            </Box>
             <Typography variant="h5" sx={{ color: 'text.primary', fontWeight: 700, mb: 0.5 }}>
               {t('chooseConversation')}
             </Typography>

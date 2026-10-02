@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Avatar, Box, Button, CircularProgress, IconButton, Menu, MenuItem, TextField, Typography } from '@mui/material';
+import { Avatar, Box, ButtonBase, CircularProgress, IconButton, InputBase, Menu, MenuItem, Typography } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import { Delete, Edit, EmojiEmotions, Favorite, FavoriteBorder, MoreVert, ThumbUp, ThumbUpOffAlt } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
@@ -9,6 +10,16 @@ import { appendComments, patchComment, setComments } from '../../store';
 import { type AppDispatch, type RootState } from '../../store';
 import { useConfirmDialog } from '../../contexts/ConfirmDialogContext';
 import CommentComposer from './CommentComposer';
+import {
+  VIBE_GRADIENT,
+  VIBE_LOVE_GRADIENT,
+  VIBE_TEAL,
+  composerBarSx,
+  pillSx,
+  vibeBorder,
+  vibeSurface,
+  vibeSurfaceHover,
+} from '../../styles/vibe';
 
 const MAX_COMMENT_LENGTH = 2000;
 const REPLIES_PAGE_SIZE = 5;
@@ -38,6 +49,7 @@ interface CommentItemProps {
 
 const CommentItem: React.FC<CommentItemProps> = ({ comment, groupId, sourceId, isReply = false }) => {
   const { t } = useTranslation();
+  const theme = useTheme();
   const dispatch = useDispatch<AppDispatch>();
   const user = useSelector((state: RootState) => state.auth.user);
   const replies = useSelector((state: RootState) => state.comment.comments[comment.id] ?? []);
@@ -247,71 +259,133 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, groupId, sourceId, i
     }
   };
 
+  const isLiked = comment.myReaction === 'LIKE';
+  const isLoved = comment.myReaction === 'LOVE';
+
+  const reactionPillSx = (active: boolean, activeBackground: string) => ({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 0.5,
+    px: 1.1,
+    py: 0.35,
+    borderRadius: '999px',
+    fontSize: '0.78rem',
+    fontWeight: 800,
+    color: active ? '#fff' : 'text.secondary',
+    background: active ? activeBackground : 'transparent',
+    border: '1px solid',
+    borderColor: active ? 'transparent' : vibeBorder(theme),
+    transition: 'transform 0.15s ease, background-color 0.15s ease, color 0.15s ease',
+    '&:hover': {
+      transform: 'translateY(-1px)',
+      ...(active ? {} : { bgcolor: vibeSurfaceHover(theme), color: 'text.primary' }),
+    },
+    '&:active': { transform: 'scale(0.94)' },
+  });
+
+  const textActionSx = {
+    px: 0.75,
+    py: 0.35,
+    borderRadius: '999px',
+    fontSize: '0.78rem',
+    fontWeight: 800,
+    '&:hover': { color: VIBE_TEAL },
+  };
+
   return (
-    <Box sx={{ display: 'flex', gap: 1.5, py: 1.25, pl: isReply ? 6 : 0 }}>
+    <Box
+      sx={{
+        display: 'flex',
+        gap: 1.25,
+        py: 1,
+        animation: 'commentIn 0.25s ease-out',
+        '@keyframes commentIn': {
+          from: { opacity: 0, transform: 'translateY(6px)' },
+          to: { opacity: 1, transform: 'translateY(0)' },
+        },
+      }}
+    >
       <Avatar
         src={comment.avatar}
         slotProps={{ img: { loading: 'lazy' } }}
-        sx={{ width: isReply ? 28 : 36, height: isReply ? 28 : 36 }}
+        sx={{ width: isReply ? 30 : 38, height: isReply ? 30 : 38, mt: 0.25, border: '2px solid', borderColor: vibeBorder(theme) }}
       />
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-              {comment.displayName || t('anonymousUser')}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              • {comment.durationCreatedDate}
-            </Typography>
-            {comment.status === 'EDITED' && (
-              <Typography variant="caption" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
-                ({t('editedLabel')})
-              </Typography>
-            )}
-          </Box>
-          {user?.id === comment.userId && (
-            <IconButton size="small" onClick={(e) => setAnchorEl(e.currentTarget)}>
-              <MoreVert fontSize="small" />
-            </IconButton>
-          )}
-        </Box>
-
         {isEditing ? (
-          <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
-            <TextField fullWidth size="small" value={editContent} onChange={(e) => setEditContent(e.target.value)} autoFocus />
-            <Button size="small" onClick={handleUpdate}>{t('save')}</Button>
-            <Button size="small" color="inherit" onClick={() => setIsEditing(false)}>{t('cancel')}</Button>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+            <Box sx={{ ...composerBarSx(theme), flex: 1, minWidth: 200 }}>
+              <InputBase
+                fullWidth
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                autoFocus
+                inputProps={{ 'aria-label': t('edit') }}
+                sx={{ fontSize: '0.92rem' }}
+              />
+            </Box>
+            <ButtonBase onClick={handleUpdate} sx={pillSx(theme, true)}>{t('save')}</ButtonBase>
+            <ButtonBase onClick={() => setIsEditing(false)} sx={pillSx(theme, false)}>{t('cancel')}</ButtonBase>
           </Box>
         ) : (
-          <Typography variant="body2" color="text.primary" sx={{ mt: 0.5, display: 'flex', alignItems: 'center', gap: 1 }}>
-            {comment.type === 'ICON' && <EmojiEmotions fontSize="small" color="primary" />}
-            {comment.content}
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5, maxWidth: '100%' }}>
+            <Box
+              sx={{
+                px: 1.5,
+                py: 1,
+                minWidth: 0,
+                borderRadius: '18px',
+                borderTopLeftRadius: '6px',
+                bgcolor: vibeSurface(theme),
+                border: '1px solid',
+                borderColor: vibeBorder(theme),
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+                <Typography sx={{ fontWeight: 800, fontSize: '0.86rem' }}>
+                  {comment.displayName || t('anonymousUser')}
+                </Typography>
+                {comment.status === 'EDITED' && (
+                  <Typography variant="caption" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
+                    ({t('editedLabel')})
+                  </Typography>
+                )}
+              </Box>
+              <Typography
+                variant="body2"
+                color="text.primary"
+                sx={{ mt: 0.25, display: 'flex', alignItems: 'center', gap: 0.75, wordBreak: 'break-word', lineHeight: 1.5 }}
+              >
+                {comment.type === 'ICON' && <EmojiEmotions fontSize="small" sx={{ color: VIBE_TEAL }} />}
+                {comment.content}
+              </Typography>
+            </Box>
+            {user?.id === comment.userId && (
+              <IconButton size="small" onClick={(e) => setAnchorEl(e.currentTarget)} sx={{ mt: 0.25, color: 'text.secondary' }}>
+                <MoreVert fontSize="small" />
+              </IconButton>
+            )}
+          </Box>
         )}
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-          <Button
-            size="small"
-            startIcon={comment.myReaction === 'LIKE' ? <ThumbUp fontSize="small" /> : <ThumbUpOffAlt fontSize="small" />}
-            color={comment.myReaction === 'LIKE' ? 'primary' : 'inherit'}
-            onClick={() => handleReact('LIKE')}
-            sx={{ minWidth: 0, px: 1 }}
-          >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 0.75, flexWrap: 'wrap' }}>
+          <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mr: 0.25 }}>
+            {comment.durationCreatedDate}
+          </Typography>
+          <ButtonBase onClick={() => handleReact('LIKE')} aria-pressed={isLiked} sx={reactionPillSx(isLiked, VIBE_GRADIENT)}>
+            {isLiked ? <ThumbUp sx={{ fontSize: 15 }} /> : <ThumbUpOffAlt sx={{ fontSize: 15 }} />}
             {comment.likeCount > 0 ? comment.likeCount : t('likeLabel')}
-          </Button>
-          <Button
-            size="small"
-            startIcon={comment.myReaction === 'LOVE' ? <Favorite fontSize="small" color="error" /> : <FavoriteBorder fontSize="small" />}
-            color={comment.myReaction === 'LOVE' ? 'error' : 'inherit'}
-            onClick={() => handleReact('LOVE')}
-            sx={{ minWidth: 0, px: 1 }}
-          >
+          </ButtonBase>
+          <ButtonBase onClick={() => handleReact('LOVE')} aria-pressed={isLoved} sx={reactionPillSx(isLoved, VIBE_LOVE_GRADIENT)}>
+            {isLoved ? <Favorite sx={{ fontSize: 15 }} /> : <FavoriteBorder sx={{ fontSize: 15 }} />}
             {comment.loveCount > 0 ? comment.loveCount : t('loveLabel')}
-          </Button>
+          </ButtonBase>
           {!isReply && (
-            <Button size="small" color="inherit" sx={{ minWidth: 0, px: 1 }} onClick={() => setReplyOpen((prev) => !prev)}>
+            <ButtonBase
+              onClick={() => setReplyOpen((prev) => !prev)}
+              sx={{ ...textActionSx, color: replyOpen ? VIBE_TEAL : 'text.secondary' }}
+            >
               {t('replyLabel')}
-            </Button>
+            </ButtonBase>
           )}
         </Box>
 
@@ -328,16 +402,24 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, groupId, sourceId, i
         )}
 
         {!isReply && comment.replyCount > 0 && (
-          <Button size="small" color="inherit" onClick={handleToggleReplies} sx={{ mt: 0.5, minWidth: 0, px: 1 }}>
+          <ButtonBase onClick={handleToggleReplies} sx={{ ...textActionSx, mt: 0.75, gap: 0.75, color: VIBE_TEAL }}>
+            <Box sx={{ width: 18, height: 2, borderRadius: 1, background: VIBE_GRADIENT }} />
             {repliesExpanded ? t('hideRepliesLabel') : t('viewRepliesLabel', { count: comment.replyCount })}
-          </Button>
+          </ButtonBase>
         )}
 
         {!isReply && repliesExpanded && (
-          <Box sx={{ mt: 0.5 }}>
+          <Box
+            sx={{
+              mt: 0.5,
+              pl: { xs: 1, sm: 1.5 },
+              borderLeft: '2px solid',
+              borderImage: `${VIBE_GRADIENT} 1`,
+            }}
+          >
             {repliesLoading && repliesPage === 1 ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
-                <CircularProgress size={18} />
+                <CircularProgress size={18} sx={{ color: VIBE_TEAL }} />
               </Box>
             ) : (
               replies.map((reply) => (
@@ -345,13 +427,13 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, groupId, sourceId, i
               ))
             )}
             {repliesHasMore && !repliesLoading && replies.length > 0 && (
-              <Button size="small" onClick={handleLoadMoreReplies} sx={{ ml: 6 }}>
+              <ButtonBase onClick={handleLoadMoreReplies} sx={{ ...textActionSx, color: VIBE_TEAL }}>
                 {t('loadMoreComments')}
-              </Button>
+              </ButtonBase>
             )}
             {repliesLoading && repliesPage > 1 && (
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
-                <CircularProgress size={16} />
+                <CircularProgress size={16} sx={{ color: VIBE_TEAL }} />
               </Box>
             )}
           </Box>

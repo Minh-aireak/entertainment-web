@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Box, Typography, Button, CircularProgress, IconButton, Tooltip, Collapse } from '@mui/material';
+import { Box, Typography, Button, ButtonBase, CircularProgress, Tooltip, Collapse } from '@mui/material';
+import { alpha, useTheme } from '@mui/material/styles';
 import { ChatBubbleOutlined, EmojiEmotions, TextSnippet } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { commentService, type CommentType } from '../../api/commentService';
@@ -10,6 +11,7 @@ import { useCommentSocket } from '../../hooks/useCommentSocket';
 import CommentComposer from './CommentComposer';
 import CommentItem from './CommentItem';
 import toast from 'react-hot-toast';
+import { VIBE_TEAL, pillSx, vibeBorder, vibeSurface } from '../../styles/vibe';
 
 const DEFAULT_PAGE_SIZE = 5;
 const MAX_COMMENT_LENGTH = 2000;
@@ -26,6 +28,7 @@ interface CommentSectionProps {
 
 const CommentSection: React.FC<CommentSectionProps> = ({ sourceId, open, onTotalChange }) => {
   const { t } = useTranslation();
+  const theme = useTheme();
   const dispatch = useDispatch<AppDispatch>();
   const comments = useSelector((state: RootState) => state.comment.comments[sourceId] ?? []);
   const isControlled = open !== undefined;
@@ -128,39 +131,55 @@ const CommentSection: React.FC<CommentSectionProps> = ({ sourceId, open, onTotal
   return (
     <Box sx={{ mt: isControlled ? 0 : 2 }}>
       {!isControlled && (
-        <Button startIcon={<ChatBubbleOutlined />} onClick={handleToggleComments} sx={{ mb: 1 }}>
+        <Button
+          startIcon={<ChatBubbleOutlined />}
+          onClick={handleToggleComments}
+          sx={{
+            mb: 1,
+            borderRadius: '999px',
+            fontWeight: 800,
+            px: 1.75,
+            color: showComments ? VIBE_TEAL : 'text.secondary',
+            bgcolor: showComments ? alpha(VIBE_TEAL, 0.12) : 'transparent',
+            '&:hover': { bgcolor: alpha(VIBE_TEAL, 0.16), color: VIBE_TEAL },
+          }}
+        >
           {t('commentsLabel')} ({totalComments})
         </Button>
       )}
 
       <Collapse in={showComments} timeout={220} unmountOnExit={!isControlled}>
-        <Box
-          sx={{
-            mt: isControlled ? 0 : 2,
-            pl: 2,
-            borderLeft: '2px solid',
-            borderColor: 'divider',
-          }}
-        >
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 3 }}>
-            <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+        <Box sx={{ mt: isControlled ? 0 : 2 }}>
+          <Box
+            sx={{
+              p: { xs: 1.5, sm: 2 },
+              mb: 2.5,
+              borderRadius: '22px',
+              bgcolor: vibeSurface(theme),
+              border: '1px solid',
+              borderColor: vibeBorder(theme),
+            }}
+          >
+            <Box sx={{ display: 'flex', gap: 1, mb: 1.5 }}>
               <Tooltip title={t('textCommentTooltip')}>
-                <IconButton
-                  size="small"
-                  color={commentType === 'TEXT' ? 'primary' : 'default'}
+                <ButtonBase
                   onClick={() => setCommentType('TEXT')}
+                  aria-pressed={commentType === 'TEXT'}
+                  aria-label={t('textCommentTooltip')}
+                  sx={{ ...pillSx(theme, commentType === 'TEXT'), display: 'flex', gap: 0.5, py: 0.5 }}
                 >
-                  <TextSnippet />
-                </IconButton>
+                  <TextSnippet sx={{ fontSize: 17 }} /> Aa
+                </ButtonBase>
               </Tooltip>
               <Tooltip title={t('iconCommentTooltip')}>
-                <IconButton
-                  size="small"
-                  color={commentType === 'ICON' ? 'primary' : 'default'}
+                <ButtonBase
                   onClick={() => setCommentType('ICON')}
+                  aria-pressed={commentType === 'ICON'}
+                  aria-label={t('iconCommentTooltip')}
+                  sx={{ ...pillSx(theme, commentType === 'ICON'), display: 'flex', gap: 0.5, py: 0.5 }}
                 >
-                  <EmojiEmotions />
-                </IconButton>
+                  <EmojiEmotions sx={{ fontSize: 17 }} /> 😎
+                </ButtonBase>
               </Tooltip>
             </Box>
             <CommentComposer
@@ -173,12 +192,15 @@ const CommentSection: React.FC<CommentSectionProps> = ({ sourceId, open, onTotal
 
           {loading && page === 1 ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-              <CircularProgress size={24} />
+              <CircularProgress size={24} sx={{ color: VIBE_TEAL }} />
             </Box>
           ) : comments.length === 0 ? (
-            <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-              {t('noCommentsYet')}
-            </Typography>
+            <Box sx={{ textAlign: 'center', py: 3 }}>
+              <Typography sx={{ fontSize: '1.8rem', lineHeight: 1, mb: 1 }} aria-hidden>💬</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {t('noCommentsYet')}
+              </Typography>
+            </Box>
           ) : (
             <Box>
               {comments.map((comment) => (
@@ -188,14 +210,14 @@ const CommentSection: React.FC<CommentSectionProps> = ({ sourceId, open, onTotal
           )}
 
           {hasMore && !loading && comments.length > 0 && (
-            <Button size="small" onClick={loadMore} sx={{ mt: 1 }}>
+            <ButtonBase onClick={loadMore} sx={{ ...pillSx(theme, false), mt: 1.5, color: VIBE_TEAL }}>
               {t('loadMoreComments')}
-            </Button>
+            </ButtonBase>
           )}
 
           {loading && page > 1 && (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
-              <CircularProgress size={20} />
+              <CircularProgress size={20} sx={{ color: VIBE_TEAL }} />
             </Box>
           )}
         </Box>

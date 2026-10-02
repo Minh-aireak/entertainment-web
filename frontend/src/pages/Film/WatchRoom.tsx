@@ -4,20 +4,19 @@ import { useSelector } from 'react-redux';
 import {
   Avatar,
   AvatarGroup,
-  Autocomplete,
   Box,
   Chip,
   CircularProgress,
   Container,
   Grid,
   IconButton,
+  InputBase,
   Link,
   ListItemIcon,
   ListItemText,
   Menu,
   MenuItem,
   Paper,
-  TextField,
   Tooltip,
   Typography,
   alpha,
@@ -30,7 +29,6 @@ import {
   ExitToApp,
   Groups,
   PostAdd as PostAddIcon,
-  Send as SendIcon,
   ShareOutlined as ShareIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
@@ -39,6 +37,18 @@ import { roomService } from '../../api/roomService';
 import { filmService } from '../../api/filmService';
 import { postService } from '../../api/postService';
 import VideoPlayer, { type VideoPlayerHandle, type PlaybackActionPayload } from '../../components/Film/VideoPlayer';
+import EpisodePicker from '../../components/Film/EpisodePicker';
+import GradientSendButton from '../../components/common/GradientSendButton';
+import {
+  VIBE_GLOW,
+  VIBE_GRADIENT,
+  VIBE_TEAL,
+  bubbleSx,
+  chatCanvasSx,
+  composerBarSx,
+  vibeBorder,
+  vibeSurface,
+} from '../../styles/vibe';
 import { useWatchRoomSession } from '../../contexts/watchRoomSessionContextValue';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import type {
@@ -445,50 +455,6 @@ const WatchRoom: React.FC = () => {
           )}
         </Paper>
 
-        <Paper
-          sx={{
-            borderRadius: 3,
-            p: 2,
-            mb: 2,
-            display: 'flex',
-            alignItems: { xs: 'stretch', sm: 'center' },
-            flexDirection: { xs: 'column', sm: 'row' },
-            gap: 1.5,
-            bgcolor: alpha(theme.palette.text.primary, 0.03),
-            border: '1px solid',
-            borderColor: alpha(theme.palette.text.primary, 0.06),
-          }}
-        >
-          <Box sx={{ minWidth: { sm: 220 } }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>{t('currentEpisode')}</Typography>
-            <Typography variant="caption" color="text.secondary">
-              {isHost ? t('hostCanChangeEpisode') : t('episodeControlledByHost')}
-            </Typography>
-          </Box>
-          <Autocomplete
-            fullWidth
-            size="small"
-            options={episodes}
-            disabled={!isHost || changingEpisode || episodes.length === 0}
-            value={currentEpisode ?? null}
-            isOptionEqualToValue={(option, value) => option.id === value.id}
-            getOptionLabel={(episode) => t('seasonEpisodeTitle', { season: episode.seasonNumber, episode: episode.episodeNumber, title: episode.title })}
-            groupBy={(episode) => t('seasonLabel', { season: episode.seasonNumber })}
-            onChange={(_event, episode) => {
-              if (episode) void handleEpisodeChange(episode.id);
-            }}
-            noOptionsText={t('noRoomEpisodes')}
-            loading={changingEpisode}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label={room.episodeId ? t('changeEpisode') : t('selectStartingEpisode')}
-                placeholder={t('chooseEpisode')}
-              />
-            )}
-          />
-        </Paper>
-
         <Grid container spacing={2}>
           <Grid size={{ xs: 12, md: 8 }}>
             <Box sx={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', bgcolor: '#000', borderRadius: 2, overflow: 'hidden' }}>
@@ -538,39 +504,98 @@ const WatchRoom: React.FC = () => {
 
           <Grid size={{ xs: 12, md: 4 }}>
             <Paper
+              elevation={0}
               sx={{
-                borderRadius: 3,
+                borderRadius: '24px',
                 height: { xs: 420, md: 'calc(100vh - 190px)' },
                 display: 'flex',
                 flexDirection: 'column',
-                bgcolor: alpha(theme.palette.text.primary, 0.03),
+                overflow: 'hidden',
+                bgcolor: 'background.paper',
                 border: '1px solid',
-                borderColor: alpha(theme.palette.text.primary, 0.06),
+                borderColor: vibeBorder(theme),
               }}
             >
-              <Box sx={{ p: 1.5, borderBottom: '1px solid', borderColor: alpha(theme.palette.text.primary, 0.06) }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+              <Box
+                sx={{
+                  px: 2,
+                  py: 1.5,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.25,
+                  borderBottom: '1px solid',
+                  borderColor: vibeBorder(theme),
+                }}
+              >
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.75,
+                    px: 1.1,
+                    py: 0.35,
+                    borderRadius: '999px',
+                    background: VIBE_GRADIENT,
+                    boxShadow: VIBE_GLOW,
+                    color: '#fff',
+                    fontSize: '0.66rem',
+                    fontWeight: 900,
+                    letterSpacing: '0.12em',
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: '50%',
+                      bgcolor: '#fff',
+                      animation: 'roomLivePulse 1.4s ease-in-out infinite',
+                      '@keyframes roomLivePulse': {
+                        '0%, 100%': { opacity: 1, transform: 'scale(1)' },
+                        '50%': { opacity: 0.35, transform: 'scale(0.7)' },
+                      },
+                      '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+                    }}
+                  />
+                  {t('liveLabel')}
+                </Box>
+                <Typography sx={{ fontWeight: 900, flex: 1, letterSpacing: '-0.01em' }}>
                   {t('chat')}
+                </Typography>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary' }}>
+                  {participantCount} {t('viewers')}
                 </Typography>
               </Box>
 
-              <Box sx={{ flex: 1, overflowY: 'auto', p: 1.5, display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <Box sx={{ flex: 1, overflowY: 'auto', p: 1.5, display: 'flex', flexDirection: 'column', gap: 1, ...chatCanvasSx(theme) }}>
                 {messages.length === 0 && (
-                  <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: 2 }}>
-                    {t('noRoomMessages')}
-                  </Typography>
+                  <Box sx={{ m: 'auto', textAlign: 'center', px: 2 }}>
+                    <Typography sx={{ fontSize: '2rem', lineHeight: 1, mb: 1 }} aria-hidden>🍿</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {t('noRoomMessages')}
+                    </Typography>
+                  </Box>
                 )}
                 {messages.map((item) => {
                   if (item.kind === 'system') {
                     return (
-                      <Typography
-                        key={item.id}
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ textAlign: 'center', display: 'block', my: 0.5 }}
-                      >
-                        {item.text}
-                      </Typography>
+                      <Box key={item.id} sx={{ display: 'flex', justifyContent: 'center', my: 0.25 }}>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            px: 1.25,
+                            py: 0.25,
+                            borderRadius: '999px',
+                            bgcolor: vibeSurface(theme),
+                            border: '1px solid',
+                            borderColor: vibeBorder(theme),
+                            color: 'text.secondary',
+                            fontWeight: 600,
+                          }}
+                        >
+                          {item.text}
+                        </Typography>
+                      </Box>
                     );
                   }
 
@@ -584,28 +609,36 @@ const WatchRoom: React.FC = () => {
                         flexDirection: isMine ? 'row-reverse' : 'row',
                         alignItems: 'flex-end',
                         gap: 0.75,
+                        animation: 'roomMessageIn 0.22s cubic-bezier(.2,.8,.2,1)',
+                        '@keyframes roomMessageIn': {
+                          from: { opacity: 0, transform: 'translateY(8px) scale(0.98)' },
+                          to: { opacity: 1, transform: 'translateY(0) scale(1)' },
+                        },
                       }}
                     >
-                      <Avatar src={message.senderAvatar} sx={{ width: 24, height: 24, fontSize: '0.65rem', bgcolor: 'primary.main' }}>
+                      <Avatar
+                        src={message.senderAvatar}
+                        sx={{
+                          width: 28,
+                          height: 28,
+                          fontSize: '0.68rem',
+                          fontWeight: 800,
+                          background: VIBE_GRADIENT,
+                          color: '#fff',
+                          border: '2px solid',
+                          borderColor: 'background.paper',
+                        }}
+                      >
                         {INITIALS(message.senderName)}
                       </Avatar>
-                      <Box sx={{ maxWidth: '75%' }}>
+                      <Box sx={{ maxWidth: '78%', display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start' }}>
                         {!isMine && (
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 0.5 }}>
+                          <Typography variant="caption" sx={{ display: 'block', ml: 1, mb: 0.25, fontWeight: 700, color: VIBE_TEAL }}>
                             {message.senderName || t('roomViewer')}
                           </Typography>
                         )}
-                        <Box
-                          sx={{
-                            px: 1.5,
-                            py: 0.75,
-                            borderRadius: 2.5,
-                            bgcolor: isMine ? 'primary.main' : alpha(theme.palette.text.primary, 0.08),
-                            color: isMine ? '#fff' : 'text.primary',
-                            wordBreak: 'break-word',
-                          }}
-                        >
-                          <Typography variant="body2">{message.content}</Typography>
+                        <Box sx={bubbleSx(theme, isMine, true)}>
+                          <Typography variant="body2" sx={{ lineHeight: 1.45 }}>{message.content}</Typography>
                         </Box>
                       </Box>
                     </Box>
@@ -614,27 +647,44 @@ const WatchRoom: React.FC = () => {
                 <div ref={messagesEndRef} />
               </Box>
 
-              <Box sx={{ p: 1.5, borderTop: '1px solid', borderColor: alpha(theme.palette.text.primary, 0.06), display: 'flex', gap: 1 }}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  placeholder={t('chatPlaceholder')}
-                  value={messageInput}
-                  onChange={(e) => setMessageInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }
-                  }}
-                />
-                <IconButton color="primary" onClick={handleSendMessage} disabled={!messageInput.trim()}>
-                  <SendIcon />
-                </IconButton>
+              <Box sx={{ p: 1.5, borderTop: '1px solid', borderColor: vibeBorder(theme), display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box sx={{ ...composerBarSx(theme), flex: 1 }}>
+                  <InputBase
+                    fullWidth
+                    placeholder={t('chatPlaceholder')}
+                    value={messageInput}
+                    onChange={(e) => setMessageInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
+                    inputProps={{ 'aria-label': t('chatPlaceholder') }}
+                    sx={{ fontSize: '0.92rem' }}
+                  />
+                </Box>
+                <GradientSendButton onClick={handleSendMessage} disabled={!messageInput.trim()} />
               </Box>
             </Paper>
           </Grid>
         </Grid>
+
+        {/* Below the player + chat (playlist-style) so the video and the chat composer always fit
+            on screen; the host scrolls down to switch episodes. */}
+        <Box sx={{ mt: 2 }}>
+          <EpisodePicker
+            episodes={episodes}
+            currentEpisodeId={room.episodeId}
+            onSelect={(episode) => void handleEpisodeChange(episode.id)}
+            title={isHost ? (room.episodeId ? t('changeEpisode') : t('selectStartingEpisode')) : (room.filmTitle || t('chooseEpisode'))}
+            subtitle={isHost ? t('hostCanChangeEpisode') : t('episodeControlledByHost')}
+            disabled={!isHost}
+            busy={changingEpisode}
+            maxGridHeight={196}
+            emptyText={t('noRoomEpisodes')}
+          />
+        </Box>
       </Container>
     </Box>
   );
