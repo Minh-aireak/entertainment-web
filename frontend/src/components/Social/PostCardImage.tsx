@@ -35,7 +35,7 @@ const PostCardImage: React.FC<PostCardImageProps> = ({ imageUrls }) => {
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         bgcolor: 'action.hover',
-        borderRadius: 1.5,
+        borderRadius: '16px',
         overflow: 'hidden',
         ...extraSx,
       }}

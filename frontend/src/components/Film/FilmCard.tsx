@@ -4,6 +4,7 @@ import { PlayArrow, Star, DeleteOutlined } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import type { FilmStatus, FilmSummaryResponse } from '../../models';
+import { VIBE_GLOW, VIBE_GRADIENT, VIBE_TEAL } from '../../styles/vibe';
 
 interface FilmCardProps {
   film: FilmSummaryResponse;
@@ -17,16 +18,11 @@ const STATUS_KEY: Record<FilmStatus, string> = {
   COMPLETED: 'filmStatus.completed',
 };
 
-const getStatusColor = (status?: FilmStatus) => {
-  switch (status) {
-    case 'ONGOING':
-      return 'success' as const;
-    case 'COMPLETED':
-      return 'default' as const;
-    default:
-      return 'default' as const;
-  }
-};
+// Ongoing = the fresh gradient pill; completed = frosted dark glass over the poster.
+const statusChipSx = (status?: FilmStatus) =>
+  status === 'ONGOING'
+    ? { background: VIBE_GRADIENT, color: '#fff', boxShadow: VIBE_GLOW }
+    : { bgcolor: 'rgba(0,0,0,0.55)', color: '#fff', backdropFilter: 'blur(6px)', border: '1px solid rgba(255,255,255,0.14)' };
 
 const FilmCard: React.FC<FilmCardProps> = React.memo(({ film, onRemove, variant = 'poster', size = 'md' }) => {
   const { t } = useTranslation();
@@ -49,16 +45,19 @@ const FilmCard: React.FC<FilmCardProps> = React.memo(({ film, onRemove, variant 
         height: '100%',
         position: 'relative',
         cursor: 'pointer',
-        transition: 'transform 0.3s ease-in-out',
+        transition: 'transform 0.3s cubic-bezier(.2,.8,.2,1), box-shadow 0.3s ease, border-color 0.3s ease',
         '&:hover': {
           transform: 'translateY(-6px)',
+          borderColor: alpha(VIBE_TEAL, 0.5),
+          boxShadow: theme.palette.mode === 'dark' ? '0 18px 38px rgba(0, 201, 167, 0.18)' : '0 18px 38px rgba(0, 168, 78, 0.16)',
           '& .film-overlay': { opacity: 1 },
+          '& .film-poster': { transform: 'scale(1.06)' },
         },
         bgcolor: 'background.paper',
-        borderRadius: 2,
+        borderRadius: '18px',
         overflow: 'hidden',
         border: '1px solid',
-        borderColor: alpha(theme.palette.text.primary, 0.05),
+        borderColor: alpha(theme.palette.text.primary, 0.06),
       }}
     >
       <Box sx={{ position: 'relative', width: '100%', height: isFill ? '100%' : undefined, aspectRatio: isFill ? undefined : '2 / 3', overflow: 'hidden', bgcolor: '#000' }}>
@@ -67,16 +66,16 @@ const FilmCard: React.FC<FilmCardProps> = React.memo(({ film, onRemove, variant 
           src={film.thumbnailUrl || 'https://via.placeholder.com/300x450?text=No+Thumbnail'}
           alt={film.title}
           loading="lazy"
-          sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          className="film-poster"
+          sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transition: 'transform 0.5s cubic-bezier(.2,.8,.2,1)' }}
         />
 
         {film.status && (
           <Box sx={{ position: 'absolute', top: 10, left: 10, zIndex: 1 }}>
             <Chip
               label={t(STATUS_KEY[film.status])}
-              color={getStatusColor(film.status)}
               size="small"
-              sx={{ fontWeight: 700, height: 22 }}
+              sx={{ fontWeight: 800, height: 22, ...statusChipSx(film.status) }}
             />
           </Box>
         )}
@@ -104,10 +103,9 @@ const FilmCard: React.FC<FilmCardProps> = React.memo(({ film, onRemove, variant 
           sx={{
             position: 'absolute',
             inset: 0,
-            bgcolor: isFill ? 'transparent' : 'rgba(0,0,0,0.6)',
             background: isFill
               ? 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.35) 55%, transparent 100%)'
-              : undefined,
+              : 'linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.45) 50%, rgba(0,0,0,0.1) 100%)',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'flex-end',
@@ -182,19 +180,13 @@ const FilmCard: React.FC<FilmCardProps> = React.memo(({ film, onRemove, variant 
                 fullWidth
                 startIcon={<PlayArrow fontSize={isLg ? 'medium' : 'small'} />}
                 sx={{
-                  bgcolor: 'primary.main',
-                  fontWeight: 700,
+                  fontWeight: 800,
                   fontSize: isLg ? '0.95rem' : '0.8125rem',
                   py: isLg ? 1 : 0.5,
-                  borderRadius: isLg ? 2 : 1,
+                  borderRadius: '999px',
                   letterSpacing: '0.02em',
-                  boxShadow: isLg ? '0 4px 14px rgba(0,168,78,0.35)' : 'none',
-                  transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-                  '&:hover': {
-                    bgcolor: 'primary.dark',
-                    transform: isLg ? 'scale(1.03)' : undefined,
-                    boxShadow: isLg ? '0 6px 18px rgba(0,168,78,0.5)' : undefined,
-                  },
+                  boxShadow: VIBE_GLOW,
+                  '&:hover': { transform: isLg ? 'scale(1.03)' : 'translateY(-1px)' },
                 }}
               >
                 {t('watchNow')}
@@ -209,7 +201,7 @@ const FilmCard: React.FC<FilmCardProps> = React.memo(({ film, onRemove, variant 
           <Typography
             variant={isLg ? 'subtitle1' : 'subtitle2'}
             noWrap
-            sx={{ fontWeight: 700, fontSize: isLg ? '1rem' : undefined }}
+            sx={{ fontWeight: 800, fontSize: isLg ? '1rem' : undefined, letterSpacing: '-0.01em' }}
           >
             {film.title}
           </Typography>

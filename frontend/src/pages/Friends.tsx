@@ -20,6 +20,7 @@ import {
   Skeleton,
   styled,
   alpha,
+  useTheme,
 } from '@mui/material';
 import {
   Search, Close, PersonAdd, PersonRemove, Chat, MoreVert, Check,
@@ -36,6 +37,17 @@ import { useConfirmDialog } from '../contexts/ConfirmDialogContext';
 import type { RootState } from '../store/index';
 import type { UserRelationshipResponse, FriendRequestResponse, UserProfileResponse } from '../models';
 import { useTranslation } from 'react-i18next';
+import { EmptyState, PageHero } from '../components/common/VibeUi';
+import {
+  VIBE_GRADIENT,
+  VIBE_LOVE_GRADIENT,
+  countBadgeSx,
+  hoverLiftSx,
+  pillTabSx,
+  pillTabsTrackSx,
+  softIconButtonSx,
+  vibeBorder,
+} from '../styles/vibe';
 
 interface FriendUI {
   id: string;
@@ -110,22 +122,8 @@ interface TabDef {
   urgent?: boolean;
 }
 
-const tabPillSx = {
-  textTransform: 'none' as const,
-  fontWeight: 700,
-  fontSize: '0.875rem',
-  minHeight: 42,
-  borderRadius: 999,
-  px: 2,
-  py: 1,
-  color: 'text.secondary',
-  gap: 1,
-  transition: 'all 0.2s ease',
-  '&.Mui-selected': {
-    color: '#fff',
-    bgcolor: 'primary.main',
-  },
-};
+// Soft aurora band across the top of each person card; requests get the warm "love" gradient.
+const CARD_BAND = 'linear-gradient(135deg, rgba(0,168,78,0.38) 0%, rgba(34,199,240,0.26) 55%, rgba(120,80,255,0.26) 100%)';
 
 const EMPTY_STATE_CONFIG: Record<number, { icon: typeof Groups; titleKey: string; subtitleKey: string; ctaKey?: string }> = {
   0: {
@@ -154,6 +152,7 @@ const EMPTY_STATE_CONFIG: Record<number, { icon: typeof Groups; titleKey: string
 const FriendsPage: React.FC = React.memo(() => {
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const theme = useTheme();
   const confirmDialog = useConfirmDialog();
   const currentUserId = useSelector((state: RootState) => state.auth.user?.id);
   const onlineUserIds = useSelector((state: RootState) => state.chat.onlineUsers);
@@ -377,19 +376,11 @@ const FriendsPage: React.FC = React.memo(() => {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, gap: 2, mb: 3 }}>
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Box sx={{
-              width: 44, height: 44, borderRadius: '14px', display: 'grid', placeItems: 'center',
-              background: 'linear-gradient(135deg, #00A84E 0%, #00c75c 100%)',
-              boxShadow: '0 4px 14px rgba(0, 168, 78, 0.3)', flexShrink: 0,
-            }}>
-              <Groups sx={{ color: '#fff', fontSize: 24 }} />
-            </Box>
-            {t('friends')}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75, ml: '58px' }}>
+      <PageHero
+        icon={<Groups />}
+        title={t('friends')}
+        subtitle={
+          <>
             {t('friendCount', { count: friends.length })}
             {onlineFriendsCount > 0 && (
               <>
@@ -399,88 +390,72 @@ const FriendsPage: React.FC = React.memo(() => {
                 </Box>
               </>
             )}
-          </Typography>
-        </Box>
-
-        <TextField
-          size="small"
-          placeholder={t('searchFriends')}
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          slotProps={{
-            input: {
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search fontSize="small" />
-                </InputAdornment>
-              ),
-              endAdornment: searchQuery ? (
-                <InputAdornment position="end">
-                  <IconButton size="small" onClick={() => setSearchQuery('')}>
-                    <Close fontSize="small" />
-                  </IconButton>
-                </InputAdornment>
-              ) : undefined,
-            },
-          }}
-          sx={{
-            width: { xs: '100%', sm: 320 },
-            '& .MuiOutlinedInput-root': {
-              borderRadius: 999,
-              bgcolor: 'action.hover',
-              '& fieldset': { border: 'none' },
-              '&:hover': { bgcolor: 'action.selected' },
-              '&.Mui-focused': {
-                bgcolor: 'background.paper',
-                boxShadow: (theme) => `0 0 0 2px ${theme.palette.primary.main}`,
+          </>
+        }
+        actions={
+          <TextField
+            size="small"
+            placeholder={t('searchFriends')}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search fontSize="small" />
+                  </InputAdornment>
+                ),
+                endAdornment: searchQuery ? (
+                  <InputAdornment position="end">
+                    <IconButton size="small" onClick={() => setSearchQuery('')}>
+                      <Close fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                ) : undefined,
               },
-            },
-          }}
-        />
-      </Box>
-
-      <Box sx={{
-        mb: 3, display: 'inline-flex', maxWidth: '100%', overflow: 'auto',
-        p: 0.5, borderRadius: 999, bgcolor: 'action.hover',
-      }}>
-        <Tabs
-          value={tabValue}
-          onChange={handleTabChange}
-          variant="scrollable"
-          scrollButtons={false}
-          slotProps={{ indicator: { style: { display: 'none' } } }}
-          sx={{ minHeight: 'auto', '& .MuiTabs-flexContainer': { gap: 0.5 } }}
-        >
-          {tabDefs.map((tab, idx) => (
-            <Tab
-              key={tab.label}
-              disableRipple
-              icon={<tab.icon fontSize="small" />}
-              iconPosition="start"
-              sx={tabPillSx}
-              label={
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                  {tab.label}
-                  <Box component="span" sx={{
-                    px: 0.9, py: 0.1, borderRadius: 999, fontSize: '0.72rem', fontWeight: 800,
-                    minWidth: 20, textAlign: 'center', lineHeight: 1.6,
-                    bgcolor: tab.urgent && tab.count > 0 ? 'error.main' : (tabValue === idx ? 'rgba(255,255,255,0.25)' : 'action.selected'),
-                    color: tab.urgent && tab.count > 0 ? '#fff' : (tabValue === idx ? '#fff' : 'text.secondary'),
-                  }}>
-                    {tab.count}
+            }}
+            sx={{
+              width: { xs: '100%', sm: 320 },
+              '& .MuiOutlinedInput-root': { borderRadius: '999px' },
+            }}
+          />
+        }
+      >
+        <Box sx={pillTabsTrackSx(theme)}>
+          <Tabs
+            value={tabValue}
+            onChange={handleTabChange}
+            variant="scrollable"
+            scrollButtons={false}
+            slotProps={{ indicator: { style: { display: 'none' } } }}
+            sx={{ minHeight: 'auto', '& .MuiTabs-flexContainer': { gap: 0.5 } }}
+          >
+            {tabDefs.map((tab, idx) => (
+              <Tab
+                key={tab.label}
+                disableRipple
+                icon={<tab.icon fontSize="small" />}
+                iconPosition="start"
+                sx={pillTabSx(theme)}
+                label={
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                    {tab.label}
+                    <Box component="span" sx={countBadgeSx(theme, tabValue === idx, Boolean(tab.urgent) && tab.count > 0)}>
+                      {tab.count}
+                    </Box>
                   </Box>
-                </Box>
-              }
-            />
-          ))}
-        </Tabs>
-      </Box>
+                }
+              />
+            ))}
+          </Tabs>
+        </Box>
+      </PageHero>
 
       <Grid container spacing={2.5}>
         {loading ? (
           Array.from({ length: 8 }).map((_, i) => (
             <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={i}>
-              <Card sx={{ borderRadius: 4, p: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5 }}>
+              <Card sx={{ borderRadius: '24px', p: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5 }}>
                 <Skeleton variant="circular" width={88} height={88} />
                 <Skeleton variant="text" width="70%" height={28} />
                 <Skeleton variant="text" width="40%" height={18} />
@@ -492,25 +467,27 @@ const FriendsPage: React.FC = React.memo(() => {
           filteredData.map((item, idx) => {
             const isOnline = item.status === 'FRIEND' && onlineUserIds.includes(item.id);
             const avatarNode = (
-              <Avatar
-                src={item.avatar}
-                sx={{
-                  width: 88, height: 88, fontSize: '2rem', fontWeight: 700,
-                  bgcolor: item.avatar ? undefined : stringToColor(item.id),
-                  border: '3px solid',
-                  borderColor: item.status === 'PENDING_RECEIVED' ? '#f39c12' : 'background.default',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                }}
-              >
-                {!item.avatar && (item.fullName?.[0]?.toUpperCase() || <Person />)}
-              </Avatar>
+              <Box sx={{ p: '3px', borderRadius: '50%', display: 'inline-flex', position: 'relative', background: isOnline ? VIBE_GRADIENT : 'transparent' }}>
+                <Avatar
+                  src={item.avatar}
+                  sx={{
+                    width: 88, height: 88, fontSize: '2rem', fontWeight: 800,
+                    bgcolor: item.avatar ? undefined : stringToColor(item.id),
+                    border: '3px solid',
+                    borderColor: item.status === 'PENDING_RECEIVED' ? '#f39c12' : 'background.paper',
+                    boxShadow: '0 6px 16px rgba(0,0,0,0.18)',
+                  }}
+                >
+                  {!item.avatar && (item.fullName?.[0]?.toUpperCase() || <Person />)}
+                </Avatar>
+              </Box>
             );
 
             return (
               <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={item.id}>
                 <Card
                   sx={{
-                    borderRadius: 4,
+                    borderRadius: '24px',
                     bgcolor: 'background.paper',
                     height: '100%',
                     display: 'flex',
@@ -520,29 +497,36 @@ const FriendsPage: React.FC = React.memo(() => {
                     p: 2.5,
                     pt: 3,
                     position: 'relative',
-                    overflow: 'visible',
+                    overflow: 'hidden',
                     border: '1px solid',
-                    borderColor: item.status === 'PENDING_RECEIVED' ? alpha('#f39c12', 0.4) : 'divider',
-                    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                    borderColor: item.status === 'PENDING_RECEIVED' ? alpha('#f39c12', 0.4) : vibeBorder(theme),
                     animation: `${fadeInUp} 0.45s cubic-bezier(0.4, 0, 0.2, 1) both`,
                     animationDelay: `${Math.min(idx * 35, 350)}ms`,
-                    '&:hover': {
-                      transform: 'translateY(-6px)',
-                      boxShadow: (theme) => theme.palette.mode === 'dark'
-                        ? '0 12px 28px rgba(0,168,78,0.18)'
-                        : '0 12px 28px rgba(0,168,78,0.12)',
-                      borderColor: 'primary.main',
-                    },
+                    ...hoverLiftSx(theme, 6),
                   }}
                 >
+                  <Box
+                    aria-hidden
+                    sx={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: 72,
+                      background: item.status === 'PENDING_RECEIVED' ? VIBE_LOVE_GRADIENT : CARD_BAND,
+                      opacity: item.status === 'PENDING_RECEIVED' ? 0.35 : 1,
+                      pointerEvents: 'none',
+                    }}
+                  />
                   {item.status === 'SUGGESTION' && (
                     <Tooltip title={t('hideSuggestion')}>
                       <IconButton
                         size="small"
                         onClick={() => handleDismissSuggestion(item.id)}
                         sx={{
-                          position: 'absolute', top: 8, right: 8, color: 'text.disabled',
-                          '&:hover': { color: 'text.secondary', bgcolor: 'action.hover' },
+                          position: 'absolute', top: 8, right: 8, zIndex: 1, color: '#fff',
+                          bgcolor: 'rgba(0,0,0,0.22)',
+                          '&:hover': { bgcolor: 'rgba(0,0,0,0.38)' },
                         }}
                       >
                         <Close fontSize="small" />
@@ -556,7 +540,7 @@ const FriendsPage: React.FC = React.memo(() => {
                     </LiveBadge>
                   ) : avatarNode}
 
-                  <Typography variant="subtitle1" noWrap sx={{ fontWeight: 700, mt: 1.5, maxWidth: '100%' }}>
+                  <Typography variant="subtitle1" noWrap sx={{ fontWeight: 800, mt: 1.5, maxWidth: '100%', letterSpacing: '-0.01em' }}>
                     {item.fullName}
                   </Typography>
 
@@ -596,7 +580,7 @@ const FriendsPage: React.FC = React.memo(() => {
                         </Button>
                         <IconButton
                           onClick={(e) => openMenu(e, item.id)}
-                          sx={{ border: '1px solid', borderColor: 'divider', flexShrink: 0 }}
+                          sx={{ ...softIconButtonSx(theme), width: 34, height: 34 }}
                         >
                           <MoreVert fontSize="small" />
                         </IconButton>
@@ -661,31 +645,27 @@ const FriendsPage: React.FC = React.memo(() => {
         ) : (
           <Grid size={{ xs: 12 }}>
             {isSearchingWithNoResults ? (
-              <Box sx={{ textAlign: 'center', py: 10, px: 2, bgcolor: 'action.hover', borderRadius: 6, border: '2px dashed', borderColor: 'divider' }}>
-                <SearchOff sx={{ fontSize: 72, color: 'text.disabled', mb: 2 }} />
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>{t('noSearchResults')}</Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                  {t('noResultsForQuery', { query: searchQuery })}
-                </Typography>
-                <Button variant="outlined" onClick={() => setSearchQuery('')} sx={{ borderRadius: 999, px: 4 }}>
-                  {t('clearSearch')}
-                </Button>
-              </Box>
+              <EmptyState
+                icon={<SearchOff />}
+                title={t('noSearchResults')}
+                description={t('noResultsForQuery', { query: searchQuery })}
+                action={
+                  <Button variant="outlined" onClick={() => setSearchQuery('')} sx={{ borderRadius: 999, px: 4 }}>
+                    {t('clearSearch')}
+                  </Button>
+                }
+              />
             ) : (
-              <Box sx={{ textAlign: 'center', py: 10, px: 2, bgcolor: 'action.hover', borderRadius: 6, border: '2px dashed', borderColor: 'divider' }}>
-                {React.createElement(EMPTY_STATE_CONFIG[tabValue].icon, { sx: { fontSize: 72, color: 'text.disabled', mb: 2 } })}
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
-                  {t(EMPTY_STATE_CONFIG[tabValue].titleKey)}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 380, mx: 'auto', mb: EMPTY_STATE_CONFIG[tabValue].ctaKey ? 3 : 0 }}>
-                  {t(EMPTY_STATE_CONFIG[tabValue].subtitleKey)}
-                </Typography>
-                {EMPTY_STATE_CONFIG[tabValue].ctaKey && (
+              <EmptyState
+                icon={React.createElement(EMPTY_STATE_CONFIG[tabValue].icon)}
+                title={t(EMPTY_STATE_CONFIG[tabValue].titleKey)}
+                description={t(EMPTY_STATE_CONFIG[tabValue].subtitleKey)}
+                action={EMPTY_STATE_CONFIG[tabValue].ctaKey && (
                   <Button variant="contained" onClick={() => setTabValue(1)} sx={{ borderRadius: 999, px: 4 }}>
                     {t(EMPTY_STATE_CONFIG[tabValue].ctaKey)}
                   </Button>
                 )}
-              </Box>
+              />
             )}
           </Grid>
         )}

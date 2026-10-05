@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Avatar, Box, Button, Card, CardContent, CardHeader, Divider, Typography } from '@mui/material';
+import { alpha, useTheme, type Theme } from '@mui/material/styles';
 import { Favorite, FavoriteBorder, ChatBubbleOutlined, ShareOutlined } from '@mui/icons-material';
 import { keyframes } from '@emotion/react';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +14,7 @@ import PostCardImage from './PostCardImage';
 import PostCardWatch from './PostCardWatch';
 import { findBackground, findFeeling } from './postComposerOptions';
 import type { Post } from './types';
+import { VIBE_TEAL, avatarRingSx, hoverLiftSx, vibeAccentText, vibeBorder, vibeSurfaceHover } from '../../styles/vibe';
 
 const CONTENT_TRUNCATE_LENGTH = 260;
 
@@ -52,17 +54,20 @@ interface PostCardProps {
   hideAuthorName?: boolean;
 }
 
-const actionButtonSx = {
+const LOVE_PINK = '#FF4D8D';
+
+const actionButtonSx = (theme: Theme) => ({
   flex: 1,
   py: 1,
-  borderRadius: 2,
+  borderRadius: '999px',
   color: 'text.secondary',
-  fontWeight: 600,
-  '&:hover': { bgcolor: 'action.hover' },
-};
+  fontWeight: 700,
+  '&:hover': { bgcolor: vibeSurfaceHover(theme) },
+});
 
 const PostCard: React.FC<PostCardProps> = React.memo(({ post, liking, onToggleLike, hideAuthorName }) => {
   const { t, i18n } = useTranslation();
+  const theme = useTheme();
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [justLiked, setJustLiked] = useState(false);
   const [contentExpanded, setContentExpanded] = useState(false);
@@ -117,33 +122,32 @@ const PostCard: React.FC<PostCardProps> = React.memo(({ post, liking, onToggleLi
       elevation={0}
       className="mb-4"
       sx={{
-        borderRadius: 3,
-        transition: 'transform 200ms ease, box-shadow 200ms ease',
-        '&:hover': {
-          transform: 'translateY(-3px)',
-          boxShadow: '0 16px 32px rgba(0, 168, 78, 0.14)',
-        },
+        borderRadius: '24px',
+        ...hoverLiftSx(theme, 3),
       }}
     >
       <CardHeader
+        sx={{ pb: 1.5 }}
         avatar={
-          <Avatar
-            src={post.avatar || undefined}
-            slotProps={{ img: { loading: 'lazy' } }}
-            sx={{
-              width: 44,
-              height: 44,
-              fontWeight: 700,
-              color: '#fff',
-              background: post.avatar ? undefined : getAvatarGradient(post.userId || post.displayName),
-            }}
-          >
-            {post.displayName?.[0]?.toUpperCase() || '?'}
-          </Avatar>
+          <Box sx={avatarRingSx(theme)}>
+            <Avatar
+              src={post.avatar || undefined}
+              slotProps={{ img: { loading: 'lazy' } }}
+              sx={{
+                width: 42,
+                height: 42,
+                fontWeight: 800,
+                color: '#fff',
+                background: post.avatar ? undefined : getAvatarGradient(post.userId || post.displayName),
+              }}
+            >
+              {post.displayName?.[0]?.toUpperCase() || '?'}
+            </Avatar>
+          </Box>
         }
         title={
           hideAuthorName ? undefined : (
-            <Typography variant="subtitle2" sx={{ fontWeight: 700 }} noWrap>
+            <Typography variant="subtitle2" sx={{ fontWeight: 800, fontSize: '0.95rem' }} noWrap>
               {post.displayName}
             </Typography>
           )
@@ -160,7 +164,7 @@ const PostCard: React.FC<PostCardProps> = React.memo(({ post, liking, onToggleLi
         {background ? (
           <Box
             sx={{
-              borderRadius: 2,
+              borderRadius: '18px',
               background: background.gradient,
               minHeight: 160,
               display: 'flex',
@@ -204,11 +208,11 @@ const PostCard: React.FC<PostCardProps> = React.memo(({ post, liking, onToggleLi
         ) : (
           <>
             {post.title && (
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 0.5, fontSize: '1.08rem', letterSpacing: '-0.01em' }}>
                 {post.title}
               </Typography>
             )}
-            <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+            <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
               {displayedContent}
             </Typography>
             {isLongContent && (
@@ -219,8 +223,8 @@ const PostCard: React.FC<PostCardProps> = React.memo(({ post, liking, onToggleLi
                   mt: 0.5,
                   px: 0,
                   minWidth: 0,
-                  fontWeight: 700,
-                  color: 'primary.main',
+                  fontWeight: 800,
+                  color: vibeAccentText(theme),
                   '&:hover': { bgcolor: 'transparent', textDecoration: 'underline' },
                 }}
               >
@@ -247,9 +251,9 @@ const PostCard: React.FC<PostCardProps> = React.memo(({ post, liking, onToggleLi
         </Box>
       )}
 
-      <Divider />
+      <Divider sx={{ mx: 2, borderColor: vibeBorder(theme) }} />
 
-      <Box className="flex items-center gap-1" sx={{ px: 1, py: 0.5 }}>
+      <Box className="flex items-center gap-1" sx={{ px: 1, py: 0.75 }}>
         <Button
           size="small"
           disabled={liking}
@@ -263,7 +267,10 @@ const PostCard: React.FC<PostCardProps> = React.memo(({ post, liking, onToggleLi
               {post.liked ? <Favorite fontSize="small" /> : <FavoriteBorder fontSize="small" />}
             </Box>
           }
-          sx={{ ...actionButtonSx, color: post.liked ? 'error.main' : 'text.secondary' }}
+          sx={{
+            ...actionButtonSx(theme),
+            ...(post.liked ? { color: LOVE_PINK, bgcolor: alpha(LOVE_PINK, 0.1), '&:hover': { bgcolor: alpha(LOVE_PINK, 0.16) } } : {}),
+          }}
         >
           {post.likeCount > 0 && (
             <Box
@@ -280,7 +287,10 @@ const PostCard: React.FC<PostCardProps> = React.memo(({ post, liking, onToggleLi
           size="small"
           onClick={() => setCommentsOpen((prev) => !prev)}
           startIcon={<ChatBubbleOutlined fontSize="small" />}
-          sx={{ ...actionButtonSx, color: commentsOpen ? 'primary.main' : 'text.secondary' }}
+          sx={{
+            ...actionButtonSx(theme),
+            ...(commentsOpen ? { color: vibeAccentText(theme), bgcolor: alpha(VIBE_TEAL, 0.1), '&:hover': { bgcolor: alpha(VIBE_TEAL, 0.16) } } : {}),
+          }}
         >
           {commentCount > 0 && (
             <Box component="span" sx={{ display: 'inline-block', mr: 0.5 }}>
@@ -290,7 +300,7 @@ const PostCard: React.FC<PostCardProps> = React.memo(({ post, liking, onToggleLi
           {t('comment')}
         </Button>
 
-        <Button size="small" onClick={handleShare} startIcon={<ShareOutlined fontSize="small" />} sx={actionButtonSx}>
+        <Button size="small" onClick={handleShare} startIcon={<ShareOutlined fontSize="small" />} sx={actionButtonSx(theme)}>
           {t('share')}
         </Button>
       </Box>

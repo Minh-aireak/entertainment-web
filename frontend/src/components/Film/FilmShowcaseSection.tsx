@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { alpha, Box, Button, Typography, Paper, useTheme } from '@mui/material';
+import { ChevronRight } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { filmService } from '../../api/filmService';
 import type { FilmCategory, FilmSummaryResponse } from '../../models';
 import FilmBentoGrid from './FilmBentoGrid';
 import { usePersistedState } from '../../hooks/usePersistedState';
+import { VIBE_GRADIENT, VIBE_TEAL, pillSx, vibeBorder } from '../../styles/vibe';
 
 interface FilmShowcaseSectionProps {
   titleKey: string;
@@ -54,16 +56,18 @@ const FilmShowcaseSection: React.FC<FilmShowcaseSectionProps> = React.memo(
 
     return (
       <Paper
+        elevation={0}
         sx={{
           mb: 6,
           p: { xs: 2, md: 4 },
-          borderRadius: 3,
+          borderRadius: '28px',
           bgcolor: alpha(theme.palette.text.primary, 0.03),
+          backgroundImage: `radial-gradient(circle at 100% 0%, ${alpha(VIBE_TEAL, 0.08)}, transparent 40%)`,
           border: '1px solid',
-          borderColor: alpha(theme.palette.text.primary, 0.06),
+          borderColor: vibeBorder(theme),
           transition: 'box-shadow 0.25s ease',
           '&:hover': {
-            boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
+            boxShadow: theme.palette.mode === 'dark' ? '0 12px 36px rgba(0,0,0,0.35)' : '0 12px 36px rgba(27,37,89,0.08)',
           },
         }}
       >
@@ -77,16 +81,21 @@ const FilmShowcaseSection: React.FC<FilmShowcaseSectionProps> = React.memo(
             gap: 2,
           }}
         >
-          <Typography
-            variant="h5"
-            sx={{ fontWeight: 800, letterSpacing: '-0.02em', flexShrink: 0 }}
-          >
-            {t(titleKey)}
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexShrink: 0 }}>
+            <Box aria-hidden sx={{ width: 6, height: 26, borderRadius: 3, background: VIBE_GRADIENT }} />
+            <Typography
+              variant="h5"
+              component="h2"
+              sx={{ fontWeight: 900, letterSpacing: '-0.025em' }}
+            >
+              {t(titleKey)}
+            </Typography>
+          </Box>
 
           <Button
             onClick={() => navigate(viewAllPath)}
-            sx={{ color: 'primary.main', fontWeight: 600, flexShrink: 0 }}
+            endIcon={<ChevronRight sx={{ color: VIBE_TEAL }} />}
+            sx={{ ...pillSx(theme, false), flexShrink: 0, py: 0.6 }}
           >
             {t('viewAll')}
           </Button>

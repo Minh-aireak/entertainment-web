@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, Button } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import { Autorenew } from '@mui/icons-material';
 import { keyframes } from '@emotion/react';
 import { useSelector } from 'react-redux';
@@ -13,6 +14,7 @@ import { usePostLikeToggle } from '../../hooks/usePostLikeToggle';
 import PostComposer from './PostComposer';
 import PostFeedList from './PostFeedList';
 import type { Post } from './types';
+import { VIBE_TEAL, pillSx } from '../../styles/vibe';
 
 const RANDOM_LIMIT = 5;
 const MAX_EXCLUDE_IDS = 100;
@@ -24,6 +26,7 @@ const spin = keyframes`
 
 const PostFeed: React.FC = () => {
   const { t } = useTranslation();
+  const theme = useTheme();
   const profileData = useSelector((state: RootState) => state.profile.profileData);
 
   const [posts, setPosts] = useState<Post[]>([]);
@@ -99,18 +102,9 @@ const PostFeed: React.FC = () => {
           disabled={loading}
           size="small"
           startIcon={
-            <Autorenew fontSize="small" sx={{ animation: loading ? `${spin} 900ms linear infinite` : 'none' }} />
+            <Autorenew fontSize="small" sx={{ color: VIBE_TEAL, animation: loading ? `${spin} 900ms linear infinite` : 'none' }} />
           }
-          sx={{
-            textTransform: 'none',
-            fontWeight: 700,
-            fontSize: '0.8125rem',
-            borderRadius: 999,
-            color: 'primary.main',
-            bgcolor: 'action.hover',
-            px: 1.75,
-            '&:hover': { bgcolor: 'action.selected' },
-          }}
+          sx={{ ...pillSx(theme, false), py: 0.6, textTransform: 'none' }}
         >
           {t('refreshFeed')}
         </Button>

@@ -17,7 +17,8 @@ import {
   Badge,
   useMediaQuery,
 } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { alpha, useTheme } from '@mui/material/styles';
+import { VIBE_GLOW, VIBE_GRADIENT, VIBE_GRADIENT_HOVER, VIBE_TEAL } from '../../styles/vibe';
 import {
   Menu as MenuIcon,
   Movie,
@@ -136,8 +137,11 @@ const listItemSx = (selected: boolean, isCollapsed: boolean, isLast?: boolean) =
   // Only layout-affecting props that actually change are transitioned, all on
   // the shared SIDEBAR_TRANSITION_MS/EASING so this never desyncs from the
   // container's own width transition.
-  transition: sidebarTransition('width', 'margin', 'padding', 'background-color', 'color'),
-  bgcolor: selected ? ACCENT_GREEN : 'transparent',
+  transition: sidebarTransition('width', 'margin', 'padding', 'background-color', 'color', 'box-shadow'),
+  bgcolor: 'transparent',
+  // Same "active = gradient" language as the rest of the app (episode tiles, pills, buttons).
+  backgroundImage: selected ? VIBE_GRADIENT : 'none',
+  boxShadow: selected ? '0 6px 18px rgba(0, 201, 167, 0.28)' : 'none',
   opacity: selected ? 1 : 0.9,
   color: selected ? '#fff' : 'text.primary',
   position: 'relative' as const,
@@ -173,9 +177,10 @@ const listItemSx = (selected: boolean, isCollapsed: boolean, isLast?: boolean) =
     textOverflow: 'ellipsis',
   },
   '&:hover': {
-    bgcolor: selected ? '#008F41' : 'rgba(0, 168, 78, 0.12)',
+    bgcolor: selected ? 'transparent' : alpha(VIBE_TEAL, 0.1),
+    backgroundImage: selected ? VIBE_GRADIENT_HOVER : 'none',
     opacity: 1,
-    '& .MuiListItemIcon-root': { color: selected ? '#fff' : ACCENT_GREEN },
+    '& .MuiListItemIcon-root': { color: selected ? '#fff' : VIBE_TEAL },
   },
 });
 
@@ -329,10 +334,10 @@ const SidebarPanel = React.memo(function SidebarPanel({
               boxShadow: (theme) => theme.palette.mode === 'dark' ? '0 2px 10px rgba(0,0,0,0.45)' : '0 2px 10px rgba(0,0,0,0.12)',
               transition: `${sidebarTransition('background-color', 'color', 'border-color', 'box-shadow')}, transform 150ms ${SIDEBAR_EASING}`,
               '&:hover': {
-                bgcolor: ACCENT_GREEN,
-                borderColor: ACCENT_GREEN,
+                backgroundImage: VIBE_GRADIENT,
+                borderColor: 'transparent',
                 color: '#fff',
-                boxShadow: '0 4px 16px rgba(0,168,78,0.45)',
+                boxShadow: VIBE_GLOW,
                 transform: 'translate(50%, -50%) scale(1.08)',
               },
               '&:active': {
@@ -483,8 +488,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: `linear-gradient(135deg, ${ACCENT_GREEN} 0%, #00c75c 100%)`,
-                boxShadow: '0 4px 14px rgba(0, 168, 78, 0.3)',
+                background: VIBE_GRADIENT,
+                boxShadow: VIBE_GLOW,
                 transition: 'transform 0.2s ease',
                 flexShrink: 0,
               }}
@@ -641,6 +646,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             minWidth: 0,
             p: { xs: 2, md: 3 },
             bgcolor: 'background.default',
+            // Faint brand glow behind every page (the chat canvas blobs, minus the dot grid).
+            backgroundImage: (theme) => [
+              `radial-gradient(900px circle at 100% 0%, ${alpha('#22C7F0', theme.palette.mode === 'dark' ? 0.07 : 0.06)}, transparent 60%)`,
+              `radial-gradient(800px circle at 0% 100%, ${alpha('#00A84E', theme.palette.mode === 'dark' ? 0.07 : 0.05)}, transparent 60%)`,
+            ].join(', '),
             minHeight: `calc(100vh - ${NAVBAR_HEIGHT}px)`,
           }}
         >
