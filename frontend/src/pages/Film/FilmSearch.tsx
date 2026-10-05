@@ -1,15 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
+  ButtonBase,
   Container,
   Typography,
   Grid,
   Skeleton,
-  TextField,
-  InputAdornment,
+  InputBase,
   Paper,
   Chip,
-  FormControl,
   Select,
   MenuItem,
   IconButton,
@@ -27,13 +26,14 @@ import {
   LocalFireDepartment,
   Theaters,
   InfoOutlined,
-  Check,
   RestartAlt,
   Category,
   Public,
   CalendarMonth,
   StarRounded,
   Tune,
+  ArrowForwardRounded,
+  KeyboardArrowDownRounded,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { filmService } from '../../api/filmService';
@@ -44,8 +44,24 @@ import type {
 } from '../../models';
 import { COUNTRY_VALUES, GENRE_VALUES } from '../../constants/film';
 import FilmCard from '../../components/Film/FilmCard';
+import { SectionHeader } from '../../components/common/VibeUi';
 import { usePersistedState } from '../../hooks/usePersistedState';
 import { useInfiniteScroll } from '../../hooks/useInfiniteScroll';
+import {
+  VIBE_GLOW,
+  VIBE_GRADIENT,
+  VIBE_GRADIENT_HOVER,
+  VIBE_LOVE_GRADIENT,
+  VIBE_TEAL,
+  eyebrowSx,
+  glassCardSx,
+  pillSx,
+  softIconButtonSx,
+  vibeAccentText,
+  vibeBorder,
+  vibeSurface,
+  vibeSurfaceHover,
+} from '../../styles/vibe';
 
 const PAGE_SIZE = 16;
 
@@ -55,11 +71,13 @@ const HOT_SEARCH_KEYS = ['ACTION', 'COMEDY', 'KOREA', 'USA', 'VIETNAM'] as const
 
 const MIN_RATING_OPTIONS = [0, 3, 4, 4.5, 4.8] as const;
 
+type MinRating = (typeof MIN_RATING_OPTIONS)[number];
+
 interface FilmFilters {
   genre: Genre | 'ALL';
   country: Country | 'ALL';
   year: number | 'ALL';
-  minRating: typeof MIN_RATING_OPTIONS[number];
+  minRating: MinRating;
 }
 
 const YEAR_OPTIONS = (() => {
@@ -86,40 +104,344 @@ const applyFilmFilters = (
   return out;
 };
 
-const sectionLabelSx = {
-  fontWeight: 700,
-  color: 'text.secondary',
-  textTransform: 'uppercase' as const,
-  letterSpacing: '0.06em',
-  fontSize: '0.72rem',
+const focusRingSx = { outline: `2px solid ${VIBE_TEAL}`, outlineOffset: 2 };
+
+/** The vibe colours plus violet, ending where they start so the moving ring loops without a seam. */
+const SEARCH_RING_FLOW = 'linear-gradient(90deg, #00A84E, #00C9A7, #22C7F0, #7850FF, #00A84E)';
+
+/*
+ * Pill search bar. Focusing it swaps the hairline border for a gradient ring that keeps flowing:
+ * the paper fill is clipped to the padding box and the gradient is painted in the transparent
+ * border, then slid along by exactly one tile per loop.
+ */
+const searchBarSx = (theme: Theme) => {
+  const dark = theme.palette.mode === 'dark';
+  const paper = theme.palette.background.paper;
+  return {
+    display: 'flex',
+    alignItems: 'center',
+    gap: { xs: 0.75, sm: 1.25 },
+    height: { xs: 58, md: 66 },
+    px: { xs: 0.75, md: 1 },
+    borderRadius: '999px',
+    border: '2px solid',
+    borderColor: vibeBorder(theme),
+    bgcolor: paper,
+    boxShadow: dark ? '0 14px 36px rgba(0, 0, 0, 0.45)' : '0 14px 36px rgba(27, 37, 89, 0.1)',
+    transition: 'box-shadow 0.25s ease, border-color 0.25s ease, transform 0.25s cubic-bezier(.2,.8,.2,1)',
+    '@keyframes filmSearchRingFlow': {
+      from: { backgroundPosition: '0 0, 0% 50%' },
+      to: { backgroundPosition: '0 0, 200% 50%' },
+    },
+    '&:hover': { borderColor: alpha(VIBE_TEAL, 0.45) },
+    '&:focus-within': {
+      borderColor: 'transparent',
+      background: `linear-gradient(${paper}, ${paper}) padding-box, ${SEARCH_RING_FLOW} border-box`,
+      backgroundSize: '100% 100%, 200% 100%',
+      animation: 'filmSearchRingFlow 3s linear infinite',
+      boxShadow: `0 0 0 6px ${alpha(VIBE_TEAL, 0.14)}, 0 18px 44px ${alpha(VIBE_TEAL, dark ? 0.22 : 0.18)}`,
+      transform: 'translateY(-2px)',
+    },
+    // The search orb is the first child: it tilts while the bar has focus.
+    '&:focus-within > :first-of-type': { transform: 'rotate(-12deg) scale(1.06)' },
+    '@media (prefers-reduced-motion: reduce)': { '&:focus-within': { animation: 'none' } },
+  };
 };
 
-const filterChipSx = (selected: boolean, theme: Theme) => ({
-  height: 38,
-  px: 0.5,
-  fontSize: '0.875rem',
-  fontWeight: selected ? 700 : 500,
-  borderRadius: 2.5,
-  borderColor: selected ? 'primary.main' : alpha(theme.palette.text.primary, 0.14),
-  bgcolor: selected ? undefined : alpha(theme.palette.text.primary, 0.03),
-  transition: 'all 0.15s ease',
+const searchOrbSx = {
+  width: { xs: 40, md: 48 },
+  height: { xs: 40, md: 48 },
+  borderRadius: '50%',
+  display: 'grid',
+  placeItems: 'center',
+  flexShrink: 0,
+  color: '#fff',
+  background: VIBE_GRADIENT,
+  boxShadow: VIBE_GLOW,
+  transition: 'transform 0.35s cubic-bezier(.2,.8,.2,1)',
+  '& .MuiSvgIcon-root': { fontSize: { xs: 22, md: 25 } },
+};
+
+const searchInputSx = {
+  flex: 1,
+  minWidth: 0,
+  fontSize: { xs: '1rem', md: '1.08rem' },
+  fontWeight: 600,
+  '& input': { textOverflow: 'ellipsis' },
+  '& input::placeholder': { color: 'text.secondary', opacity: 0.85, fontWeight: 500 },
+};
+
+const clearButtonSx = (theme: Theme) => ({
+  ...softIconButtonSx(theme),
+  width: 36,
+  height: 36,
+  '@keyframes filmSearchPop': {
+    from: { opacity: 0, transform: 'scale(0.6)' },
+    to: { opacity: 1, transform: 'scale(1)' },
+  },
+  animation: 'filmSearchPop 0.22s cubic-bezier(.2,.8,.2,1)',
+  '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+});
+
+const goButtonSx = {
+  width: { xs: 44, md: 50 },
+  height: { xs: 44, md: 50 },
+  flexShrink: 0,
+  color: '#fff',
+  background: VIBE_GRADIENT,
+  boxShadow: VIBE_GLOW,
+  transition: 'transform 0.18s cubic-bezier(.2,.8,.2,1), box-shadow 0.2s ease',
+  '& .MuiSvgIcon-root': { transition: 'transform 0.2s ease' },
+  '&:hover': { background: VIBE_GRADIENT_HOVER, transform: 'scale(1.06)' },
+  '&:hover .MuiSvgIcon-root': { transform: 'translateX(3px)' },
+  '&:active': { transform: 'scale(0.92)' },
+};
+
+const hotBadgeSx = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 0.5,
+  px: 1.25,
+  py: 0.5,
+  borderRadius: '999px',
+  background: VIBE_LOVE_GRADIENT,
+  boxShadow: '0 6px 16px rgba(255, 77, 141, 0.35)',
+  color: '#fff',
+  fontSize: '0.7rem',
+  fontWeight: 900,
+  letterSpacing: '0.12em',
+  textTransform: 'uppercase' as const,
+  '& .MuiSvgIcon-root': { fontSize: 16 },
+};
+
+/** Hot keyword as a #hashtag sticker: tilts on hover, lights up while its filter is applied. */
+const hotTagSx = (theme: Theme, active: boolean) => ({
+  ...pillSx(theme, active),
+  py: 0.8,
+  fontSize: '0.85rem',
   '&:hover': {
-    borderColor: 'primary.main',
-    bgcolor: selected ? undefined : 'rgba(0,168,78,0.12)',
-    transform: 'translateY(-1px)',
+    transform: 'translateY(-2px) rotate(-2deg)',
+    ...(active ? {} : { bgcolor: vibeSurfaceHover(theme), borderColor: alpha(VIBE_TEAL, 0.45) }),
+  },
+  '&:active': { transform: 'scale(0.95)' },
+  '&.Mui-focusVisible': focusRingSx,
+});
+
+/** Genre / country option: glass pill when idle, gradient with a glow when picked. */
+const filterPillSx = (theme: Theme, selected: boolean) => ({
+  ...pillSx(theme, selected),
+  px: 2,
+  py: 1,
+  fontSize: '0.875rem',
+  '&:hover': {
+    transform: 'translateY(-2px)',
+    ...(selected
+      ? { boxShadow: `0 10px 26px ${alpha(VIBE_TEAL, 0.45)}` }
+      : { bgcolor: vibeSurfaceHover(theme), borderColor: alpha(VIBE_TEAL, 0.45) }),
+  },
+  '&:active': { transform: 'scale(0.95)' },
+  '&.Mui-focusVisible': focusRingSx,
+});
+
+const resetPillSx = (theme: Theme) => {
+  const red = theme.palette.error.main;
+  return {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 0.75,
+    px: 1.5,
+    py: 0.75,
+    borderRadius: '999px',
+    fontSize: '0.8rem',
+    fontWeight: 800,
+    color: red,
+    bgcolor: alpha(red, 0.1),
+    border: '1px solid',
+    borderColor: alpha(red, 0.3),
+    transition: 'background-color 0.2s ease, transform 0.15s ease',
+    '& .MuiSvgIcon-root': { fontSize: 18, transition: 'transform 0.45s cubic-bezier(.2,.8,.2,1)' },
+    '&:hover': { bgcolor: alpha(red, 0.18) },
+    '&:hover .MuiSvgIcon-root': { transform: 'rotate(-360deg)' },
+    '&:active': { transform: 'scale(0.95)' },
+    '&.Mui-focusVisible': focusRingSx,
+  };
+};
+
+/*
+ * Pill dropdown built on a plain InputBase, so there is no notched outline to fight: glass when
+ * idle, a gradient ring (same padding-box / border-box trick as the search bar, with a teal tint
+ * over the paper) once it holds a real filter. The chevron sits in its own little bubble.
+ */
+const pillSelectSx = (theme: Theme, active: boolean) => {
+  const paper = theme.palette.background.paper;
+  const tint = alpha(VIBE_TEAL, theme.palette.mode === 'dark' ? 0.1 : 0.07);
+  return {
+    width: '100%',
+    minHeight: 60,
+    pl: 1,
+    pr: 1.5,
+    borderRadius: '999px',
+    border: '1.5px solid',
+    borderColor: vibeBorder(theme),
+    bgcolor: vibeSurface(theme),
+    cursor: 'pointer',
+    transition: 'transform 0.2s cubic-bezier(.2,.8,.2,1), box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.2s ease',
+    '&:hover': { transform: 'translateY(-2px)', borderColor: alpha(VIBE_TEAL, 0.5), bgcolor: vibeSurfaceHover(theme) },
+    ...(active
+      ? {
+          borderColor: 'transparent',
+          background: `linear-gradient(${tint}, ${tint}) padding-box, linear-gradient(${paper}, ${paper}) padding-box, ${VIBE_GRADIENT} border-box`,
+          boxShadow: `0 10px 26px ${alpha(VIBE_TEAL, 0.2)}`,
+          '&:hover': { transform: 'translateY(-2px)' },
+        }
+      : {}),
+    '&.Mui-focused': { boxShadow: `0 0 0 4px ${alpha(VIBE_TEAL, 0.16)}` },
+    '& .MuiSelect-select': { py: 0.75 },
+    '& .MuiSelect-icon': {
+      right: 12,
+      top: 'calc(50% - 15px)',
+      width: 30,
+      height: 30,
+      p: '4px',
+      boxSizing: 'border-box' as const,
+      borderRadius: '50%',
+      color: active ? '#fff' : 'text.secondary',
+      background: active ? VIBE_GRADIENT : vibeSurfaceHover(theme),
+      transition: 'transform 0.25s cubic-bezier(.2,.8,.2,1), color 0.2s ease',
+    },
+  };
+};
+
+const pillSelectOrbSx = (theme: Theme, active: boolean) => ({
+  width: 38,
+  height: 38,
+  borderRadius: '50%',
+  display: 'grid',
+  placeItems: 'center',
+  flexShrink: 0,
+  color: active ? '#fff' : vibeAccentText(theme),
+  background: active ? VIBE_GRADIENT : alpha(VIBE_TEAL, 0.12),
+  '& .MuiSvgIcon-root': { fontSize: 20 },
+});
+
+const pillSelectMenuProps = (columns?: number) => ({
+  anchorOrigin: { vertical: 'bottom', horizontal: 'left' } as const,
+  transformOrigin: { vertical: 'top', horizontal: 'left' } as const,
+  slotProps: {
+    paper: { sx: { mt: 1, borderRadius: '22px', p: 0.75, maxHeight: 440 } },
+    list: {
+      sx: columns
+        ? { display: 'grid', gridTemplateColumns: `repeat(${columns}, 1fr)`, gap: 0.75, p: 0.5 }
+        : { display: 'flex', flexDirection: 'column' as const, gap: 0.5, p: 0.5 },
+    },
   },
 });
 
-const selectSx = (theme: Theme) => ({
-  borderRadius: 2,
-  bgcolor: alpha(theme.palette.text.primary, 0.03),
-  '& .MuiOutlinedInput-notchedOutline': {
-    borderColor: alpha(theme.palette.text.primary, 0.14),
-  },
-  '&:hover .MuiOutlinedInput-notchedOutline': {
-    borderColor: 'primary.main',
+const pillSelectItemSx = (grid: boolean, fullRow: boolean) => ({
+  m: 0,
+  minHeight: 0,
+  py: 1,
+  px: 2,
+  gap: 1,
+  borderRadius: '999px',
+  justifyContent: grid ? 'center' : 'flex-start',
+  fontWeight: 700,
+  ...(grid && fullRow ? { gridColumn: '1 / -1' } : {}),
+  '&.Mui-selected, &.Mui-selected:hover, &.Mui-selected.Mui-focusVisible': {
+    background: VIBE_GRADIENT,
+    color: '#fff',
+    boxShadow: VIBE_GLOW,
   },
 });
+
+const FilterLabel: React.FC<{ icon: React.ReactNode; children: React.ReactNode }> = ({ icon, children }) => {
+  const theme = useTheme();
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 0.75,
+        mb: 1.5,
+        color: vibeAccentText(theme),
+        '& .MuiSvgIcon-root': { fontSize: 16 },
+      }}
+    >
+      {icon}
+      <Typography component="span" sx={eyebrowSx(theme)}>
+        {children}
+      </Typography>
+    </Box>
+  );
+};
+
+interface PillSelectProps<T extends string | number> {
+  value: T;
+  options: readonly T[];
+  /** The "no filter" option: the pill stays glass while this is picked. */
+  emptyValue: T;
+  label: string;
+  icon: React.ReactNode;
+  renderOption: (option: T) => React.ReactNode;
+  onChange: (value: T) => void;
+  /** Lay the menu out as a grid of bubbles instead of a list. */
+  columns?: number;
+}
+
+function PillSelect<T extends string | number>({
+  value,
+  options,
+  emptyValue,
+  label,
+  icon,
+  renderOption,
+  onChange,
+  columns,
+}: PillSelectProps<T>) {
+  const theme = useTheme();
+  const active = value !== emptyValue;
+  return (
+    <Select
+      value={value}
+      onChange={(e) => onChange(e.target.value as T)}
+      input={<InputBase />}
+      inputProps={{ 'aria-label': label }}
+      IconComponent={KeyboardArrowDownRounded}
+      renderValue={(selected) => (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
+          <Box sx={pillSelectOrbSx(theme, active)}>{icon}</Box>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography
+              component="span"
+              sx={{
+                display: 'block',
+                fontSize: '0.66rem',
+                fontWeight: 900,
+                letterSpacing: '0.12em',
+                lineHeight: 1.4,
+                textTransform: 'uppercase',
+                color: active ? vibeAccentText(theme) : 'text.secondary',
+              }}
+            >
+              {label}
+            </Typography>
+            <Typography component="span" noWrap sx={{ display: 'block', fontWeight: 800, fontSize: '0.98rem', lineHeight: 1.3 }}>
+              {renderOption(selected)}
+            </Typography>
+          </Box>
+        </Box>
+      )}
+      MenuProps={pillSelectMenuProps(columns)}
+      sx={pillSelectSx(theme, active)}
+    >
+      {options.map((option) => (
+        <MenuItem key={String(option)} value={option} sx={pillSelectItemSx(!!columns, option === emptyValue)}>
+          {renderOption(option)}
+        </MenuItem>
+      ))}
+    </Select>
+  );
+}
 
 const FilmSearch: React.FC = React.memo(() => {
   const { t } = useTranslation();
@@ -134,7 +456,6 @@ const FilmSearch: React.FC = React.memo(() => {
   const [loading, setLoading] = useState(items.length === 0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [focused, setFocused] = useState(false);
   const [filters, setFilters] = usePersistedState<FilmFilters>('filmSearch:filters', {
     genre: 'ALL',
     country: 'ALL',
@@ -249,7 +570,7 @@ const FilmSearch: React.FC = React.memo(() => {
     setQuery('');
   }, [setFilters, setQuery]);
 
-  const hotSearchChips = useMemo(() => {
+  const hotSearchTags = useMemo(() => {
     return HOT_SEARCH_KEYS.map((key) => {
       const isGenre = GENRE_VALUES.includes(key as Genre);
       const isCountry = COUNTRY_VALUES.includes(key as Country);
@@ -258,30 +579,21 @@ const FilmSearch: React.FC = React.memo(() => {
         : isCountry
         ? t(`country.${key as Country}`)
         : key;
+      const active = filters.genre === key || filters.country === key;
       return (
-        <Chip
-          key={key}
-          label={label}
-          onClick={() => handleHotSearch(key)}
-          size="medium"
-          sx={{
-            fontSize: '0.85rem',
-            px: 0.5,
-            py: 0.3,
-            bgcolor: alpha(theme.palette.text.primary, 0.04),
-            borderColor: alpha(theme.palette.text.primary, 0.12),
-            color: 'text.primary',
-            '&:hover': {
-              bgcolor: 'primary.main',
-              color: '#fff',
-              borderColor: 'primary.main',
-            },
-          }}
-          variant="outlined"
-        />
+        <ButtonBase key={key} onClick={() => handleHotSearch(key)} sx={hotTagSx(theme, active)}>
+          <Box
+            component="span"
+            aria-hidden
+            sx={{ mr: '2px', fontWeight: 900, color: active ? 'rgba(255,255,255,0.75)' : vibeAccentText(theme) }}
+          >
+            #
+          </Box>
+          {label}
+        </ButtonBase>
       );
     });
-  }, [handleHotSearch, t, theme]);
+  }, [filters.genre, filters.country, handleHotSearch, t, theme]);
 
   const handleClearQuery = useCallback(() => {
     setQuery('');
@@ -297,11 +609,13 @@ const FilmSearch: React.FC = React.memo(() => {
     });
   }, [setFilters]);
 
-  const hasActiveFilters =
-    filters.genre !== 'ALL' ||
-    filters.country !== 'ALL' ||
-    filters.year !== 'ALL' ||
-    filters.minRating > 0;
+  const activeFilterCount = [
+    filters.genre !== 'ALL',
+    filters.country !== 'ALL',
+    filters.year !== 'ALL',
+    filters.minRating > 0,
+  ].filter(Boolean).length;
+  const hasActiveFilters = activeFilterCount > 0;
 
   return (
     <Box sx={{ minHeight: '100vh', pb: 8 }}>
@@ -338,69 +652,44 @@ const FilmSearch: React.FC = React.memo(() => {
             {t('searchPageSubtitle')}
           </Typography>
 
-          <Box
-            sx={{
-              maxWidth: 760,
-              position: 'relative',
-            }}
-          >
-            <TextField
-              fullWidth
-              placeholder={t('searchPlaceholder')}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  setCommittedQuery(query);
-                }
-              }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 3,
-                  bgcolor: 'background.paper',
-                  py: 0.5,
-                  fontSize: '1.05rem',
-                  transition: 'box-shadow 0.2s ease, transform 0.2s ease',
-                  boxShadow: focused
-                    ? '0 0 0 4px rgba(0,168,78,0.18), 0 16px 40px rgba(0,0,0,0.45)'
-                    : '0 10px 30px rgba(0,0,0,0.3)',
-                  border: focused ? '1px solid primary.main' : '1px solid transparent',
-                },
-                '& .MuiOutlinedInput-notchedOutline': {
-                  border: 'none',
-                },
-              }}
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Search sx={{ color: focused ? 'primary.main' : 'text.secondary', fontSize: 24 }} />
-                    </InputAdornment>
-                  ),
-                  endAdornment: query ? (
-                    <InputAdornment position="end">
-                      <Tooltip title={t('delete')}>
-                        <IconButton onClick={handleClearQuery} size="small" edge="end">
-                          <Close fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </InputAdornment>
-                  ) : null,
-                },
-              }}
-            />
+          <Box sx={{ maxWidth: 760 }}>
+            <Box sx={searchBarSx(theme)}>
+              <Box sx={searchOrbSx} aria-hidden>
+                <Search />
+              </Box>
+              <InputBase
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    setCommittedQuery(query);
+                  }
+                }}
+                placeholder={t('searchPlaceholder')}
+                inputProps={{ 'aria-label': t('searchPageTitle'), enterKeyHint: 'search' }}
+                sx={searchInputSx}
+              />
+              {query && (
+                <Tooltip title={t('clearSearch')}>
+                  <IconButton onClick={handleClearQuery} aria-label={t('clearSearch')} sx={clearButtonSx(theme)}>
+                    <Close fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
+              <Tooltip title={t('searchFilms')}>
+                <IconButton onClick={() => setCommittedQuery(query)} aria-label={t('searchFilms')} sx={goButtonSx}>
+                  <ArrowForwardRounded />
+                </IconButton>
+              </Tooltip>
+            </Box>
           </Box>
 
-          <Box sx={{ mt: 3, display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.secondary' }}>
-              <LocalFireDepartment sx={{ fontSize: 18, color: 'error.main' }} />
-              <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                {t('hotSearches')}
-              </Typography>
+          <Box sx={{ mt: 3, display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap' }}>
+            <Box sx={hotBadgeSx}>
+              <LocalFireDepartment />
+              {t('hotSearches')}
             </Box>
-            {hotSearchChips}
+            {hotSearchTags}
           </Box>
         </Container>
       </Box>
@@ -408,58 +697,47 @@ const FilmSearch: React.FC = React.memo(() => {
       <Container maxWidth="xl">
         <Paper
           sx={{
+            ...glassCardSx(theme),
+            position: 'relative',
+            overflow: 'hidden',
+            isolation: 'isolate',
             mb: 4,
             p: { xs: 2.5, md: 3.5 },
-            borderRadius: 4,
-            bgcolor: alpha(theme.palette.text.primary, 0.03),
-            border: '1px solid',
-            borderColor: alpha(theme.palette.text.primary, 0.06),
           }}
         >
           <Box
+            aria-hidden
             sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              mb: 3,
-              flexWrap: 'wrap',
-              gap: 2,
+              position: 'absolute',
+              zIndex: -1,
+              top: -120,
+              right: -90,
+              width: 300,
+              height: 300,
+              borderRadius: '50%',
+              background: VIBE_GRADIENT,
+              opacity: theme.palette.mode === 'dark' ? 0.14 : 0.1,
+              filter: 'blur(60px)',
+              pointerEvents: 'none',
             }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: 36,
-                  height: 36,
-                  borderRadius: 2,
-                  bgcolor: alpha('#00A84E', 0.15),
-                }}
-              >
-                <Tune sx={{ fontSize: 20, color: 'primary.main' }} />
-              </Box>
-              <Typography variant="subtitle1" sx={{ fontWeight: 800, fontSize: '1.05rem' }}>
-                {t('searchFilters')}
-              </Typography>
-            </Box>
-            {hasActiveFilters && (
-              <Chip
-                icon={<RestartAlt sx={{ fontSize: '16px !important' }} />}
-                label={t('resetFilters')}
-                onClick={resetFilters}
-                size="medium"
-                sx={{
-                  fontWeight: 700,
-                  bgcolor: alpha('#ef5350', 0.12),
-                  color: '#ef5350',
-                  border: '1px solid rgba(239,83,80,0.3)',
-                  '&:hover': { bgcolor: alpha('#ef5350', 0.2) },
-                }}
-              />
-            )}
-          </Box>
+          />
+
+          <SectionHeader
+            icon={<Tune />}
+            title={t('searchFilters')}
+            count={activeFilterCount || undefined}
+            action={
+              hasActiveFilters ? (
+                <ButtonBase onClick={resetFilters} aria-label={t('resetFilters')} sx={resetPillSx(theme)}>
+                  <RestartAlt />
+                  <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
+                    {t('resetFilters')}
+                  </Box>
+                </ButtonBase>
+              ) : undefined
+            }
+            sx={{ mb: 3 }}
+          />
 
           {hasActiveFilters && (
             <Box
@@ -469,8 +747,8 @@ const FilmSearch: React.FC = React.memo(() => {
                 gap: 1,
                 mb: 3,
                 pb: 3,
-                borderBottom: '1px solid',
-                borderBottomColor: alpha(theme.palette.text.primary, 0.06),
+                borderBottom: '1px dashed',
+                borderBottomColor: vibeBorder(theme),
               }}
             >
               {filters.genre !== 'ALL' && (
@@ -513,125 +791,85 @@ const FilmSearch: React.FC = React.memo(() => {
           )}
 
           <Box sx={{ mb: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 1.5 }}>
-              <Category sx={{ fontSize: 16, color: 'text.secondary' }} />
-              <Typography variant="caption" sx={sectionLabelSx}>
-                {t('filterByGenre')}
-              </Typography>
-            </Box>
+            <FilterLabel icon={<Category />}>{t('filterByGenre')}</FilterLabel>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-              <Chip
-                label={t('allGenres')}
+              <ButtonBase
                 onClick={() => setFilters((f) => ({ ...f, genre: 'ALL' }))}
-                color={filters.genre === 'ALL' ? 'primary' : 'default'}
-                variant={filters.genre === 'ALL' ? 'filled' : 'outlined'}
-                size="medium"
-                icon={filters.genre === 'ALL' ? <Check sx={{ fontSize: '16px !important' }} /> : undefined}
-                sx={filterChipSx(filters.genre === 'ALL', theme)}
-              />
+                aria-pressed={filters.genre === 'ALL'}
+                sx={filterPillSx(theme, filters.genre === 'ALL')}
+              >
+                {t('allGenres')}
+              </ButtonBase>
               {GENRE_VALUES.map((g) => (
-                <Chip
+                <ButtonBase
                   key={g}
-                  label={t(`genre.${g}`)}
                   onClick={() => setFilters((f) => ({ ...f, genre: f.genre === g ? 'ALL' : g }))}
-                  color={filters.genre === g ? 'primary' : 'default'}
-                  variant={filters.genre === g ? 'filled' : 'outlined'}
-                  size="medium"
-                  icon={filters.genre === g ? <Check sx={{ fontSize: '16px !important' }} /> : undefined}
-                  sx={filterChipSx(filters.genre === g, theme)}
-                />
+                  aria-pressed={filters.genre === g}
+                  sx={filterPillSx(theme, filters.genre === g)}
+                >
+                  {t(`genre.${g}`)}
+                </ButtonBase>
               ))}
             </Box>
           </Box>
 
           <Box sx={{ mb: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 1.5 }}>
-              <Public sx={{ fontSize: 16, color: 'text.secondary' }} />
-              <Typography variant="caption" sx={sectionLabelSx}>
-                {t('filterByCountry')}
-              </Typography>
-            </Box>
+            <FilterLabel icon={<Public />}>{t('filterByCountry')}</FilterLabel>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-              <Chip
-                label={t('allCountries')}
+              <ButtonBase
                 onClick={() => setFilters((f) => ({ ...f, country: 'ALL' }))}
-                color={filters.country === 'ALL' ? 'primary' : 'default'}
-                variant={filters.country === 'ALL' ? 'filled' : 'outlined'}
-                size="medium"
-                icon={filters.country === 'ALL' ? <Check sx={{ fontSize: '16px !important' }} /> : undefined}
-                sx={filterChipSx(filters.country === 'ALL', theme)}
-              />
+                aria-pressed={filters.country === 'ALL'}
+                sx={filterPillSx(theme, filters.country === 'ALL')}
+              >
+                {t('allCountries')}
+              </ButtonBase>
               {COUNTRY_VALUES.map((c) => (
-                <Chip
+                <ButtonBase
                   key={c}
-                  label={t(`country.${c}`)}
                   onClick={() => setFilters((f) => ({ ...f, country: f.country === c ? 'ALL' : c }))}
-                  color={filters.country === c ? 'primary' : 'default'}
-                  variant={filters.country === c ? 'filled' : 'outlined'}
-                  size="medium"
-                  icon={filters.country === c ? <Check sx={{ fontSize: '16px !important' }} /> : undefined}
-                  sx={filterChipSx(filters.country === c, theme)}
-                />
+                  aria-pressed={filters.country === c}
+                  sx={filterPillSx(theme, filters.country === c)}
+                >
+                  {t(`country.${c}`)}
+                </ButtonBase>
               ))}
             </Box>
           </Box>
 
-          <Divider sx={{ my: 3, borderColor: 'divider' }} />
+          <Divider sx={{ my: 3, borderStyle: 'dashed', borderColor: vibeBorder(theme) }} />
 
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-            <Box sx={{ flex: '1 1 200px', minWidth: 200 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 1 }}>
-                <CalendarMonth sx={{ fontSize: 16, color: 'text.secondary' }} />
-                <Typography variant="caption" sx={sectionLabelSx}>
-                  {t('filterYear')}
-                </Typography>
-              </Box>
-              <FormControl fullWidth size="medium">
-                <Select
-                  value={filters.year}
-                  displayEmpty
-                  inputProps={{ 'aria-label': t('filterYear') }}
-                  onChange={(e) =>
-                    setFilters((f) => ({ ...f, year: e.target.value as number | 'ALL' }))
-                  }
-                  sx={selectSx(theme)}
-                >
-                  {YEAR_OPTIONS.map((y) => (
-                    <MenuItem key={y} value={y}>
-                      {y === 'ALL' ? t('allYears') : y}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2 }}>
+            <Box sx={{ flex: { xs: '1 1 100%', sm: '0 1 300px' }, minWidth: 0 }}>
+              <PillSelect
+                value={filters.year}
+                options={YEAR_OPTIONS}
+                emptyValue="ALL"
+                label={t('filterYear')}
+                icon={<CalendarMonth />}
+                renderOption={(y) => (y === 'ALL' ? t('allYears') : y)}
+                onChange={(year) => setFilters((f) => ({ ...f, year }))}
+                columns={3}
+              />
             </Box>
 
-            <Box sx={{ flex: '1 1 200px', minWidth: 200 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 1 }}>
-                <StarRounded sx={{ fontSize: 16, color: 'text.secondary' }} />
-                <Typography variant="caption" sx={sectionLabelSx}>
-                  {t('filterMinRating')}
-                </Typography>
-              </Box>
-              <FormControl fullWidth size="medium">
-                <Select
-                  value={filters.minRating}
-                  displayEmpty
-                  inputProps={{ 'aria-label': t('filterMinRating') }}
-                  onChange={(e) =>
-                    setFilters((f) => ({
-                      ...f,
-                      minRating: e.target.value as (typeof MIN_RATING_OPTIONS)[number],
-                    }))
-                  }
-                  sx={selectSx(theme)}
-                >
-                  {MIN_RATING_OPTIONS.map((r) => (
-                    <MenuItem key={r} value={r}>
-                      {r === 0 ? t('anyRating') : `≥ ${r.toFixed(1)} ★`}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+            <Box sx={{ flex: { xs: '1 1 100%', sm: '0 1 300px' }, minWidth: 0 }}>
+              <PillSelect<MinRating>
+                value={filters.minRating}
+                options={MIN_RATING_OPTIONS}
+                emptyValue={0}
+                label={t('filterMinRating')}
+                icon={<StarRounded />}
+                renderOption={(r) =>
+                  r === 0 ? (
+                    t('anyRating')
+                  ) : (
+                    <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                      <StarRounded sx={{ fontSize: 18, color: '#FFC83D' }} />≥ {r.toFixed(1)}
+                    </Box>
+                  )
+                }
+                onChange={(minRating) => setFilters((f) => ({ ...f, minRating }))}
+              />
             </Box>
 
             <Box
@@ -641,7 +879,6 @@ const FilmSearch: React.FC = React.memo(() => {
                 gap: 0.75,
                 flex: '1 1 240px',
                 color: 'text.secondary',
-                pt: { xs: 0, md: 3.75 },
               }}
             >
               <InfoOutlined fontSize="small" sx={{ color: 'text.secondary', fontSize: 16 }} />
