@@ -9,26 +9,40 @@ import {
   Grid,
   TextField,
   Button,
-  Divider,
   IconButton,
   CircularProgress,
   InputAdornment,
   CardContent,
   Card,
 } from '@mui/material';
-import { CameraAlt, CalendarMonth, Message, Edit } from '@mui/icons-material';
+import { CameraAlt, CalendarMonth, Message, Edit, AccountCircle, Bolt, NotificationsActive } from '@mui/icons-material';
+import { alpha, useTheme } from '@mui/material/styles';
 import { toast } from 'react-hot-toast';
 import { profileService } from '../api/profileService';
 import { fileService } from '../api/fileService';
 import { notificationService } from '../api/notificationService';
 import type { NotificationResponse, ConversationResponse } from '../models';
 import { useTranslation } from 'react-i18next';
+import { EmptyState, SectionHeader } from '../components/common/VibeUi';
+import {
+  VIBE_GLOW,
+  VIBE_GRADIENT,
+  VIBE_LOVE_GRADIENT,
+  gradientTextSx,
+  heroSurfaceSx,
+  hoverLiftSx,
+  iconTileSx,
+  vibeAccentText,
+  vibeBorder,
+  vibeSurface,
+} from '../styles/vibe';
 
 type FormErrors = Partial<Record<'firstName' | 'lastName' | 'phoneNumber' | 'email' | 'displayName' | 'dob', string>>;
 
 const ProfilePage: React.FC = React.memo(() => {
   const dispatch = useDispatch();
   const { t, i18n } = useTranslation();
+  const theme = useTheme();
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const { profileData, loading: profileLoading } = useSelector((state: RootState) => state.profile);
   const [isEditing, setIsEditing] = useState(false);
@@ -282,8 +296,20 @@ const ProfilePage: React.FC = React.memo(() => {
     <Box>
       <Grid container spacing={4}>
         <Grid size={{ xs: 12, md: 4 }}>
-          <Paper sx={{ p: 4, textAlign: 'center', borderRadius: 4 }}>
-            <Box sx={{ position: 'relative', display: 'inline-block', mb: 2 }}>
+          <Paper elevation={0} sx={{ textAlign: 'center', borderRadius: '28px', overflow: 'hidden', border: '1px solid', borderColor: vibeBorder(theme) }}>
+            <Box
+              aria-hidden
+              sx={{
+                ...heroSurfaceSx(theme),
+                height: 128,
+                borderRadius: 0,
+                border: 'none',
+                boxShadow: 'none',
+                backgroundColor: alpha(theme.palette.text.primary, 0.02),
+              }}
+            />
+            <Box sx={{ px: 4, pb: 4 }}>
+            <Box sx={{ position: 'relative', display: 'inline-block', mb: 2, mt: '-78px', p: '4px', borderRadius: '50%', background: VIBE_GRADIENT, boxShadow: VIBE_GLOW }}>
               <input
                 type="file"
                 ref={fileInputRef}
@@ -293,11 +319,15 @@ const ProfilePage: React.FC = React.memo(() => {
               />
               <Avatar 
                 src={formData.avatar}
-                sx={{ 
-                  width: 150, 
-                  height: 150, 
-                  fontSize: 60, 
-                  bgcolor: 'primary.main',
+                sx={{
+                  width: 140,
+                  height: 140,
+                  fontSize: 56,
+                  fontWeight: 900,
+                  color: '#fff',
+                  background: VIBE_GRADIENT,
+                  border: '4px solid',
+                  borderColor: 'background.paper',
                   cursor: uploading ? 'default' : 'pointer',
                   opacity: uploading ? 0.6 : 1,
                   transition: 'opacity 0.3s ease'
@@ -313,58 +343,66 @@ const ProfilePage: React.FC = React.memo(() => {
               <IconButton 
                 onClick={!uploading ? handleAvatarClick : undefined}
                 disabled={uploading}
-                sx={{ 
-                  position: 'absolute', 
-                  bottom: 0, 
-                  right: 0, 
-                  bgcolor: 'white',
-                  boxShadow: 2,
-                  '&:hover': { bgcolor: '#f0f0f0' },
-                  '&.Mui-disabled': { bgcolor: '#e0e0e0' }
+                sx={{
+                  position: 'absolute',
+                  bottom: 6,
+                  right: 6,
+                  width: 42,
+                  height: 42,
+                  color: '#fff',
+                  background: VIBE_GRADIENT,
+                  boxShadow: VIBE_GLOW,
+                  border: '3px solid',
+                  borderColor: 'background.paper',
+                  '&:hover': { transform: 'scale(1.08)' },
+                  '&.Mui-disabled': { color: '#fff', opacity: 0.7 }
                 }}
               >
                 {uploading ? (
-                  <CircularProgress size={20} />
+                  <CircularProgress size={18} color="inherit" />
                 ) : (
-                  <CameraAlt color="primary" />
+                  <CameraAlt sx={{ fontSize: 20 }} />
                 )}
               </IconButton>
             </Box>
-            <Typography variant="h5" sx={{ fontWeight: 'bold' }}>{formData.displayName}</Typography>
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>@{formData.username}</Typography>
-            <Divider sx={{ mb: 3 }} />
-            <Grid container spacing={2}>
-              <Grid size={{ xs: 6 }}>
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  {profileData?.totalPosts ?? '-'}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">{t('totalPosts')}</Typography>
-              </Grid>
-              <Grid size={{ xs: 6 }}>
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  {profileData?.totalFriends ?? '-'}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">{t('friends')}</Typography>
-              </Grid>
+            <Typography variant="h5" sx={{ fontWeight: 900, letterSpacing: '-0.02em' }}>{formData.displayName}</Typography>
+            <Typography variant="body2" sx={{ mb: 3, fontWeight: 800, color: vibeAccentText(theme) }}>@{formData.username}</Typography>
+            <Grid container spacing={1.5}>
+              {[
+                { value: profileData?.totalPosts ?? '-', label: t('totalPosts') },
+                { value: profileData?.totalFriends ?? '-', label: t('friends') },
+              ].map((stat) => (
+                <Grid size={{ xs: 6 }} key={stat.label}>
+                  <Box sx={{ py: 1.75, borderRadius: '18px', bgcolor: vibeSurface(theme), border: '1px solid', borderColor: vibeBorder(theme) }}>
+                    <Typography variant="h5" sx={{ fontWeight: 900, lineHeight: 1.1, ...gradientTextSx }}>
+                      {stat.value}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>{stat.label}</Typography>
+                  </Box>
+                </Grid>
+              ))}
             </Grid>
+            </Box>
           </Paper>
         </Grid>
 
         <Grid size={{ xs: 12, md: 8 }}>
-          <Paper sx={{ p: 4, borderRadius: 4 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-              <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{t('personalInformation')}</Typography>
-              {!isEditing ? (
-                <Button startIcon={<Edit />} variant="outlined" onClick={() => setIsEditing(true)}>
+          <Paper elevation={0} sx={{ p: { xs: 2.5, md: 4 }, borderRadius: '28px', border: '1px solid', borderColor: vibeBorder(theme) }}>
+            <SectionHeader
+              icon={<AccountCircle />}
+              title={t('personalInformation')}
+              sx={{ mb: 3 }}
+              action={!isEditing ? (
+                <Button startIcon={<Edit />} variant="outlined" onClick={() => setIsEditing(true)} sx={{ borderRadius: '999px', px: 2 }}>
                   {t('edit')}
                 </Button>
               ) : (
                 <Box sx={{ display: 'flex', gap: 1 }}>
-                  <Button variant="outlined" onClick={() => setIsEditing(false)}>{t('cancel')}</Button>
-                  <Button variant="contained" onClick={handleSave}>{t('save')}</Button>
+                  <Button variant="outlined" onClick={() => setIsEditing(false)} sx={{ borderRadius: '999px', px: 2 }}>{t('cancel')}</Button>
+                  <Button variant="contained" onClick={handleSave} sx={{ borderRadius: '999px', px: 2.5 }}>{t('save')}</Button>
                 </Box>
               )}
-            </Box>
+            />
             
             <Grid container spacing={3}>
               <Grid size={{ xs: 12, sm: 6 }}>
@@ -459,7 +497,7 @@ const ProfilePage: React.FC = React.memo(() => {
                         <InputAdornment position="start">
                           <CalendarMonth
                             sx={{
-                              color: 'rgba(255, 255, 255, 0.4)',
+                              color: 'text.secondary',
                               mr: 1
                             }}
                           />
@@ -482,21 +520,23 @@ const ProfilePage: React.FC = React.memo(() => {
             </Grid>
           </Paper>
 
-          <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 4, mb: 2 }}>{t('recentActivity')}</Typography>
-          <Grid container spacing={2}>
+          <SectionHeader icon={<Bolt />} title={t('recentActivity')} sx={{ mt: 4 }} />
+          <Grid container spacing={1.5}>
             {recentActivities.notifications.length === 0 && recentActivities.conversations.length === 0 && (
               <Grid size={{ xs: 12 }}>
-                <Typography variant="body2" color="text.secondary">{t('noRecentActivity')}</Typography>
+                <EmptyState compact emoji="✨" title={t('noRecentActivity')} />
               </Grid>
             )}
             
             {recentActivities.notifications.map((notif) => (
               <Grid size={{ xs: 12 }} key={notif.id}>
-                <Card variant="outlined" sx={{ borderRadius: 3 }}>
-                  <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <CalendarMonth color="primary" />
-                    <Box>
-                      <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                <Card elevation={0} sx={{ borderRadius: '20px', ...hoverLiftSx(theme, 2) }}>
+                  <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, '&:last-child': { pb: 2 } }}>
+                    <Box sx={{ ...iconTileSx(40), boxShadow: 'none' }}>
+                      <NotificationsActive sx={{ fontSize: 20 }} />
+                    </Box>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="body1" sx={{ fontWeight: 700 }}>
                         {notif.message}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
@@ -510,11 +550,13 @@ const ProfilePage: React.FC = React.memo(() => {
 
             {recentActivities.conversations.map((conv) => (
               <Grid size={{ xs: 12 }} key={conv.id}>
-                <Card variant="outlined" sx={{ borderRadius: 3 }}>
-                  <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <Message color="secondary" />
-                    <Box>
-                      <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                <Card elevation={0} sx={{ borderRadius: '20px', ...hoverLiftSx(theme, 2) }}>
+                  <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, '&:last-child': { pb: 2 } }}>
+                    <Box sx={{ ...iconTileSx(40), background: VIBE_LOVE_GRADIENT, boxShadow: 'none' }}>
+                      <Message sx={{ fontSize: 20 }} />
+                    </Box>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="body1" sx={{ fontWeight: 700 }}>
                         {t('newConversationIn', { conversation: (conv as any).conversationName || t('conversationFallback') })}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">

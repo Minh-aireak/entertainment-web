@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Box, Typography, Button, useTheme, alpha, Container, Skeleton, Paper, IconButton } from '@mui/material';
-import { MovieFilter, PlayArrow, Refresh, Star } from '@mui/icons-material';
+import { Alert, Box, Typography, Button, useTheme, alpha, Container, Skeleton, IconButton } from '@mui/material';
+import { AutoAwesome, MovieFilter, PlayArrow, Refresh, Star } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { filmService } from '../../api/filmService';
 import type { FilmSummaryResponse } from '../../models';
 import { useNavigate } from 'react-router-dom';
 import FilmShowcaseSection from '../../components/Film/FilmShowcaseSection';
 import { usePersistedState } from '../../hooks/usePersistedState';
+import { EmptyState } from '../../components/common/VibeUi';
+import { VIBE_GLOW, VIBE_GRADIENT, VIBE_TEAL } from '../../styles/vibe';
 
 const isInteractiveTarget = (target: EventTarget | null) =>
   target instanceof HTMLElement && !!target.closest('button, a, [role="button"]');
@@ -337,7 +339,7 @@ const FilmHome: React.FC = React.memo(() => {
       {heroLoading && heroFilms.length === 0 ? (
         <Skeleton
           variant="rounded"
-          sx={{ height: HERO_HEIGHT, maxHeight: HERO_MAX_HEIGHT, width: '100%', mb: 6, borderRadius: { xs: 0, md: 4 }, mt: { xs: 0, md: 2 } }}
+          sx={{ height: HERO_HEIGHT, maxHeight: HERO_MAX_HEIGHT, width: '100%', mb: 6, borderRadius: { xs: 0, md: '28px' }, mt: { xs: 0, md: 2 } }}
         />
       ) : featuredFilm ? (
         <Box
@@ -350,8 +352,10 @@ const FilmHome: React.FC = React.memo(() => {
             position: 'relative',
             mb: 6,
             overflow: 'hidden',
-            borderRadius: { xs: 0, md: 4 },
+            borderRadius: { xs: 0, md: '28px' },
             mt: { xs: 0, md: 2 },
+            border: { xs: 'none', md: '1px solid' },
+            borderColor: { md: alpha(theme.palette.text.primary, 0.08) },
             cursor: heroFilms.length >= 2 ? (isDragging ? 'grabbing' : 'grab') : 'default',
             userSelect: isDragging ? 'none' : undefined,
             touchAction: heroFilms.length >= 2 ? 'pan-y' : undefined,
@@ -412,7 +416,7 @@ const FilmHome: React.FC = React.memo(() => {
                     left: 0,
                     right: 0,
                     bottom: 0,
-                    background: `linear-gradient(to right, ${alpha(theme.palette.background.default, 0.9)} 0%, ${alpha(theme.palette.background.default, 0.4)} 50%, transparent 100%), linear-gradient(to top, ${theme.palette.background.default} 0%, transparent 30%)`,
+                    background: `radial-gradient(circle at 8% 100%, ${alpha(VIBE_TEAL, 0.28)} 0%, transparent 45%), linear-gradient(to right, ${alpha(theme.palette.background.default, 0.9)} 0%, ${alpha(theme.palette.background.default, 0.4)} 50%, transparent 100%), linear-gradient(to top, ${theme.palette.background.default} 0%, transparent 30%)`,
                     display: 'flex',
                     alignItems: 'center',
                     gap: 4,
@@ -431,10 +435,11 @@ const FilmHome: React.FC = React.memo(() => {
                       width: 180,
                       aspectRatio: '2 / 3',
                       objectFit: 'cover',
-                      borderRadius: 3,
+                      borderRadius: '20px',
                       border: '2px solid',
-                      borderColor: alpha(theme.palette.text.primary, 0.15),
-                      boxShadow: '0 12px 32px rgba(0,0,0,0.5)',
+                      borderColor: alpha('#FFFFFF', 0.18),
+                      boxShadow: `0 18px 40px rgba(0,0,0,0.55), 0 0 0 4px ${alpha(VIBE_TEAL, 0.18)}`,
+                      transform: 'rotate(-2deg)',
                       flexShrink: 0,
                       pointerEvents: 'none',
                       userSelect: 'none',
@@ -442,9 +447,27 @@ const FilmHome: React.FC = React.memo(() => {
                     }}
                   />
                   <Box sx={{ minWidth: 0 }}>
-                  <Typography variant="overline" sx={{ color: 'primary.main', fontWeight: 800, letterSpacing: 2, mb: 1 }}>
+                  <Box
+                    sx={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 0.75,
+                      mb: 1.5,
+                      px: 1.25,
+                      py: 0.4,
+                      borderRadius: '999px',
+                      background: VIBE_GRADIENT,
+                      boxShadow: VIBE_GLOW,
+                      color: '#fff',
+                      fontSize: '0.7rem',
+                      fontWeight: 900,
+                      letterSpacing: '0.14em',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    <AutoAwesome sx={{ fontSize: 14 }} />
                     {t('featuredMovie')}
-                  </Typography>
+                  </Box>
                   <Typography
                     variant="h1"
                     sx={{
@@ -459,9 +482,21 @@ const FilmHome: React.FC = React.memo(() => {
                     {film.title}
                   </Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 4 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      <Star sx={{ color: '#FFD700' }} />
-                      <Typography sx={{ color: 'text.primary', fontWeight: 700 }}>{film.averageRating.toFixed(1)}</Typography>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 0.5,
+                        px: 1.25,
+                        py: 0.4,
+                        borderRadius: '999px',
+                        bgcolor: alpha('#FFD700', 0.14),
+                        border: '1px solid',
+                        borderColor: alpha('#FFD700', 0.35),
+                      }}
+                    >
+                      <Star sx={{ color: '#FFD700', fontSize: 18 }} />
+                      <Typography sx={{ color: 'text.primary', fontWeight: 800 }}>{film.averageRating.toFixed(1)}</Typography>
                     </Box>
                     <Typography sx={{ color: 'text.secondary' }}>
                       {film.episodeCount > 0 ? t('episodeCount', { count: film.episodeCount }) : t('standaloneFilm')} •{' '}
@@ -474,7 +509,7 @@ const FilmHome: React.FC = React.memo(() => {
                       size="large"
                       startIcon={<PlayArrow />}
                       onClick={() => navigate(`/film/${film.id}`)}
-                      sx={{ bgcolor: 'primary.main', px: 4, py: 1.5, fontSize: '1.1rem', borderRadius: 2 }}
+                      sx={{ px: 4, py: 1.5, fontSize: '1.05rem', borderRadius: '999px', boxShadow: VIBE_GLOW }}
                     >
                       {t('watchNow')}
                     </Button>
@@ -497,10 +532,11 @@ const FilmHome: React.FC = React.memo(() => {
                 >
                   <Box
                     sx={{
-                      width: index === activeDotIndex ? 24 : 8,
+                      width: index === activeDotIndex ? 28 : 8,
                       height: 8,
                       borderRadius: 4,
-                      bgcolor: index === activeDotIndex ? 'primary.main' : alpha(theme.palette.text.primary, 0.3),
+                      background: index === activeDotIndex ? VIBE_GRADIENT : alpha(theme.palette.text.primary, 0.3),
+                      boxShadow: index === activeDotIndex ? VIBE_GLOW : 'none',
                       transition: 'all 0.3s ease',
                     }}
                   />
@@ -512,13 +548,12 @@ const FilmHome: React.FC = React.memo(() => {
       ) : (
         !heroLoading && (
           <Container maxWidth="xl" sx={{ py: 6 }}>
-            <Paper sx={{ minHeight: 360, borderRadius: 4, display: 'grid', placeItems: 'center', textAlign: 'center', p: 4, bgcolor: alpha(theme.palette.text.primary, 0.03) }}>
-              <Box>
-                <MovieFilter sx={{ fontSize: 72, color: 'text.disabled', mb: 2 }} />
-                <Typography variant="h5" sx={{ fontWeight: 800, mb: 1 }}>{t('filmCatalogUpdating')}</Typography>
-                <Typography color="text.secondary">{t('filmCatalogUpdatingDescription')}</Typography>
-              </Box>
-            </Paper>
+            <EmptyState
+              icon={<MovieFilter />}
+              title={t('filmCatalogUpdating')}
+              description={t('filmCatalogUpdatingDescription')}
+              sx={{ minHeight: 360, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}
+            />
           </Container>
         )
       )}

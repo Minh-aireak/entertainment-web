@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Box, Typography } from '@mui/material';
+import { Box } from '@mui/material';
 import { Person } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
@@ -8,6 +8,7 @@ import { postService } from '../../api/postService';
 import { useInfiniteScroll } from '../../hooks/useInfiniteScroll';
 import { usePostLikeToggle } from '../../hooks/usePostLikeToggle';
 import PostFeedList from './PostFeedList';
+import { SectionHeader } from '../common/VibeUi';
 import type { Post } from './types';
 
 const PAGE_SIZE = 10;
@@ -63,12 +64,7 @@ const MyPostsFeed: React.FC = () => {
 
   return (
     <Box>
-      <Box className="flex items-center gap-1.5" sx={{ mb: 2, px: 0.5 }}>
-        <Person sx={{ fontSize: 24, color: 'primary.main' }} />
-        <Typography variant="h6" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
-          {t('myPostsTitle')}
-        </Typography>
-      </Box>
+      <SectionHeader icon={<Person />} title={t('myPostsTitle')} sx={{ px: 0.5 }} />
 
       <PostFeedList
         posts={posts}

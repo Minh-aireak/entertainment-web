@@ -11,6 +11,7 @@ import {
   Skeleton,
   Typography,
 } from '@mui/material';
+import { alpha, useTheme } from '@mui/material/styles';
 import { DoneAll, Notifications as NotificationsIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -21,11 +22,14 @@ import { REALTIME_NOTIFICATION_EVENT } from '../contexts/WebSocketContext';
 import type { NotificationResponse, PageResponse } from '../models';
 import { getNotificationLink } from '../utils/notificationLink';
 import { formatRelativeTime } from '../utils/time';
+import { EmptyState, PageHero } from '../components/common/VibeUi';
+import { VIBE_GRADIENT, VIBE_LOVE_GRADIENT, VIBE_TEAL, vibeBorder, vibeSurfaceHover } from '../styles/vibe';
 
 const PAGE_SIZE = 12;
 
 const NotificationsPage: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const theme = useTheme();
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [pageData, setPageData] = useState<PageResponse<NotificationResponse> | null>(null);
@@ -82,36 +86,43 @@ const NotificationsPage: React.FC = () => {
   };
 
   return (
-    <Container maxWidth="lg" sx={{ py: { xs: 3, md: 6 } }}>
-      <Box sx={{ display: 'flex', alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', gap: 2, mb: 4, flexDirection: { xs: 'column', sm: 'row' } }}>
-        <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.75 }}>
-            <Badge badgeContent={unreadCount} color="error" max={99}>
-              <NotificationsIcon color="primary" sx={{ fontSize: 34 }} />
-            </Badge>
-            <Typography variant="h3" sx={{ fontWeight: 900, fontSize: { xs: '2rem', md: '3rem' } }}>
-              {t('notifications')}
-            </Typography>
-          </Box>
-          <Typography color="text.secondary">
-            {unreadCount > 0 ? t('unreadNotifications', { count: unreadCount }) : t('allNotificationsRead')}
-          </Typography>
-        </Box>
-
-        <Button
-          variant="outlined"
-          startIcon={<DoneAll />}
-          onClick={handleMarkAllRead}
-          disabled={unreadCount === 0}
-          sx={{ borderRadius: 3, px: 3 }}
-        >
-          {t('markAllRead')}
-        </Button>
-      </Box>
+    <Container maxWidth="lg" sx={{ pb: { xs: 3, md: 6 } }}>
+      <PageHero
+        icon={
+          <Badge
+            badgeContent={unreadCount}
+            max={99}
+            sx={{
+              '& .MuiBadge-badge': {
+                background: VIBE_LOVE_GRADIENT,
+                color: '#fff',
+                fontWeight: 900,
+                border: '2px solid',
+                borderColor: 'background.paper',
+              },
+            }}
+          >
+            <NotificationsIcon />
+          </Badge>
+        }
+        title={t('notifications')}
+        subtitle={unreadCount > 0 ? t('unreadNotifications', { count: unreadCount }) : t('allNotificationsRead')}
+        actions={
+          <Button
+            variant="outlined"
+            startIcon={<DoneAll />}
+            onClick={handleMarkAllRead}
+            disabled={unreadCount === 0}
+            sx={{ borderRadius: '999px', px: 3 }}
+          >
+            {t('markAllRead')}
+          </Button>
+        }
+      />
 
       {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
 
-      <Paper elevation={0} sx={{ overflow: 'hidden', borderRadius: 4, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' }}>
+      <Paper elevation={0} sx={{ overflow: 'hidden', borderRadius: '24px', bgcolor: 'background.paper', border: '1px solid', borderColor: vibeBorder(theme) }}>
         {loading ? (
           <Box sx={{ p: 2 }}>
             {Array.from({ length: 6 }).map((_, index) => (
@@ -125,10 +136,7 @@ const NotificationsPage: React.FC = () => {
             ))}
           </Box>
         ) : !pageData?.data.length ? (
-          <Box sx={{ py: 12, px: 3, textAlign: 'center' }}>
-            <NotificationsIcon sx={{ fontSize: 72, color: 'text.disabled', mb: 2 }} />
-            <Typography variant="h6" sx={{ fontWeight: 700 }}>{t('noNotificationsYet')}</Typography>
-          </Box>
+          <EmptyState icon={<NotificationsIcon />} title={t('noNotificationsYet')} sx={{ border: 'none', borderRadius: 0 }} />
         ) : (
           pageData.data.map((notification, index) => {
             const link = getNotificationLink(notification);
@@ -137,26 +145,53 @@ const NotificationsPage: React.FC = () => {
                 key={notification.id}
                 onClick={link ? () => navigate(link) : undefined}
                 sx={{
+                  position: 'relative',
                   display: 'flex',
                   gap: 2,
                   alignItems: 'center',
                   p: { xs: 2, md: 2.5 },
-                  bgcolor: notification.read ? 'transparent' : 'rgba(0,168,78,0.07)',
+                  bgcolor: notification.read ? 'transparent' : alpha(VIBE_TEAL, 0.07),
                   borderBottom: index < pageData.data.length - 1 ? '1px solid' : 'none',
-                  borderBottomColor: 'divider',
-                  ...(link && { cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }),
+                  borderBottomColor: vibeBorder(theme),
+                  transition: 'background-color 0.2s ease',
+                  ...(!notification.read && {
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      left: 0,
+                      top: 14,
+                      bottom: 14,
+                      width: 4,
+                      borderRadius: '0 4px 4px 0',
+                      background: VIBE_GRADIENT,
+                    },
+                  }),
+                  ...(link && { cursor: 'pointer', '&:hover': { bgcolor: vibeSurfaceHover(theme) } }),
                 }}
               >
                 <Badge color="primary" variant="dot" invisible={notification.read} overlap="circular">
-                  <Avatar src={notification.avatarSender} sx={{ width: 48, height: 48 }}>
-                    {notification.displayNameSender?.[0]?.toUpperCase() || 'A'}
-                  </Avatar>
+                  <Box sx={{ p: '2px', borderRadius: '50%', display: 'inline-flex', background: notification.read ? 'transparent' : VIBE_GRADIENT }}>
+                    <Avatar
+                      src={notification.avatarSender}
+                      sx={{
+                        width: 48,
+                        height: 48,
+                        fontWeight: 800,
+                        color: '#fff',
+                        background: VIBE_GRADIENT,
+                        border: '2px solid',
+                        borderColor: 'background.paper',
+                      }}
+                    >
+                      {notification.displayNameSender?.[0]?.toUpperCase() || 'A'}
+                    </Avatar>
+                  </Box>
                 </Badge>
                 <Box sx={{ minWidth: 0, flex: 1 }}>
-                  <Typography sx={{ fontWeight: notification.read ? 500 : 750, mb: 0.5 }}>
+                  <Typography sx={{ fontWeight: notification.read ? 500 : 800, mb: 0.5 }}>
                     {notification.message}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: notification.read ? 'text.secondary' : VIBE_TEAL }}>
                     {formatRelativeTime(notification.createdAt, i18n.language)}
                   </Typography>
                 </Box>

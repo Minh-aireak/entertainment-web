@@ -14,6 +14,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { alpha, useTheme } from '@mui/material/styles';
 import {
   Send,
   Close,
@@ -32,6 +33,7 @@ import { fileService } from '../../api/fileService';
 import { getAvatarGradient } from '../../utils/avatarColor';
 import { type RootState } from '../../store';
 import { POST_BACKGROUNDS, POST_FEELINGS, BACKGROUND_TEXT_LIMIT } from './postComposerOptions';
+import { VIBE_GRADIENT, VIBE_TEAL, avatarRingSx, softIconButtonSx, vibeAccentText, vibeBorder } from '../../styles/vibe';
 import type {
   Post,
 } from './types';
@@ -97,6 +99,7 @@ const runUploadWorkers = async (
 
 const PostComposer: React.FC<PostComposerProps> = ({ avatar, displayName, onPostCreated }) => {
   const { t } = useTranslation();
+  const theme = useTheme();
   const themeMode = useSelector((state: RootState) => state.ui.themeMode);
 
   const [expanded, setExpanded] = useState(false);
@@ -295,30 +298,38 @@ const PostComposer: React.FC<PostComposerProps> = ({ avatar, displayName, onPost
   const activeBackground = POST_BACKGROUNDS.find((b) => b.key === backgroundKey);
   const activeFeeling = POST_FEELINGS.find((f) => f.key === feelingKey);
   const hideTitleField = Boolean(activeBackground);
+  const toolButtonSx = (active: boolean) => ({
+    ...softIconButtonSx(theme),
+    width: 36,
+    height: 36,
+    ...(active ? { color: vibeAccentText(theme), borderColor: alpha(VIBE_TEAL, 0.55) } : {}),
+  });
 
   return (
     <Card
       elevation={0}
       sx={{
-        borderRadius: 3,
+        borderRadius: '24px',
         mb: 2,
-        transition: 'box-shadow 200ms ease',
-        '&:focus-within': { boxShadow: '0 0 0 2px rgba(0, 168, 78, 0.35)' },
+        transition: 'box-shadow 200ms ease, border-color 200ms ease',
+        '&:focus-within': { borderColor: alpha(VIBE_TEAL, 0.5), boxShadow: `0 0 0 4px ${alpha(VIBE_TEAL, 0.12)}` },
       }}
     >
-      <CardContent sx={{ pb: 1.5 }}>
+      <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
         <Box className="flex gap-2" sx={{ alignItems: expanded ? 'flex-start' : 'center' }}>
-          <Avatar
-            src={avatar || undefined}
-            slotProps={{ img: { loading: 'lazy' } }}
-            sx={{
-              background: avatar ? undefined : getAvatarGradient(displayName),
-              color: '#fff',
-              fontWeight: 700,
-            }}
-          >
-            {displayName?.[0]?.toUpperCase() || '?'}
-          </Avatar>
+          <Box sx={avatarRingSx(theme)}>
+            <Avatar
+              src={avatar || undefined}
+              slotProps={{ img: { loading: 'lazy' } }}
+              sx={{
+                background: avatar ? undefined : getAvatarGradient(displayName),
+                color: '#fff',
+                fontWeight: 800,
+              }}
+            >
+              {displayName?.[0]?.toUpperCase() || '?'}
+            </Avatar>
+          </Box>
 
           <Box className="flex flex-1 flex-col gap-2" sx={{ minWidth: 0 }}>
             {activeBackground ? (
@@ -390,8 +401,9 @@ const PostComposer: React.FC<PostComposerProps> = ({ avatar, displayName, onPost
                 fullWidth
                 sx={{
                   '& .MuiOutlinedInput-root': {
-                    borderRadius: expanded ? 2 : 999,
-                    transition: 'border-radius 160ms ease',
+                    borderRadius: expanded ? '18px' : '999px',
+                    minHeight: 44,
+                    transition: 'border-radius 160ms ease, box-shadow 0.2s ease, background-color 0.2s ease',
                   },
                 }}
               />
@@ -430,14 +442,14 @@ const PostComposer: React.FC<PostComposerProps> = ({ avatar, displayName, onPost
                   onChange={handlePickImages}
                 />
 
-                <Box className="flex items-center flex-wrap gap-1">
-                  <IconButton size="small" onClick={(e) => setEmojiAnchorEl(e.currentTarget)}>
+                <Box className="flex items-center flex-wrap" sx={{ gap: 0.75 }}>
+                  <IconButton size="small" onClick={(e) => setEmojiAnchorEl(e.currentTarget)} sx={toolButtonSx(false)}>
                     <EmojiEmotions fontSize="small" />
                   </IconButton>
                   <IconButton
                     size="small"
                     onClick={(e) => setFeelingAnchorEl(e.currentTarget)}
-                    sx={{ color: activeFeeling ? 'primary.main' : undefined }}
+                    sx={toolButtonSx(Boolean(activeFeeling))}
                   >
                     <Mood fontSize="small" />
                   </IconButton>
@@ -445,7 +457,7 @@ const PostComposer: React.FC<PostComposerProps> = ({ avatar, displayName, onPost
                     <IconButton
                       size="small"
                       onClick={() => setShowBgStrip((v) => !v)}
-                      sx={{ color: activeBackground ? 'primary.main' : undefined }}
+                      sx={toolButtonSx(Boolean(activeBackground) || showBgStrip)}
                     >
                       <Palette fontSize="small" />
                     </IconButton>
@@ -453,7 +465,7 @@ const PostComposer: React.FC<PostComposerProps> = ({ avatar, displayName, onPost
                   <IconButton
                     size="small"
                     onClick={() => fileInputRef.current?.click()}
-                    sx={{ color: hasImages ? 'primary.main' : undefined }}
+                    sx={toolButtonSx(hasImages)}
                   >
                     <ImageIcon fontSize="small" />
                   </IconButton>
@@ -480,7 +492,7 @@ const PostComposer: React.FC<PostComposerProps> = ({ avatar, displayName, onPost
                           cursor: 'pointer',
                           bgcolor: 'background.paper',
                           border: '2px solid',
-                          borderColor: !backgroundKey ? 'primary.main' : 'divider',
+                          borderColor: !backgroundKey ? VIBE_TEAL : vibeBorder(theme),
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -500,7 +512,8 @@ const PostComposer: React.FC<PostComposerProps> = ({ avatar, displayName, onPost
                             cursor: 'pointer',
                             background: bg.gradient,
                             border: '2px solid',
-                            borderColor: backgroundKey === bg.key ? 'primary.main' : 'transparent',
+                            borderColor: backgroundKey === bg.key ? '#fff' : 'transparent',
+                            boxShadow: backgroundKey === bg.key ? `0 0 0 2px ${VIBE_TEAL}` : 'none',
                             transition: 'transform 120ms ease',
                             '&:hover': { transform: 'scale(1.15)' },
                           }}
@@ -538,10 +551,10 @@ const PostComposer: React.FC<PostComposerProps> = ({ avatar, displayName, onPost
                             sx={{
                               position: 'relative',
                               aspectRatio: '1 / 1',
-                              borderRadius: 1.5,
+                              borderRadius: '14px',
                               overflow: 'hidden',
                               border: '1px solid',
-                              borderColor: p.error ? 'error.main' : 'divider',
+                              borderColor: p.error ? 'error.main' : vibeBorder(theme),
                               bgcolor: 'action.hover',
                               cursor: 'grab',
                               opacity: draggingKey === p.key ? 0.35 : 1,
@@ -585,7 +598,7 @@ const PostComposer: React.FC<PostComposerProps> = ({ avatar, displayName, onPost
                                   left: 0,
                                   right: 0,
                                   height: 3,
-                                  bgcolor: 'primary.main',
+                                  background: VIBE_GRADIENT,
                                   width: `${p.progress}%`,
                                   transition: 'width 120ms',
                                 }}
@@ -632,7 +645,7 @@ const PostComposer: React.FC<PostComposerProps> = ({ avatar, displayName, onPost
 
                 <Box className="mt-1 flex justify-end gap-2">
                   {(title || content || pendingUploads.length > 0) && (
-                    <Button size="small" color="inherit" onClick={handleCancel} disabled={posting}>
+                    <Button size="small" color="inherit" onClick={handleCancel} disabled={posting} sx={{ borderRadius: '999px', px: 2 }}>
                       {t('cancel')}
                     </Button>
                   )}
@@ -642,6 +655,7 @@ const PostComposer: React.FC<PostComposerProps> = ({ avatar, displayName, onPost
                     endIcon={<Send fontSize="small" />}
                     disabled={!canSubmit || posting}
                     onClick={handleSubmit}
+                    sx={{ borderRadius: '999px', px: 2.5 }}
                   >
                     {posting ? t('posting') : t('postSubmit')}
                   </Button>

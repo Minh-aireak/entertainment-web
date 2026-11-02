@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Button, Chip, Typography } from '@mui/material';
+import { alpha, useTheme } from '@mui/material/styles';
 import {
   MovieCreation,
   PeopleAlt,
@@ -9,6 +10,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
+import { VIBE_GLOW, VIBE_GRADIENT, VIBE_TEAL, eyebrowSx, vibeAccentText, vibeBorder, vibeSurface } from '../../styles/vibe';
 
 interface PostCardWatchProps {
   watchFilmTitle: string;
@@ -26,6 +28,7 @@ const PostCardWatch: React.FC<PostCardWatchProps> = ({
   roomClosed,
 }) => {
   const { t } = useTranslation();
+  const theme = useTheme();
   const navigate = useNavigate();
 
   const handleCopy = async () => {
@@ -49,11 +52,12 @@ const PostCardWatch: React.FC<PostCardWatchProps> = ({
         display: 'flex',
         flexDirection: { xs: 'column', sm: 'row' },
         gap: 1.5,
-        borderRadius: 2,
+        borderRadius: '20px',
         overflow: 'hidden',
         border: '1px solid',
-        borderColor: 'divider',
-        bgcolor: 'background.paper',
+        borderColor: vibeBorder(theme),
+        bgcolor: vibeSurface(theme),
+        backgroundImage: `radial-gradient(circle at 100% 0%, ${alpha(VIBE_TEAL, 0.16)}, transparent 55%)`,
       }}
     >
       <Box
@@ -82,16 +86,40 @@ const PostCardWatch: React.FC<PostCardWatchProps> = ({
             <MovieCreation sx={{ fontSize: 48, opacity: 0.4 }} />
           </Box>
         )}
+        {watchFilmThumbnailUrl && (
+          <Box
+            aria-hidden
+            sx={{
+              position: 'absolute',
+              inset: 0,
+              display: 'grid',
+              placeItems: 'center',
+              background: 'linear-gradient(180deg, rgba(0,0,0,0) 30%, rgba(0,0,0,0.55) 100%)',
+            }}
+          >
+            <Box sx={{ width: 46, height: 46, borderRadius: '50%', display: 'grid', placeItems: 'center', background: VIBE_GRADIENT, boxShadow: VIBE_GLOW, color: '#fff' }}>
+              <OndemandVideo sx={{ fontSize: 22 }} />
+            </Box>
+          </Box>
+        )}
       </Box>
 
       <Box sx={{ flex: 1, p: 1.5, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+          <Typography component="span" sx={eyebrowSx(theme)}>
+            🍿 {t('watchTogetherTitle')}
+          </Typography>
           <Chip
             size="small"
             variant="outlined"
             icon={<PeopleAlt sx={{ fontSize: 16 }} />}
             label={t('participantsInRoom', { count: watchParticipantCount ?? 1 })}
-            sx={{ alignSelf: 'flex-start' }}
+            sx={{
+              alignSelf: 'flex-start',
+              color: vibeAccentText(theme),
+              borderColor: alpha(VIBE_TEAL, 0.4),
+              '& .MuiChip-icon': { color: VIBE_TEAL },
+            }}
           />
         </Box>
 
@@ -108,6 +136,7 @@ const PostCardWatch: React.FC<PostCardWatchProps> = ({
             startIcon={<ContentCopy fontSize="small" />}
             onClick={handleCopy}
             disabled={!watchInviteCode}
+            sx={{ borderRadius: '999px' }}
           >
             {t('copyInviteCode')}
           </Button>
@@ -117,6 +146,7 @@ const PostCardWatch: React.FC<PostCardWatchProps> = ({
             startIcon={<OndemandVideo fontSize="small" />}
             onClick={handleJoin}
             disabled={roomClosed || !watchInviteCode}
+            sx={{ borderRadius: '999px', px: 2 }}
           >
             {roomClosed ? t('roomClosedLabel') : t('joinRoom')}
           </Button>
