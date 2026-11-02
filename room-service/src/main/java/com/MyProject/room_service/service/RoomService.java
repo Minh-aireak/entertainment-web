@@ -399,7 +399,11 @@ public class RoomService {
                 ensureEpisodeBelongsToFilm(current.getFilmId(), request.getEpisodeId());
                 episodeId = request.getEpisodeId();
                 positionSeconds = 0;
-                playing = true;
+                // Cued at the start, not playing yet. Every player, the host's included, still
+                // has to load the new episode, and a clock started now would run ahead of the
+                // host while it loads. The host's player starts the episode as soon as it can and
+                // reports PLAY, and that PLAY is what starts the room.
+                playing = false;
             }
             case HEARTBEAT -> {
                 // A playing room must keep reporting a live position - accepting a positionless

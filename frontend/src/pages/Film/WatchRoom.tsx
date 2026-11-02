@@ -94,6 +94,7 @@ const WatchRoom: React.FC = () => {
     syncTarget,
     closedEvent,
     hostLocalSnapshotRef,
+    updateHostLocalSnapshot,
     openRoom,
     changeEpisode,
     sendPlayback,
@@ -117,6 +118,8 @@ const WatchRoom: React.FC = () => {
 
   const isHost = !!room?.host;
   const activeRoomId = room?.id;
+  // The episode the mounted player shows; it tags that player's reports, see sendPlayback.
+  const playerEpisodeId = room?.episodeId;
 
   // Session state lives above the router. Navigating to another feature therefore leaves this
   // session joined and the global mini-player takes over instead of closing/leaving the room.
@@ -255,9 +258,9 @@ const WatchRoom: React.FC = () => {
           payload = { action: 'HEARTBEAT', positionSeconds: action.positionSeconds };
           break;
       }
-      sendPlayback(payload);
+      sendPlayback(payload, playerEpisodeId);
     },
-    [roomId, sendPlayback],
+    [roomId, sendPlayback, playerEpisodeId],
   );
 
   const handleLeave = async () => {
@@ -479,7 +482,7 @@ const WatchRoom: React.FC = () => {
                     autoPlay={false}
                     onPlaybackAction={handleHostAction}
                     onStalledError={refreshVideo}
-                    onLocalTimeUpdate={(state) => { hostLocalSnapshotRef.current = state; }}
+                    onLocalTimeUpdate={(state) => updateHostLocalSnapshot(playerEpisodeId, state)}
                     style={{ maxWidth: '100%', aspectRatio: 'auto', height: '100%' }}
                   />
                 ) : (

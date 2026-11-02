@@ -228,6 +228,94 @@ describe('WatchRoomSessionContext', () => {
     expect(secondCall[1].action).toBe('PLAY');
   });
 
+  it('makes the host start a new episode as soon as it loads, although the server cues it paused', async () => {
+    const result = await openRoom(baseRoom({ episodeId: 'ep-1', playing: true, positionSeconds: 300, playbackRevision: 2 }));
+
+    act(() => {
+      latestSocketCallbacks().onPlayback?.(basePlaybackEvent({
+        action: 'CHANGE_EPISODE', episodeId: 'ep-2', playing: false, positionSeconds: 0, playbackRevision: 3,
+      }));
+    });
+
+    expect(result.current.room?.episodeId).toBe('ep-2');
+    expect(result.current.room?.playing).toBe(false);
+    // What the host's new player restores on mount.
+    expect(result.current.hostLocalSnapshotRef.current).toEqual({ positionSeconds: 0, playing: true, playbackRate: 1 });
+  });
+
+  it("drops the old episode player's reports while switching episodes and after the switch landed", async () => {
+    const result = await openRoom(baseRoom({ episodeId: 'ep-1', playing: true, playbackRevision: 1 }));
+    vi.mocked(roomService.updatePlayback).mockResolvedValue({ code: 0, result: undefined });
+
+    await act(async () => {
+      await result.current.changeEpisode('ep-2');
+    });
+    expect(roomService.updatePlayback).toHaveBeenCalledTimes(1);
+    expect(roomService.updatePlayback).toHaveBeenCalledWith('room-1', { action: 'CHANGE_EPISODE', episodeId: 'ep-2' });
+
+    // Its heartbeat in the gap before the CHANGE_EPISODE echo - the server would apply that
+    // position to the new episode.
+    await act(async () => {
+      await result.current.sendPlayback({ action: 'HEARTBEAT', positionSeconds: 600 }, 'ep-1');
+    });
+    expect(roomService.updatePlayback).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      latestSocketCallbacks().onPlayback?.(basePlaybackEvent({
+        action: 'CHANGE_EPISODE', episodeId: 'ep-2', playing: false, positionSeconds: 0, playbackRevision: 2,
+      }));
+    });
+    // A late pause from it before it unmounts.
+    await act(async () => {
+      await result.current.sendPlayback({ action: 'PAUSE', positionSeconds: 601 }, 'ep-1');
+    });
+    expect(roomService.updatePlayback).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await result.current.sendPlayback({ action: 'PLAY', positionSeconds: 0.2 }, 'ep-2');
+    });
+    expect(roomService.updatePlayback).toHaveBeenCalledTimes(2);
+    expect(roomService.updatePlayback).toHaveBeenLastCalledWith('room-1', { action: 'PLAY', positionSeconds: 0.2 });
+  });
+
+  it("ignores the old episode player's local echo, so the new episode doesn't start at its position", async () => {
+    const result = await openRoom(baseRoom({ episodeId: 'ep-1', playing: true, positionSeconds: 300, playbackRevision: 2 }));
+
+    act(() => {
+      latestSocketCallbacks().onPlayback?.(basePlaybackEvent({
+        action: 'CHANGE_EPISODE', episodeId: 'ep-2', playing: false, positionSeconds: 0, playbackRevision: 3,
+      }));
+    });
+    act(() => {
+      result.current.updateHostLocalSnapshot('ep-1', { positionSeconds: 301, playing: true, playbackRate: 1 });
+    });
+    expect(result.current.hostLocalSnapshotRef.current).toEqual({ positionSeconds: 0, playing: true, playbackRate: 1 });
+
+    act(() => {
+      result.current.updateHostLocalSnapshot('ep-2', { positionSeconds: 1.5, playing: true, playbackRate: 1 });
+    });
+    expect(result.current.hostLocalSnapshotRef.current).toEqual({ positionSeconds: 1.5, playing: true, playbackRate: 1 });
+  });
+
+  it('hands the room back to the current episode player when CHANGE_EPISODE fails', async () => {
+    const result = await openRoom(baseRoom({ episodeId: 'ep-1', playbackRevision: 1 }));
+    vi.mocked(roomService.updatePlayback)
+      .mockRejectedValueOnce(new Error('network error'))
+      .mockResolvedValue({ code: 0, result: undefined });
+    vi.mocked(roomService.getRoom).mockResolvedValue({ code: 0, result: baseRoom({ episodeId: 'ep-1', playbackRevision: 1 }) });
+
+    await act(async () => {
+      await result.current.changeEpisode('ep-2');
+    });
+    expect(toast.error).toHaveBeenCalled();
+
+    await act(async () => {
+      await result.current.sendPlayback({ action: 'PAUSE', positionSeconds: 12 }, 'ep-1');
+    });
+    expect(roomService.updatePlayback).toHaveBeenCalledTimes(2);
+    expect(roomService.updatePlayback).toHaveBeenLastCalledWith('room-1', { action: 'PAUSE', positionSeconds: 12 });
+  });
+
   it('keeps dropping HEARTBEAT while a second queued critical command is still pending', async () => {
     const result = await openRoom(baseRoom({ playbackRevision: 1 }));
     let resolvePause!: () => void;

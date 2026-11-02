@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
 import { Box, CircularProgress, Fade, IconButton, Menu, MenuItem, Tooltip, Typography } from '@mui/material';
 import {
@@ -39,8 +39,10 @@ export interface VideoPlayerHandle {
   syncTo: (state: { positionSeconds: number; playing: boolean; playbackRate: number; action: SyncAction }) => void;
   /** Applied by a 'host' player right after mount (before any user interaction) to restore the
    *  position/playing/rate it had before an unmount (e.g. switching between the full room page
-   *  and the mini player) - unlike syncTo, this always hard-sets state and suppresses the native
-   *  play/pause event it causes from being reported as a real host action. */
+   *  and the mini player), or to start a newly cued episode. Before the media has loaded (the
+   *  normal case on mount) the state is applied on 'loadedmetadata', and the play it then starts
+   *  is reported like any host play: PLAY goes out once playback really starts. On an
+   *  already-loaded player it is applied at once and the play/pause it causes is not reported. */
   restoreHostState: (state: { positionSeconds: number; playing: boolean; playbackRate: number }) => void;
 }
 
@@ -106,6 +108,8 @@ const SEEK_THROTTLE_MS = 150;
 const STALLED_ERROR_COOLDOWN_MS = 4000;
 // Host only: a stall shorter than this is a hiccup between segments, not worth pausing the room.
 const HOST_HOLD_DELAY_MS = 350;
+// HTMLMediaElement.HAVE_NOTHING - no source loaded yet, not even metadata.
+const HAVE_NOTHING = 0;
 // HTMLMediaElement.HAVE_FUTURE_DATA - enough data at the current position to start playing.
 const HAVE_FUTURE_DATA = 3;
 // How far past a seek target has to be downloaded already for the host to play it without a stall.
@@ -176,6 +180,17 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
   // Mirrors isScrubbing for native event handlers - a drag fires a stream of seeks/stalls that
   // must not each be reported; the release reports the final position once.
   const isScrubbingRef = useRef(false);
+  // Host only: a restoreHostState that arrived before the media loaded. That is the normal case,
+  // because a fresh player is restored the moment it mounts, before the effect below has even
+  // attached its source. Attaching a source runs the media load algorithm, which resets
+  // currentTime and playbackRate and aborts a pending play(), so the restore waits for
+  // 'loadedmetadata'.
+  const pendingRestoreRef = useRef<{ positionSeconds: number; playing: boolean; playbackRate: number } | null>(null);
+  // False from the moment this player unmounts. Cleared in a layout-effect cleanup, which runs
+  // during the commit itself: the browser still pauses a <video> it removes, and that queued
+  // 'pause'/'timeupdate' can land before the passive-effect listeners are gone. An episode
+  // switch unmounts the old player exactly that way, and none of it may reach the room.
+  const mountedRef = useRef(false);
 
   const [playing, setPlaying] = useState(autoPlay);
   const [showStartOverlay, setShowStartOverlay] = useState(false);
@@ -183,6 +198,8 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
   const [duration, setDuration] = useState(0);
   const [bufferedEnd, setBufferedEnd] = useState(0);
   const [buffering, setBuffering] = useState(false);
+  // A pending restore that will start playing: shown as loading, not as paused.
+  const [restoringPlay, setRestoringPlay] = useState(false);
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
   const [showControls, setShowControls] = useState(true);
@@ -195,9 +212,16 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
   // full local control and, for 'host', also reports every change via onPlaybackAction.
   const interactive = role !== 'viewer';
 
+  useLayoutEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const notifyHostAction = useCallback(
     (action: PlaybackActionPayload) => {
-      if (role === 'host') onPlaybackAction?.(action);
+      if (role === 'host' && mountedRef.current) onPlaybackAction?.(action);
     },
     [role, onPlaybackAction],
   );
@@ -230,6 +254,18 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
     const shouldResume = wasPlayingRef.current;
 
     const onLoadedMeta = () => {
+      const restore = pendingRestoreRef.current;
+      pendingRestoreRef.current = null;
+      if (restore) {
+        setRestoringPlay(false);
+        if (restore.positionSeconds > 0) video.currentTime = restore.positionSeconds;
+        video.playbackRate = restore.playbackRate;
+        // Not suppressed. The room clock kept going while this player loaded (or, for a newly
+        // cued episode, the room is waiting for it), so this start must reach the room. The hold
+        // logic in onPlay/onPlaying sends the PLAY once playback really starts.
+        if (restore.playing) video.play().catch(() => {});
+        return;
+      }
       if (resumeTime > 0) video.currentTime = resumeTime;
       if (shouldResume) video.play().catch(() => {});
     };
@@ -281,10 +317,16 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
     const video = videoRef.current;
     if (!video) return;
 
+    // Local echo for the caller, never sent to the server. Not after unmount, see mountedRef.
+    const echoLocalState = (playingNow: boolean) => {
+      if (!mountedRef.current) return;
+      onLocalTimeUpdate?.({ positionSeconds: video.currentTime, durationSeconds: video.duration || 0, playing: playingNow, playbackRate: video.playbackRate });
+    };
+
     const onTimeUpdate = () => {
       setCurrentTime(video.currentTime);
       lastTimeRef.current = video.currentTime;
-      onLocalTimeUpdate?.({ positionSeconds: video.currentTime, durationSeconds: video.duration || 0, playing: !video.paused, playbackRate: video.playbackRate });
+      echoLocalState(!video.paused);
     };
     const onDurationChange = () => setDuration(video.duration || 0);
     const onProgress = () => {
@@ -305,7 +347,7 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
       } else {
         notifyHostAction({ type: 'play', positionSeconds: video.currentTime });
       }
-      onLocalTimeUpdate?.({ positionSeconds: video.currentTime, durationSeconds: video.duration || 0, playing: true, playbackRate: video.playbackRate });
+      echoLocalState(true);
     };
     const onPause = () => {
       setPlaying(false);
@@ -320,7 +362,7 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
       } else {
         notifyHostAction({ type: 'pause', positionSeconds: video.currentTime });
       }
-      onLocalTimeUpdate?.({ positionSeconds: video.currentTime, durationSeconds: video.duration || 0, playing: false, playbackRate: video.playbackRate });
+      echoLocalState(false);
     };
     const onVolumeChange = () => {
       setVolume(video.volume);
@@ -603,6 +645,20 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
       if (!video) return;
 
       clearCatchup();
+
+      if (video.readyState === HAVE_NOTHING) {
+        // Nothing loaded yet. Whatever is set on the element now is wiped once the source is
+        // attached (play() aborted, currentTime and rate reset), and the host would sit paused
+        // while the rest of the room plays.
+        const position = Number.isFinite(positionSeconds) && positionSeconds > 0 ? positionSeconds : 0;
+        const targetRate = Number.isFinite(rate) && rate > 0 ? rate : video.playbackRate;
+        pendingRestoreRef.current = { positionSeconds: position, playing: shouldPlay, playbackRate: targetRate };
+        setCurrentTime(position);
+        setPlaybackRate(targetRate);
+        setRestoringPlay(shouldPlay);
+        return;
+      }
+
       if (Number.isFinite(positionSeconds)) {
         video.currentTime = positionSeconds;
         setCurrentTime(positionSeconds);
@@ -796,8 +852,8 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
           alignItems: 'center',
           justifyContent: 'center',
           cursor: interactive ? 'pointer' : 'default',
-          opacity: playing ? 0 : 1,
-          pointerEvents: playing ? 'none' : 'auto',
+          opacity: playing || restoringPlay ? 0 : 1,
+          pointerEvents: playing || restoringPlay ? 'none' : 'auto',
           transition: 'opacity 0.2s',
         }}
       >
@@ -816,7 +872,7 @@ const VideoPlayer = React.forwardRef<VideoPlayerHandle, VideoPlayerProps>(({
         </Box>
       </Box>
 
-      {playing && buffering && (
+      {((playing && buffering) || restoringPlay) && (
         <Box
           sx={{
             position: 'absolute',

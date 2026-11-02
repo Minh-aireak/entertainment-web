@@ -184,7 +184,13 @@ describe('VideoPlayer syncTo/restoreHostState', () => {
   });
 });
 
-describe('VideoPlayer restoreHostState suppression', () => {
+// jsdom's readyState is always 0 (HAVE_NOTHING), which restoreHostState treats as "not loaded
+// yet" - these cover a player whose media is already there.
+const markLoaded = (video: HTMLVideoElement) => {
+  Object.defineProperty(video, 'readyState', { configurable: true, get: () => 4 });
+};
+
+describe('VideoPlayer restoreHostState on an already-loaded player', () => {
   it('does not report a play/pause host action for the state change it causes itself', () => {
     const ref = React.createRef<VideoPlayerHandle>();
     const onPlaybackAction = vi.fn<(action: PlaybackActionPayload) => void>();
@@ -193,6 +199,7 @@ describe('VideoPlayer restoreHostState suppression', () => {
     );
     const video = container.querySelector('video') as HTMLVideoElement;
     makeVideoControllable(video);
+    markLoaded(video);
 
     act(() => {
       ref.current!.restoreHostState({ positionSeconds: 42, playing: true, playbackRate: 1 });
@@ -220,6 +227,7 @@ describe('VideoPlayer restoreHostState suppression', () => {
     );
     const video = container.querySelector('video') as HTMLVideoElement;
     makeVideoControllable(video);
+    markLoaded(video);
 
     // Already paused (jsdom default) and target is also paused - no native event will fire.
     act(() => {
@@ -228,16 +236,114 @@ describe('VideoPlayer restoreHostState suppression', () => {
     expect(video.pause).not.toHaveBeenCalled();
 
     // A real user-driven play right after must still report normally, proving the suppression
-    // flag didn't leak into this unrelated action. jsdom's readyState is always 0 (nothing
-    // loaded), which a host now treats as "report PLAY once playback really starts" - model the
-    // usual browser state of the current spot being playable.
-    Object.defineProperty(video, 'readyState', { configurable: true, get: () => 4 });
+    // flag didn't leak into this unrelated action.
     act(() => {
       video.play();
     });
     expect(onPlaybackAction).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'play' } satisfies Partial<PlaybackActionPayload>),
     );
+  });
+});
+
+// A fresh host player (the new episode after CHANGE_EPISODE, or the mini player taking over) is
+// restored the moment it mounts, before its source is even attached. The browser's media load
+// then wipes anything already set on the element and aborts a pending play(), which left the
+// host paused on a new episode while viewers played it.
+describe('VideoPlayer restoreHostState before the media has loaded', () => {
+  type RestoreState = Parameters<VideoPlayerHandle['restoreHostState']>[0];
+  let player: HTMLElement;
+  let video: HTMLVideoElement;
+  let onPlaybackAction: ReturnType<typeof vi.fn<(action: PlaybackActionPayload) => void>>;
+  let readyState: number;
+
+  const spinnerShown = () => player.querySelector('[role="progressbar"]') !== null;
+
+  // Restores from the ref callback, the way WatchRoom and the mini player do.
+  const renderRestoredOnMount = (state: RestoreState) => {
+    onPlaybackAction = vi.fn();
+    const earlyPlay = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+    const restoreOnMount = (handle: VideoPlayerHandle | null) => handle?.restoreHostState(state);
+    const { container } = render(
+      <VideoPlayer ref={restoreOnMount} role="host" src={SRC} autoPlay={false} onPlaybackAction={onPlaybackAction} />,
+    );
+    expect(earlyPlay).not.toHaveBeenCalled();
+    earlyPlay.mockRestore();
+
+    player = container;
+    video = container.querySelector('video') as HTMLVideoElement;
+    makeVideoControllable(video);
+    readyState = 0;
+    Object.defineProperty(video, 'readyState', { configurable: true, get: () => readyState });
+    // What attaching the source does to the element.
+    video.currentTime = 0;
+    video.playbackRate = 1;
+  };
+
+  const finishLoadingMetadata = () => {
+    readyState = 1;
+    act(() => {
+      video.dispatchEvent(new Event('loadedmetadata'));
+    });
+  };
+
+  it('applies the position, rate and play once the metadata has loaded', () => {
+    renderRestoredOnMount({ positionSeconds: 42, playing: true, playbackRate: 1.5 });
+    // Shown as loading while it waits, not as a paused player.
+    expect(spinnerShown()).toBe(true);
+
+    finishLoadingMetadata();
+
+    expect(video.currentTime).toBe(42);
+    expect(video.playbackRate).toBe(1.5);
+    expect(video.play).toHaveBeenCalledTimes(1);
+    expect(spinnerShown()).toBe(false);
+  });
+
+  it('reports that start as a host PLAY once playback really starts', () => {
+    renderRestoredOnMount({ positionSeconds: 0, playing: true, playbackRate: 1 });
+
+    finishLoadingMetadata();
+    // Still loading the first segment - the room must not start yet.
+    expect(onPlaybackAction).not.toHaveBeenCalled();
+
+    act(() => {
+      video.dispatchEvent(new Event('playing'));
+    });
+    expect(onPlaybackAction).toHaveBeenCalledTimes(1);
+    expect(onPlaybackAction).toHaveBeenCalledWith({ type: 'play', positionSeconds: 0 });
+  });
+
+  it('stays paused after loading when the restored state was paused', () => {
+    renderRestoredOnMount({ positionSeconds: 5, playing: false, playbackRate: 1 });
+    expect(spinnerShown()).toBe(false);
+
+    finishLoadingMetadata();
+
+    expect(video.currentTime).toBe(5);
+    expect(video.play).not.toHaveBeenCalled();
+    expect(onPlaybackAction).not.toHaveBeenCalled();
+  });
+
+  it('also waits for the load when the restore lands after the source was attached', () => {
+    const ref = React.createRef<VideoPlayerHandle>();
+    onPlaybackAction = vi.fn();
+    const { container } = render(
+      <VideoPlayer ref={ref} role="host" src={SRC} autoPlay={false} onPlaybackAction={onPlaybackAction} />,
+    );
+    video = container.querySelector('video') as HTMLVideoElement;
+    makeVideoControllable(video);
+    readyState = 0;
+    Object.defineProperty(video, 'readyState', { configurable: true, get: () => readyState });
+
+    act(() => {
+      ref.current!.restoreHostState({ positionSeconds: 30, playing: true, playbackRate: 1 });
+    });
+    expect(video.play).not.toHaveBeenCalled();
+
+    finishLoadingMetadata();
+    expect(video.currentTime).toBe(30);
+    expect(video.play).toHaveBeenCalledTimes(1);
   });
 });
 

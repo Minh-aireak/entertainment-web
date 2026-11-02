@@ -52,16 +52,28 @@ export const WatchRoomSessionProvider: React.FC<React.PropsWithChildren> = ({ ch
   // never overtake or immediately follow a command it was already stale relative to.
   const pendingCriticalCountRef = useRef(0);
   const pendingPromiseRef = useRef<Promise<void>>(Promise.resolve());
+  // The episode the host has just asked for, until the server's answer lands: its CHANGE_EPISODE
+  // echo, or a REST snapshot already on it. Until then the old episode's player is still on
+  // screen, and whatever it reports belongs to an episode the room is leaving.
+  const switchingToEpisodeRef = useRef<string | null>(null);
 
   useEffect(() => {
     roomRef.current = room;
   }, [room]);
+
+  /** Whether a host player showing `episodeId` may still drive the room: it has to be on the
+   *  episode the room is on, or on the one the host is switching to. */
+  const isActiveHostEpisode = useCallback(
+    (episodeId: string | undefined) => episodeId === (switchingToEpisodeRef.current ?? roomRef.current?.episodeId),
+    [],
+  );
 
   const clearSessionState = useCallback(() => {
     requestIdRef.current += 1;
     roomRef.current = null;
     appliedRevisionRef.current = NO_REVISION_APPLIED;
     hostLocalSnapshotRef.current = DEFAULT_HOST_SNAPSHOT;
+    switchingToEpisodeRef.current = null;
     pendingCriticalCountRef.current = 0;
     pendingPromiseRef.current = Promise.resolve();
     setRoom(null);
@@ -83,6 +95,7 @@ export const WatchRoomSessionProvider: React.FC<React.PropsWithChildren> = ({ ch
     if (snapshot.playbackRevision < appliedRevisionRef.current) return;
     appliedRevisionRef.current = snapshot.playbackRevision;
     roomRef.current = snapshot;
+    if (snapshot.episodeId === switchingToEpisodeRef.current) switchingToEpisodeRef.current = null;
     if (snapshot.host) {
       hostLocalSnapshotRef.current = {
         positionSeconds: snapshot.positionSeconds,
@@ -108,25 +121,33 @@ export const WatchRoomSessionProvider: React.FC<React.PropsWithChildren> = ({ ch
     appliedRevisionRef.current = event.playbackRevision;
     const eventPosition = livePosition(event);
     const syncHost = event.action === 'CHANGE_EPISODE';
+    const withEvent = (current: RoomResponse): RoomResponse => ({
+      ...current,
+      episodeId: event.episodeId ?? current.episodeId,
+      playing: event.playing,
+      positionSeconds: eventPosition,
+      playbackRate: event.playbackRate,
+      lastActionAt: event.at,
+      playbackRevision: event.playbackRevision,
+    });
+
+    // Right away, not only once React re-renders: the old episode's player is still mounted
+    // until then, and isActiveHostEpisode has to turn it away already.
+    if (roomRef.current) roomRef.current = withEvent(roomRef.current);
+    if (syncHost && event.episodeId === switchingToEpisodeRef.current) switchingToEpisodeRef.current = null;
     if (syncHost && roomRef.current?.host) {
+      // The server cues a new episode paused at the start. The host's new player starts it as
+      // soon as it has loaded, and the PLAY it then reports is what starts the room.
       hostLocalSnapshotRef.current = {
         positionSeconds: eventPosition,
-        playing: event.playing,
+        playing: true,
         playbackRate: event.playbackRate,
       };
     }
 
     setRoom((current) => {
       if (!current) return current;
-      const updated: RoomResponse = {
-        ...current,
-        episodeId: event.episodeId ?? current.episodeId,
-        playing: event.playing,
-        positionSeconds: eventPosition,
-        playbackRate: event.playbackRate,
-        lastActionAt: event.at,
-        playbackRevision: event.playbackRevision,
-      };
+      const updated = withEvent(current);
       roomRef.current = updated;
       return updated;
     });
@@ -176,6 +197,7 @@ export const WatchRoomSessionProvider: React.FC<React.PropsWithChildren> = ({ ch
     setVideoError(null);
     appliedRevisionRef.current = NO_REVISION_APPLIED;
     hostLocalSnapshotRef.current = DEFAULT_HOST_SNAPSHOT;
+    switchingToEpisodeRef.current = null;
     try {
       const response = await roomService.joinRoom(roomId, { inviteCode });
       if (requestIdRef.current !== requestId) return;
@@ -243,9 +265,13 @@ export const WatchRoomSessionProvider: React.FC<React.PropsWithChildren> = ({ ch
     onReconnected: resyncFromServer,
   }, room?.wsToken);
 
-  const sendPlayback = useCallback((request: PlaybackUpdateRequest): Promise<void> => {
+  const sendPlayback = useCallback((request: PlaybackUpdateRequest, fromEpisodeId?: string): Promise<void> => {
     const activeRoom = roomRef.current;
     if (!activeRoom?.host || activeRoom.status !== 'ACTIVE') return Promise.resolve();
+    // A report from a player still on an episode the room is leaving would be applied by the
+    // server to the new episode, e.g. the old player's heartbeat in the gap between the
+    // CHANGE_EPISODE response and its echo.
+    if (fromEpisodeId !== undefined && !isActiveHostEpisode(fromEpisodeId)) return Promise.resolve();
 
     const isCritical = request.action !== 'HEARTBEAT';
     if (!isCritical && pendingCriticalCountRef.current > 0) {
@@ -262,6 +288,10 @@ export const WatchRoomSessionProvider: React.FC<React.PropsWithChildren> = ({ ch
       try {
         await roomService.updatePlayback(activeRoom.id, request);
       } catch {
+        if (request.action === 'CHANGE_EPISODE' && switchingToEpisodeRef.current === request.episodeId) {
+          // No switch after all: the current episode's player drives the room again.
+          switchingToEpisodeRef.current = null;
+        }
         if (isCritical) {
           toast.error(t('playbackUpdateFailed'));
           await resyncFromServer();
@@ -276,11 +306,13 @@ export const WatchRoomSessionProvider: React.FC<React.PropsWithChildren> = ({ ch
     const next = pendingPromiseRef.current.then(run);
     pendingPromiseRef.current = next;
     return next;
-  }, [t, resyncFromServer]);
+  }, [t, resyncFromServer, isActiveHostEpisode]);
 
   const changeEpisode = useCallback(async (episodeId: string) => {
     const activeRoom = roomRef.current;
-    if (!activeRoom?.host || !episodeId || episodeId === activeRoom.episodeId) return;
+    const targetEpisodeId = switchingToEpisodeRef.current ?? activeRoom?.episodeId;
+    if (!activeRoom?.host || !episodeId || episodeId === targetEpisodeId) return;
+    switchingToEpisodeRef.current = episodeId;
     setChangingEpisode(true);
     try {
       await sendPlayback({ action: 'CHANGE_EPISODE', episodeId });
@@ -288,6 +320,19 @@ export const WatchRoomSessionProvider: React.FC<React.PropsWithChildren> = ({ ch
       setChangingEpisode(false);
     }
   }, [sendPlayback]);
+
+  /** Host players echo their local state through here; see HostLocalSnapshot. An echo from a
+   *  player that is not on the room's episode any more is dropped: an episode switch's old player
+   *  can still fire a timeupdate after the switch has landed, and the new episode would then
+   *  start where the old one was. */
+  const updateHostLocalSnapshot = useCallback((episodeId: string | undefined, state: HostLocalSnapshot) => {
+    if (!isActiveHostEpisode(episodeId)) return;
+    hostLocalSnapshotRef.current = {
+      positionSeconds: state.positionSeconds,
+      playing: state.playing,
+      playbackRate: state.playbackRate,
+    };
+  }, [isActiveHostEpisode]);
 
   const refreshVideo = useCallback(() => setVideoRefreshKey((current) => current + 1), []);
 
@@ -317,6 +362,7 @@ export const WatchRoomSessionProvider: React.FC<React.PropsWithChildren> = ({ ch
     syncTarget,
     closedEvent,
     hostLocalSnapshotRef,
+    updateHostLocalSnapshot,
     openRoom,
     changeEpisode,
     sendPlayback,
@@ -326,7 +372,7 @@ export const WatchRoomSessionProvider: React.FC<React.PropsWithChildren> = ({ ch
   }), [
     changeEpisode, changingEpisode, closeSession, closedEvent, episodes, errorMessage,
     leaveSession, loading, openRoom, syncTarget,
-    refreshVideo, room, sendPlayback, videoError, videoSrc,
+    refreshVideo, room, sendPlayback, updateHostLocalSnapshot, videoError, videoSrc,
   ]);
 
   return <WatchRoomSessionContext.Provider value={value}>{children}</WatchRoomSessionContext.Provider>;

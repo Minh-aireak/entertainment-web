@@ -21,6 +21,7 @@ const WatchRoomMiniPlayer: React.FC = () => {
     videoError,
     syncTarget,
     hostLocalSnapshotRef,
+    updateHostLocalSnapshot,
     sendPlayback,
     refreshVideo,
   } = useWatchRoomSession();
@@ -66,22 +67,24 @@ const WatchRoomMiniPlayer: React.FC = () => {
 
   if (!room || room.status !== 'ACTIVE' || isFullRoomPage) return null;
 
+  // Tagged with the episode this player shows, see sendPlayback.
+  const playerEpisodeId = room.episodeId;
   const handleHostAction = (action: PlaybackActionPayload) => {
     switch (action.type) {
       case 'play':
-        sendPlayback({ action: 'PLAY', positionSeconds: action.positionSeconds });
+        sendPlayback({ action: 'PLAY', positionSeconds: action.positionSeconds }, playerEpisodeId);
         break;
       case 'pause':
-        sendPlayback({ action: 'PAUSE', positionSeconds: action.positionSeconds });
+        sendPlayback({ action: 'PAUSE', positionSeconds: action.positionSeconds }, playerEpisodeId);
         break;
       case 'seek':
-        sendPlayback({ action: 'SEEK', positionSeconds: action.positionSeconds });
+        sendPlayback({ action: 'SEEK', positionSeconds: action.positionSeconds }, playerEpisodeId);
         break;
       case 'rate':
-        sendPlayback({ action: 'HEARTBEAT', positionSeconds: action.positionSeconds, playbackRate: action.playbackRate });
+        sendPlayback({ action: 'HEARTBEAT', positionSeconds: action.positionSeconds, playbackRate: action.playbackRate }, playerEpisodeId);
         break;
       case 'heartbeat':
-        sendPlayback({ action: 'HEARTBEAT', positionSeconds: action.positionSeconds });
+        sendPlayback({ action: 'HEARTBEAT', positionSeconds: action.positionSeconds }, playerEpisodeId);
         break;
     }
   };
@@ -152,7 +155,7 @@ const WatchRoomMiniPlayer: React.FC = () => {
             autoPlay={room.host ? false : room.playing}
             onPlaybackAction={room.host ? handleHostAction : undefined}
             onStalledError={refreshVideo}
-            onLocalTimeUpdate={room.host ? (state) => { hostLocalSnapshotRef.current = state; } : undefined}
+            onLocalTimeUpdate={room.host ? (state) => updateHostLocalSnapshot(playerEpisodeId, state) : undefined}
             style={{ width: '100%', height: '100%', maxWidth: '100%', aspectRatio: 'auto' }}
           />
         ) : room.episodeId ? (

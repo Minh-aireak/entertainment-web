@@ -693,6 +693,29 @@ class RoomServiceTest {
     }
 
     @Test
+    void updatePlayback_changeEpisode_cuesNewEpisodePausedAtStart() {
+        Room room = activeRoomBuilder().filmId("film-1").episodeId("episode-1")
+                .playing(true).positionSeconds(321).playbackRevision(7).build();
+        when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
+        when(roomFilmExternalService.getEpisodesByFilm("film-1"))
+                .thenReturn(List.of(new FilmClient.EpisodeInfo("episode-2", "film-1", 20)));
+        stubCasSuccess("room-1", room);
+
+        roomService.updatePlayback("room-1", PlaybackUpdateRequest.builder()
+                .action(PlaybackAction.CHANGE_EPISODE)
+                .episodeId("episode-2")
+                .build());
+
+        // Viewers must not start the new episode before the host's player can: the room waits
+        // at 0 for the PLAY the host's player sends once it is really playing.
+        verify(outboxRepository).save(argThat(o -> o.getTopic().equals("room.playback.updated")
+                && o.getPayload().contains("\"episodeId\":\"episode-2\"")
+                && o.getPayload().contains("\"playing\":false")
+                && o.getPayload().contains("\"positionSeconds\":0.0")
+                && o.getPayload().contains("\"playbackRevision\":8")));
+    }
+
+    @Test
     void updatePlayback_changeEpisode_privateRoomDoesNotBroadcastToLobby() {
         Room room = activeRoomBuilder().publicRoom(false).filmId("film-1").build();
         when(roomRepository.findById("room-1")).thenReturn(Optional.of(room));
