@@ -17,8 +17,13 @@
 	</parent>
 
 	<properties>
-		<java.version>24</java.version>
-		<projectlombok-lombok.version>1.18.38</projectlombok-lombok.version>
+		<java.version>25</java.version>
+		<!-- 1.18.42 là bản Lombok chính thức hỗ trợ JDK 25 (1.18.38 chỉ tới JDK 24). -->
+		<projectlombok-lombok.version>1.18.42</projectlombok-lombok.version>
+		<!-- Byte Buddy (Mockito inline mock maker, Hibernate proxy) mà Spring Boot 3.4.5 kèm theo là
+		     1.15.11, chỉ biết tới Java 24 -> trên Java 25 mock nào cũng throw "Java 25 (69) is not
+		     supported". 1.17.8 hỗ trợ Java 25; override property này đổi cả byte-buddy-agent. -->
+		<byte-buddy.version>1.17.8</byte-buddy.version>
 		<mapstruct.version>1.6.3</mapstruct.version>
 		<lombok-mapstruct-binding.version>0.2.0</lombok-mapstruct-binding.version>
 		<spotless.version>2.43.0</spotless.version>
@@ -206,18 +211,6 @@
 				<groupId>com.diffplug.spotless</groupId>
 				<artifactId>spotless-maven-plugin</artifactId>
 				<version>${spotless.version}</version>
-			</plugin>
-
-			<!-- JDK chạy máy này đã lên Java 25 nhưng Byte Buddy (Mockito inline mock maker) mới
-			     chính thức hỗ trợ tới Java 24 -> mock bất kỳ class nào cũng throw
-			     "Java 25 (69) is not supported by the current version of Byte Buddy". Cờ experimental
-			     là workaround chính thức được Byte Buddy khuyến nghị trong thông báo lỗi. -->
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-surefire-plugin</artifactId>
-				<configuration>
-					<argLine>-Dnet.bytebuddy.experimental=true</argLine>
-				</configuration>
 			</plugin>
 
 		</plugins>

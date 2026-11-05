@@ -1,5 +1,5 @@
 # ---- 1. Build stage ----
-FROM eclipse-temurin:24-jdk AS build
+FROM eclipse-temurin:25-jdk AS build
 
 # Cài đặt Maven
 RUN apt-get update && apt-get install -y maven
@@ -13,7 +13,7 @@ COPY . .
 RUN mvn -B clean package -Dmaven.test.skip=true -pl identity-service -am
 
 # ---- 2. Runtime stage ----
-FROM eclipse-temurin:24-jre-alpine
+FROM eclipse-temurin:25-jre-alpine
 
 WORKDIR /app
 
