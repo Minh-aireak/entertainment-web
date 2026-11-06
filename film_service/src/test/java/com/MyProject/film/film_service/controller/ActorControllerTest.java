@@ -8,7 +8,6 @@ import com.MyProject.film.film_service.dto.request.ActorRequest;
 import com.MyProject.film.film_service.dto.response.ActorResponse;
 import com.MyProject.film.film_service.enums.ErrorCode;
 import com.MyProject.film.film_service.exception.AppException;
-import com.MyProject.film.film_service.repository.elasticsearch.FilmElasticRepository;
 import com.MyProject.film.film_service.service.ActorService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -50,22 +49,6 @@ class ActorControllerTest {
     MockMvc mockMvc;
 
     @MockitoBean ActorService actorService;
-    // FilmServiceApplication declares @EnableJpaRepositories/@EnableElasticsearchRepositories directly
-    // on the primary source class, so Spring processes them (and tries to build real repository
-    // proxies backed by an entityManagerFactory/ElasticsearchOperations bean) regardless of which
-    // controller is under test in this @WebMvcTest slice - every repository interface must be mocked
-    // to avoid ApplicationContext startup failure.
-    @MockitoBean com.MyProject.film.film_service.repository.mysql.ActorRepository actorRepository;
-    @MockitoBean com.MyProject.film.film_service.repository.mysql.DirectorRepository directorRepository;
-    @MockitoBean com.MyProject.film.film_service.repository.mysql.EpisodeRepository episodeRepository;
-    @MockitoBean com.MyProject.film.film_service.repository.mysql.FilmFollowRepository filmFollowRepository;
-    @MockitoBean com.MyProject.film.film_service.repository.mysql.OutboxRepository outboxRepository;
-    @MockitoBean com.MyProject.film.film_service.repository.mysql.RatingRepository ratingRepository;
-    @MockitoBean com.MyProject.film.film_service.repository.mysql.FilmCastRepository filmCastRepository;
-    @MockitoBean com.MyProject.film.film_service.repository.mysql.FilmRepository filmRepository;
-    @MockitoBean com.MyProject.film.film_service.repository.mysql.FilmDirectorRepository filmDirectorRepository;
-    @MockitoBean com.MyProject.film.film_service.repository.mysql.RatingLikeRepository ratingLikeRepository;
-    @MockitoBean FilmElasticRepository filmElasticRepository;
 
     final ObjectMapper objectMapper = new ObjectMapper();
 

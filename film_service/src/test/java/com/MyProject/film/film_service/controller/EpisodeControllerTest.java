@@ -7,7 +7,6 @@ import com.MyProject.film.film_service.dto.request.EpisodeRequest;
 import com.MyProject.film.film_service.dto.response.EpisodeResponse;
 import com.MyProject.film.film_service.enums.ErrorCode;
 import com.MyProject.film.film_service.exception.AppException;
-import com.MyProject.film.film_service.repository.elasticsearch.FilmElasticRepository;
 import com.MyProject.film.film_service.service.EpisodeService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -49,18 +48,6 @@ class EpisodeControllerTest {
     MockMvc mockMvc;
 
     @MockitoBean EpisodeService episodeService;
-    // See ActorControllerTest for why every repository interface must be mocked here.
-    @MockitoBean com.MyProject.film.film_service.repository.mysql.ActorRepository actorRepository;
-    @MockitoBean com.MyProject.film.film_service.repository.mysql.DirectorRepository directorRepository;
-    @MockitoBean com.MyProject.film.film_service.repository.mysql.EpisodeRepository episodeRepository;
-    @MockitoBean com.MyProject.film.film_service.repository.mysql.FilmFollowRepository filmFollowRepository;
-    @MockitoBean com.MyProject.film.film_service.repository.mysql.OutboxRepository outboxRepository;
-    @MockitoBean com.MyProject.film.film_service.repository.mysql.RatingRepository ratingRepository;
-    @MockitoBean com.MyProject.film.film_service.repository.mysql.FilmCastRepository filmCastRepository;
-    @MockitoBean com.MyProject.film.film_service.repository.mysql.FilmRepository filmRepository;
-    @MockitoBean com.MyProject.film.film_service.repository.mysql.FilmDirectorRepository filmDirectorRepository;
-    @MockitoBean com.MyProject.film.film_service.repository.mysql.RatingLikeRepository ratingLikeRepository;
-    @MockitoBean FilmElasticRepository filmElasticRepository;
 
     final ObjectMapper objectMapper = new ObjectMapper();
 
