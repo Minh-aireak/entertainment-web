@@ -1,5 +1,5 @@
 # ---- 1. Build stage ----
-FROM eclipse-temurin:25-jdk AS build
+FROM eclipse-temurin:21-jdk AS build
 
 RUN apt-get update && apt-get install -y maven
 
@@ -11,7 +11,7 @@ COPY . .
 RUN mvn -B clean package -Dmaven.test.skip=true -pl file-service -am
 
 # ---- 2. Runtime stage ----
-FROM eclipse-temurin:25-jre-alpine
+FROM eclipse-temurin:21-jre-alpine
 
 # ffmpeg cho HlsTranscodeJob (remux MP4 -> segment .ts + manifest .m3u8, "-c copy" nên không encode
 # lại - nhẹ CPU, phù hợp máy yếu).

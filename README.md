@@ -158,7 +158,7 @@ Role: USER
 
 **Backend**
 
-- Java 25, Spring Boot 3.4.5, Spring Cloud 2024.0.1.
+- Java 21, Spring Boot 3.4.5, Spring Cloud 2024.0.1.
 - Spring Cloud Gateway, Spring Security, OAuth2 Resource Server và JWT.
 - OpenFeign, Resilience4j, JPA/Hibernate và Spring Data MongoDB.
 - MySQL, MongoDB, Redis, Elasticsearch, Kafka KRaft và Debezium.
@@ -290,7 +290,7 @@ Frontend chỉ gọi backend qua Gateway. Các cổng service trực tiếp ph�
 
 ## Chạy thủ công khi phát triển
 
-Ngoài Docker, cần JDK 25 và Node.js 22+.
+Ngoài Docker, cần JDK 21 và Node.js 22+.
 
 Khởi động hạ tầng cần thiết:
 

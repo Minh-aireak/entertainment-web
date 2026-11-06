@@ -1,5 +1,5 @@
 # ---- 1. Build stage ----
-FROM eclipse-temurin:25-jdk AS build
+FROM eclipse-temurin:21-jdk AS build
 
 RUN apt-get update && apt-get install -y maven
 
@@ -12,7 +12,7 @@ COPY . .
 RUN mvn -B clean package -Dmaven.test.skip=true -pl debezium-manager -am
 
 # ---- 2. Runtime stage ----
-FROM eclipse-temurin:25-jre-alpine
+FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
